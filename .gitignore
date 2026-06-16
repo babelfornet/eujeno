@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Ambiente / segreti
+.env
+.env.*
+!.env.example
+
+# Modelli & cache Hugging Face (non versionare i pesi)
+models/
+*.safetensors
+*.bin
+*.gguf
+.cache/
+hf_cache/
+
+# Substrato durevole del nodo (job store, blob attivazioni/KV) — vedi PRD Parte 3
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+data/
+job_store/
+blobs/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
