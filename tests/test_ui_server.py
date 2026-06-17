@@ -84,3 +84,25 @@ def test_mcp_add_list_remove():
     assert c.get("/api/mcp/list").json()["servers"] == ["fs"]
     c.post("/api/mcp/remove", json={"name": "fs"})
     assert c.get("/api/mcp/list").json()["servers"] == []
+
+
+def test_node_status_after_join_p2p(monkeypatch):
+    import synapse.ui.server as srv
+    started = {}
+
+    class FakeMgr:
+        def __init__(self): pass
+        def start(self, role, cmd, info): started["role"] = role; started["cmd"] = cmd; started["info"] = info
+        def status(self): return {started.get("role", "x"): {"running": True, "pid": 1, **started.get("info", {})}}
+        def stop(self, r): pass
+        def stop_all(self): pass
+
+    monkeypatch.setattr(srv, "NodeManager", FakeMgr)
+    app = srv.create_ui_app("http://x:9000")
+    c = TestClient(app)
+    r = c.post("/api/network/join_p2p", json={"advertise": "http://127.0.0.1:8001",
+                                              "peers": "http://127.0.0.1:8002", "stages": "embed,decoder:0-12"})
+    assert r.json()["ok"] is True
+    assert started["role"] == "worker"
+    assert "--peers" in started["cmd"] and "--advertise" in started["cmd"]
+    assert c.get("/api/config").json()["coordinator_url"] == "http://127.0.0.1:8001"

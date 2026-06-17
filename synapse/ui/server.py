@@ -154,4 +154,36 @@ def create_ui_app(coordinator_url: str) -> FastAPI:
             manager.stop_all()
         return {"ok": True, "status": manager.status()}
 
+    @app.post("/api/network/create_p2p")
+    async def network_create_p2p(request: Request):
+        body = await request.json()
+        advertise = str(body.get("advertise") or "http://127.0.0.1:8001").rstrip("/")
+        stages = body.get("stages", "")
+        model = body.get("model", "Qwen/Qwen2.5-0.5B-Instruct")
+        if not stages:
+            return JSONResponse({"error": "stages obbligatori"}, status_code=400)
+        port = advertise.rsplit(":", 1)[-1]
+        cmd = [sys.executable, "-m", "synapse", "serve", "--advertise", advertise,
+               "--stages", stages, "--model", model, "--host", "0.0.0.0", "--port", str(port)]
+        manager.start("worker", cmd, {"role": "worker", "mode": "p2p", "advertise": advertise, "stages": stages})
+        state["coordinator_url"] = advertise
+        return {"ok": True, "coordinator_url": _coord(), "status": manager.status()}
+
+    @app.post("/api/network/join_p2p")
+    async def network_join_p2p(request: Request):
+        body = await request.json()
+        advertise = str(body.get("advertise") or "http://127.0.0.1:8001").rstrip("/")
+        peers = str(body.get("peers") or "").strip()
+        stages = body.get("stages", "")
+        model = body.get("model", "Qwen/Qwen2.5-0.5B-Instruct")
+        if not stages or not peers:
+            return JSONResponse({"error": "stages e peers obbligatori"}, status_code=400)
+        port = advertise.rsplit(":", 1)[-1]
+        cmd = [sys.executable, "-m", "synapse", "serve", "--advertise", advertise, "--peers", peers,
+               "--stages", stages, "--model", model, "--host", "0.0.0.0", "--port", str(port)]
+        manager.start("worker", cmd, {"role": "worker", "mode": "p2p", "advertise": advertise,
+                                      "peers": peers, "stages": stages})
+        state["coordinator_url"] = advertise
+        return {"ok": True, "coordinator_url": _coord(), "status": manager.status()}
+
     return app
