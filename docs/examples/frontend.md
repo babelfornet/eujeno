@@ -23,4 +23,12 @@ Dal tab **Gestione** puoi controllare il nodo locale senza CLI:
 
 > Sicurezza: `synapse ui` è in ascolto su `127.0.0.1` e avvia processi sulla **tua** macchina (`python -m synapse coordinator|serve`). Usalo solo in locale/fidato.
 
-In arrivo: **configurare tool MCP** (Fase 3).
+## Tool MCP (tab "MCP")
+
+`synapse ui` fa da **host MCP**: dal tab **MCP** configuri server MCP (stdio) e i loro tool diventano usabili dal modello.
+
+- **Aggiungi server MCP**: name + command + args (es. command `npx`, args `@modelcontextprotocol/server-filesystem /percorso`). I tool scoperti compaiono nella lista.
+- **Abilita "usa tool MCP"** (toggle): in chat, le richieste passano i tool al modello; quando il modello chiama un tool, `synapse ui` lo **esegue** sul server MCP e rimanda il risultato (loop di tool-calling). Sotto la risposta vedi quali tool sono stati usati (`🔧 nome → risultato`).
+
+> Richiede un modello che supporti il **tool-calling**: con Qwen 0.5B è dimostrativo (il meccanismo funziona, ma il modello chiama i tool in modo inaffidabile); con un 7B+ diventa utile. Per ora i server MCP sono solo **stdio**.
+
