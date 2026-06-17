@@ -10,7 +10,7 @@ Fornire un singolo entry-point eseguibile — il comando `synapse` — per tutte
 
 ## 2. In scope / Fuori scope
 
-**In scope:** entry-point `synapse`; framework **Typer**; comandi `version`, `model-info`, `generate`, `selfcheck`, `schema`; modalità output **JSON** vs testo; exit code deterministici; lettura prompt da stdin; due helper riusabili (`compute_boundaries`, `model_config_dims`).
+**In scope:** entry-point `synapse`; framework **Typer**; comandi `version`, `model` (con `--info`), `generate`, `selfcheck`, `schema`; modalità output **JSON** vs testo; exit code deterministici; lettura prompt da stdin; due helper riusabili (`compute_boundaries`, `model_config_dims`).
 
 **Fuori scope (deferred):** sottocomandi `node serve/join`, `dht`, qualsiasi networking (Parte 2-3); autenticazione; configurazione persistente su file; quantizzazione/opzioni di runtime avanzate.
 
