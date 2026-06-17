@@ -690,6 +690,9 @@ function StatusDot({ on }){
 function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNodeStatus }){
   const DEFAULT_MODEL = 'Qwen/Qwen2.5-0.5B-Instruct';
 
+  // 0) network mode toggle: 'coordinator' | 'p2p'
+  const [netMode, setNetMode] = useState('coordinator');
+
   // 1) coordinator target
   const [target, setTarget] = useState(coordinatorUrl || '');
   const [applyBusy, setApplyBusy] = useState(false);
@@ -713,6 +716,21 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
 
   // 4) local node stop busy map
   const [stopBusy, setStopBusy] = useState({});
+
+  // 5) create P2P network (first/seed node, no coordinator)
+  const [cpAdvertise, setCpAdvertise] = useState('http://127.0.0.1:8001');
+  const [cpStages, setCpStages] = useState('embed,decoder:0-12');
+  const [cpModel, setCpModel] = useState(DEFAULT_MODEL);
+  const [cpBusy, setCpBusy] = useState(false);
+  const [cpFb, setCpFb] = useState(null);
+
+  // 6) join P2P network (via gossip peers)
+  const [jpAdvertise, setJpAdvertise] = useState('http://127.0.0.1:8002');
+  const [jpPeers, setJpPeers] = useState('http://127.0.0.1:8001');
+  const [jpStages, setJpStages] = useState('decoder:12-24,head');
+  const [jpModel, setJpModel] = useState(DEFAULT_MODEL);
+  const [jpBusy, setJpBusy] = useState(false);
+  const [jpFb, setJpFb] = useState(null);
 
   const postJson = async (url, body) => {
     const res = await fetch(url, {
@@ -780,6 +798,50 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
     } finally { setJnBusy(false); }
   };
 
+  const createP2P = async () => {
+    const advertise = cpAdvertise.trim();
+    const stages = cpStages.trim();
+    const model = cpModel.trim() || DEFAULT_MODEL;
+    if (!advertise){ setCpFb({ kind: 'err', text: 'inserisci un Advertise URL' }); return; }
+    if (!stages){ setCpFb({ kind: 'err', text: 'specifica almeno uno stage (es. embed,decoder:0-12)' }); return; }
+    setCpBusy(true); setCpFb(null);
+    try {
+      const { res, data } = await postJson('/api/network/create_p2p', { advertise, stages, model });
+      if (!res.ok){ setCpFb({ kind: 'err', text: errText(data, res, 'impossibile creare la rete P2P') }); }
+      else {
+        const next = (data && data.coordinator_url) || advertise;
+        if (next) setCoordinatorUrl(next);
+        setCpFb({ kind: 'ok', text: 'nodo seed P2P avviato · ' + advertise + '\nla dashboard ora punta al tuo nodo (' + next + '). Nessun coordinator: aggiungi altri nodi via gossip per completare il modello.' });
+        refreshNodeStatus();
+      }
+    } catch (e) {
+      setCpFb({ kind: 'err', text: 'richiesta fallita: ' + (e && e.message || e) });
+    } finally { setCpBusy(false); }
+  };
+
+  const joinP2P = async () => {
+    const advertise = jpAdvertise.trim();
+    const peers = jpPeers.trim();
+    const stages = jpStages.trim();
+    const model = jpModel.trim() || DEFAULT_MODEL;
+    if (!advertise){ setJpFb({ kind: 'err', text: 'inserisci un Advertise URL' }); return; }
+    if (!peers){ setJpFb({ kind: 'err', text: 'specifica almeno un peer (es. http://127.0.0.1:8001)' }); return; }
+    if (!stages){ setJpFb({ kind: 'err', text: 'specifica almeno uno stage (es. decoder:12-24,head)' }); return; }
+    setJpBusy(true); setJpFb(null);
+    try {
+      const { res, data } = await postJson('/api/network/join_p2p', { advertise, peers, stages, model });
+      if (!res.ok){ setJpFb({ kind: 'err', text: errText(data, res, 'impossibile unirsi alla rete P2P') }); }
+      else {
+        const next = (data && data.coordinator_url) || advertise;
+        if (next) setCoordinatorUrl(next);
+        setJpFb({ kind: 'ok', text: 'nodo P2P avviato · stages ' + stages + ' · peers ' + peers + '\nla dashboard ora punta al tuo nodo (' + next + ').' });
+        refreshNodeStatus();
+      }
+    } catch (e) {
+      setJpFb({ kind: 'err', text: 'richiesta fallita: ' + (e && e.message || e) });
+    } finally { setJpBusy(false); }
+  };
+
   const stopRole = async (role) => {
     setStopBusy(b => Object.assign({}, b, { [role]: true }));
     try {
@@ -835,6 +897,25 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
         h(Feedback, { fb: applyFb }),
       ),
 
+      // mode toggle: Coordinator | P2P (senza coordinator)
+      h(GCard, { title: 'Modalità rete', subtitle: 'Scegli come avviare/unire i nodi: con un coordinator centrale, oppure in P2P dove i nodi si scoprono via gossip senza coordinator.' },
+        h('div', { style: { display: 'flex', background: '#0b1320', border: '1px solid #1c2a3e', borderRadius: '11px', padding: '3px', gap: '3px', maxWidth: '420px' }},
+          [['coordinator', 'Coordinator'], ['p2p', 'P2P (senza coordinator)']].map(([mode, lbl]) => {
+            const active = netMode === mode;
+            return h('button', { key: mode, onClick: () => setNetMode(mode), style: Object.assign({
+              flex: 1, cursor: 'pointer', border: 'none', borderRadius: '8px', padding: '8px 14px',
+              fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '13px', fontWeight: 600,
+              letterSpacing: '.2px', transition: 'all .25s ease', whiteSpace: 'nowrap',
+            }, active
+              ? { background: '#16313a', color: '#7ff0e0', boxShadow: 'inset 0 -2px 0 ' + TEAL }
+              : { background: 'transparent', color: '#67788f' }) }, lbl);
+          }),
+        ),
+      ),
+
+      // ===== COORDINATOR MODE =====
+      netMode === 'coordinator' ? h('div', null,
+
       // 2 - create network
       h(GCard, { title: 'Crea una rete', subtitle: 'Avvia un coordinator locale e imposta automaticamente il target su di esso.' },
         h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }},
@@ -876,7 +957,78 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
           ),
         ),
         h(Feedback, { fb: jnFb }),
+      )
+
+      ) : null,
+      // ===== END COORDINATOR MODE =====
+
+      // ===== P2P MODE =====
+      netMode === 'p2p' ? h('div', null,
+
+      // P2P - create network (first/seed node)
+      h(GCard, { title: 'Crea rete P2P (primo nodo)', subtitle: 'Avvia un nodo seed P2P (serve --advertise --stages, senza coordinator) e punta la dashboard al tuo nodo.' },
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: '13px' }},
+          h('div', null,
+            GLabel('advertise url'),
+            h('input', { type: 'text', value: cpAdvertise, spellCheck: false,
+              onChange: e => setCpAdvertise(e.target.value), placeholder: 'http://127.0.0.1:8001', style: gInputStyle }),
+            h('div', { style: { fontSize: '11px', color: '#647689', marginTop: '6px', lineHeight: 1.5 }}, "l'URL con cui ti annunci, raggiungibile dagli altri nodi"),
+          ),
+          h('div', null,
+            GLabel('stages (es. embed,decoder:0-12 · head)'),
+            h('input', { type: 'text', value: cpStages, spellCheck: false,
+              onChange: e => setCpStages(e.target.value), placeholder: 'embed,decoder:0-12', style: gInputStyle }),
+          ),
+          h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }},
+            h('div', { style: { flex: 1, minWidth: '220px' }},
+              GLabel('model id'),
+              h('input', { type: 'text', value: cpModel, spellCheck: false,
+                onChange: e => setCpModel(e.target.value), placeholder: DEFAULT_MODEL, style: gInputStyle }),
+            ),
+            h(GButton, { onClick: createP2P, busy: cpBusy }, 'Crea rete P2P'),
+          ),
+        ),
+        h(Feedback, { fb: cpFb }),
       ),
+
+      // P2P - join network (via gossip peers)
+      h(GCard, { title: 'Aggiungiti a rete P2P', subtitle: 'Avvia un nodo P2P locale che si unisce alla rete via gossip indicando uno o più peer seed.' },
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: '13px' }},
+          h('div', null,
+            GLabel('advertise url (il tuo nodo)'),
+            h('input', { type: 'text', value: jpAdvertise, spellCheck: false,
+              onChange: e => setJpAdvertise(e.target.value), placeholder: 'http://127.0.0.1:8002', style: gInputStyle }),
+          ),
+          h('div', null,
+            GLabel('peers (url di un nodo seed)'),
+            h('input', { type: 'text', value: jpPeers, spellCheck: false,
+              onChange: e => setJpPeers(e.target.value), placeholder: 'http://127.0.0.1:8001', style: gInputStyle }),
+          ),
+          h('div', null,
+            GLabel('stages (es. decoder:12-24,head)'),
+            h('input', { type: 'text', value: jpStages, spellCheck: false,
+              onChange: e => setJpStages(e.target.value), placeholder: 'decoder:12-24,head', style: gInputStyle }),
+          ),
+          h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }},
+            h('div', { style: { flex: 1, minWidth: '220px' }},
+              GLabel('model id'),
+              h('input', { type: 'text', value: jpModel, spellCheck: false,
+                onChange: e => setJpModel(e.target.value), placeholder: DEFAULT_MODEL, style: gInputStyle }),
+            ),
+            h(GButton, { onClick: joinP2P, busy: jpBusy }, 'Aggiungiti (P2P)'),
+          ),
+        ),
+        h(Feedback, { fb: jpFb }),
+      ),
+
+      // P2P explainer note
+      h('div', { style: {
+        fontSize: '11.5px', color: '#647689', lineHeight: 1.6, marginBottom: '16px',
+        padding: '12px 14px', background: '#0c1421', border: '1px solid #1b2a3f', borderRadius: '12px',
+      }}, 'Nessun coordinator: i nodi si scoprono via gossip e ognuno è interrogabile (la chat funziona puntando la dashboard a un peer). Richiede che i nodi si raggiungano (LAN/VPN/IP pubblici).')
+
+      ) : null,
+      // ===== END P2P MODE =====
 
       // 4 - local node status
       h(GCard, { title: 'Nodo locale', subtitle: 'Processi avviati da questa UI · aggiornato ogni 2s.' },
