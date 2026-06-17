@@ -89,7 +89,10 @@ def model(
         boundaries = compute_boundaries(dims["num_layers"], blocks)
     except ValueError as e:
         _fail("model", "INVALID_BOUNDARIES", str(e))
+    from synapse.config import SUPPORTED_ARCHS
     data = {"model": model_id, **dims, "blocks": blocks, "boundaries": boundaries}
+    data["architecture"] = dims.get("model_type", "?")
+    data["compatible"] = data["architecture"] in SUPPORTED_ARCHS
     human = (
         f"model: {model_id}\n"
         f"layers: {dims['num_layers']}  hidden: {dims['hidden_size']}  "
@@ -97,6 +100,23 @@ def model(
         f"blocchi: {blocks}  confini: {boundaries}"
     )
     _emit_ok("model", data, human)
+
+
+@app.command()
+def models():
+    """Elenca i modelli/famiglie compatibili (architettura Llama/Qwen2)."""
+    from synapse.config import SUPPORTED_ARCHS
+    examples = [
+        "Qwen/Qwen2.5-0.5B-Instruct", "Qwen/Qwen2.5-1.5B-Instruct", "Qwen/Qwen2.5-3B-Instruct",
+        "Qwen/Qwen2.5-7B-Instruct", "Qwen/Qwen2.5-14B-Instruct", "Qwen/Qwen2.5-32B-Instruct",
+        "Qwen/Qwen2.5-72B-Instruct", "meta-llama/Llama-3.2-1B-Instruct",
+        "meta-llama/Llama-3.2-3B-Instruct", "meta-llama/Llama-3.1-8B-Instruct",
+    ]
+    data = {"supported_architectures": sorted(SUPPORTED_ARCHS), "examples": examples,
+            "note": "Architettura Llama/Qwen2 (decoder-only). Verifica con 'synapse model --info --model <id>'. "
+                    "Per modelli grandi usa --dtype bfloat16 e/o splitta su piu nodi."}
+    human = "Modelli compatibili (Llama/Qwen2):\n" + "\n".join(f"  - {m}" for m in examples)
+    _emit_ok("models", data, human=human)
 
 
 def _read_prompt(prompt: str) -> str:

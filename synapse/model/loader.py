@@ -30,6 +30,7 @@ def model_config_dims(model_id: str) -> dict:
         "hidden_size": cfg.hidden_size,
         "num_attention_heads": cfg.num_attention_heads,
         "num_key_value_heads": getattr(cfg, "num_key_value_heads", cfg.num_attention_heads),
+        "model_type": cfg.model_type,
     }
 
 
