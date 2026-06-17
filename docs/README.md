@@ -11,7 +11,7 @@
 | [ROADMAP.md](./ROADMAP.md) | **Stato del progetto**: passi eseguiti / da eseguire, milestone, backlog. Punto di partenza per capire "a che punto siamo". |
 | [00-vision-architecture.md](./00-vision-architecture.md) | **Parte 0** — Visione, obiettivi, principi, mappa dei componenti, flusso dati. Lo scheletro architetturale approvato. |
 | [decisions/](./decisions/) | **ADR** (Architecture Decision Records): decisioni tecniche motivate (es. quale substrate P2P, quale runtime). |
-| [prd/](./prd/) | **PRD** per ciascun sottosistema (Parti 1–5): Peer Node, Discovery & Routing, Queue & Load Balancing, Incentivi & Reputazione, Sicurezza & BFT. |
+| [prd/](./prd/) | **PRD** per ciascun sottosistema (Parti 1–5): Peer Node, Discovery & Routing, Queue & Load Balancing, Incentivi & Reputazione, Sicurezza & BFT. Più la **[CLI `synapse`](./prd/cli.md)** (AI-native), entry-point per tutte le operazioni. |
 
 ## Come è organizzato il lavoro
 
