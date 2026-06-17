@@ -19,6 +19,7 @@ Fornire un singolo entry-point eseguibile — il comando `synapse` — per tutte
 1. **Layer di presentazione sottile** — nessuna logica di business nella CLI. Ogni comando chiama il codice in `synapse/model/` e formatta l'output. La logica resta riusabile e testabile in isolamento.
 2. **AI-native** — il consumatore di riferimento è un agente automatico, non solo un umano (vedi §5).
 3. **YAGNI** — si espone solo ciò che il codice attuale già fa; i comandi futuri si appendono allo stesso `app`.
+4. **Comandi a parola singola** — ove possibile ogni comando è una sola parola (`version`, `model`, `generate`, `selfcheck`, `schema`); le varianti/azioni si esprimono con **switch**, non con nomi composti né sottocomandi nidificati. Es.: `synapse model --info` (non `model-info`). Questo mantiene la superficie piatta, prevedibile e facile da comporre per un agente.
 
 ## 4. Packaging & invocazione
 
@@ -76,12 +77,13 @@ Default condivisi: `--model` default da `config.py` (`Qwen/Qwen2.5-0.5B-Instruct
 | Comando | Opzioni | `data` (modalità JSON) |
 |---------|---------|------------------------|
 | `version` | — | `{ "version": "0.0.1" }` |
-| `model-info` | `--model`, `--blocks` | `{ "model": str, "num_layers": int, "hidden_size": int, "num_attention_heads": int, "num_key_value_heads": int, "blocks": int, "boundaries": [int, ...] }` |
+| `model` | `--info`, `--model`, `--blocks` | `{ "model": str, "num_layers": int, "hidden_size": int, "num_attention_heads": int, "num_key_value_heads": int, "blocks": int, "boundaries": [int, ...] }` |
 | `generate` | `--model`, `--prompt`, `--max-new-tokens`, `--blocks` | `{ "model": str, "prompt": str, "text": str, "tokens": [int, ...] }` |
 | `selfcheck` | `--model`, `--prompt`, `--max-new-tokens`, `--blocks` | `{ "model": str, "match": bool, "reference": [int, ...], "pipeline": [int, ...] }` |
 | `schema` | — | `{ "commands": [ { "name": str, "help": str, "options": [ { "name", "type", "default", "required" } ] } ] }` |
 
-- `model-info` usa `model_config_dims` (solo `AutoConfig`, **niente pesi**) → veloce, non scarica il modello intero.
+- `model` espone le operazioni sul modello tramite switch d'azione. In v1 l'unica azione è **`--info`** (dims + split proposto); se non si passa alcuno switch d'azione, `model` esegue `--info` di default. Azioni future (es. `--download`) saranno nuovi switch sullo stesso comando.
+- `model --info` usa `model_config_dims` (solo `AutoConfig`, **niente pesi**) → veloce, non scarica il modello intero.
 - `generate` usa `load_full_model` → `split_into_blocks(compute_boundaries(...))` → `pipeline_generate` → `tokenizer.decode`.
 - `selfcheck` esegue `reference_generate` **e** `pipeline_generate` e confronta le liste di token: `match` è il segnale chiave per un AI.
 
@@ -131,4 +133,4 @@ Un handler top-level cattura le eccezioni note, le mappa a un `code`, e — in m
 
 ## 13. Comandi futuri (placeholder, non implementati)
 
-Allo stesso `app` si appenderanno, in Parte 2-3: `synapse node serve` / `synapse node join` (avvio peer, registrazione blocchi), `synapse dht ...` (ispezione registry/coverage). Erediteranno lo stesso contratto AI-native (envelope JSON, exit code, stream puliti).
+Allo stesso `app` si appenderanno, in Parte 2-3, comandi a parola singola con switch (coerenti col principio §3.4): `synapse serve` (avvio peer + registrazione blocchi), `synapse join` (ingresso nella rete + self-assignment), `synapse dht` con switch d'azione (`--coverage`, `--peers`) per ispezionare registry e coverage. Erediteranno lo stesso contratto AI-native (envelope JSON, exit code, stream puliti).
