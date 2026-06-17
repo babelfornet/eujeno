@@ -12,22 +12,23 @@
 
 ## Quickstart multi-nodo (PoC)
 
-Inferenza distribuita di un modello su 2 nodi (qui in localhost; su LAN sostituisci gli IP nel file topologia).
+Tre modi, scegli in base alla rete:
 
-```bash
-pip install -e .
+- **[P2P puro](docs/examples/p2p.md)** (decentralizzato, consigliato) — i nodi si scoprono via **gossip**, niente server centrale; l'entry punta a un nodo qualsiasi e scopre la topologia da solo. Per LAN/VPN/IP pubblici.
+  ```bash
+  synapse serve --stages "embed,decoder:0-12" --port 8001 --advertise http://127.0.0.1:8001
+  synapse serve --stages "decoder:12-24,head" --port 8002 --advertise http://127.0.0.1:8002 --peers http://127.0.0.1:8001
+  synapse --json infer --peer http://127.0.0.1:8001 --prompt "La capitale dell'Italia è"
+  ```
+- **[Coordinator](docs/examples/coordinator.md)** (opt-in) — per macchine dietro NAT su reti diverse **senza VPN**: i nodi si connettono in uscita a un coordinator raggiungibile. *(in arrivo)*
+- **Topologia statica** — file JSON con gli IP, transport diretto, senza discovery:
+  ```bash
+  synapse serve --stages "embed,decoder:0-12" --port 8001
+  synapse serve --stages "decoder:12-24,head" --port 8002
+  synapse --json infer --topology docs/examples/topology.localhost.json --prompt "La capitale dell'Italia è"
+  ```
 
-# Nodo A (serve embedding + primi 12 layer)
-synapse serve --stages "embed,decoder:0-12" --port 8001
-
-# Nodo B (serve gli ultimi 12 layer + la testa) — altro terminale/macchina
-synapse serve --stages "decoder:12-24,head" --port 8002
-
-# Entry: esegue l'inferenza attraverso i due nodi
-synapse --json infer --topology docs/examples/topology.localhost.json --prompt "La capitale dell'Italia è"
-```
-
-Su 3 macchine: avvia un `synapse serve` per nodo con range di layer diversi, copia `docs/examples/topology.localhost.json` mettendo gli **IP:porta reali** di ogni nodo, e lancia `synapse infer` puntando a quel file. Le macchine devono raggiungersi sulla rete (LAN/VPN) e scaricano il modello da Hugging Face al primo avvio.
+Le macchine scaricano il modello da Hugging Face al primo avvio.
 
 ## Documentazione
 
