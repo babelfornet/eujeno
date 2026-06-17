@@ -247,12 +247,47 @@ def infer(
     max_new_tokens: int = typer.Option(8, "--max-new-tokens", help="Numero di token da generare"),
     peer: str = typer.Option(None, "--peer", help="[P2P] URL di un nodo qualsiasi: scopre la topologia via gossip ed esegue diretto"),
     coordinator: str = typer.Option(None, "--coordinator", help="[coordinator] URL HTTP del coordinator: client sottile"),
+    mcp: bool = typer.Option(False, "--mcp", help="[coordinator/peer] usa i tool MCP configurati (loop tool-calling)"),
 ):
     """Esegue inferenza distribuita su una topologia di BlockServer."""
     import httpx
     from transformers import AutoTokenizer
 
     prompt = _read_prompt(prompt)
+    if mcp:
+        import httpx as _httpx
+        from synapse.mcp_config import load_servers
+        from synapse.ui.mcp import McpRegistry
+        from synapse.ui.agent import run_tool_loop
+        target = coordinator or peer
+        if not target:
+            _fail("infer", "USAGE_ERROR", "--mcp richiede --coordinator o --peer", exit_code=2)
+        target = target.rstrip("/")
+        reg = McpRegistry()
+        for name, cfg in load_servers().items():
+            reg.add(name, cfg["command"], cfg.get("args", []))
+        if not reg.list_servers():
+            _fail("infer", "USAGE_ERROR", "nessun server MCP configurato (usa 'synapse mcp --add')", exit_code=2)
+        try:
+            tools = reg.list_tools()
+        except Exception as e:
+            _fail("infer", "GENERATION_FAILED", f"errore MCP: {e}")
+        clean_tools = [{"type": t["type"], "function": t["function"]} for t in tools]
+
+        def call_model(messages, tls):
+            with _httpx.Client(timeout=300.0) as client:
+                rr = client.post(f"{target}/v1/chat/completions",
+                                 json={"messages": messages, "tools": tls, "max_tokens": max_new_tokens})
+            return rr.json()["choices"][0]["message"]
+
+        try:
+            out = run_tool_loop([{"role": "user", "content": prompt}], clean_tools,
+                                call_model, lambda n, a: reg.call_tool(n, a), 6)
+        except Exception as e:
+            _fail("infer", "GENERATION_FAILED", str(e))
+        _emit_ok("infer", {"model": "synapse", "prompt": prompt, "text": out["content"],
+                           "tool_runs": out["tool_runs"]}, human=out["content"])
+        return
     if coordinator:
         try:
             with httpx.Client(timeout=300.0) as client:
