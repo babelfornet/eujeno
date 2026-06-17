@@ -95,3 +95,17 @@ def compute_boundaries(num_layers: int, n_blocks: int) -> list[int]:
         size = base + (1 if i < extra else 0)   # i primi `extra` blocchi hanno un layer in più
         boundaries.append(boundaries[-1] + size)
     return boundaries
+
+
+def prepare_decoder_block(model, lo: int, hi: int):
+    """Prepara i layer decoder [lo, hi) per essere serviti: li affetta e rimappa
+    layer_idx a indici locali 0-based (UNA volta). Ritorna (layers, rotary_emb).
+    Costruisci una DecoderBlock(layers, rotary_emb) PER JOB per avere cache separate.
+
+    ATTENZIONE: muta layer.self_attn.layer_idx come split_into_blocks. Cattura
+    eventuali riferimenti al modello intero PRIMA di chiamare questa funzione."""
+    inner = model.model
+    layers = inner.layers[lo:hi]
+    for local_idx, layer in enumerate(layers):
+        layer.self_attn.layer_idx = local_idx
+    return layers, inner.rotary_emb
