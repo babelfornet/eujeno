@@ -1,3 +1,4 @@
+import asyncio
 import os
 import sys
 
@@ -6,6 +7,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from synapse.ui.manager import NodeManager
+from synapse.ui.mcp import McpRegistry
+from synapse.ui.agent import run_tool_loop
 
 _STATIC = os.path.join(os.path.dirname(__file__), "static")
 
@@ -16,6 +19,7 @@ def create_ui_app(coordinator_url: str) -> FastAPI:
     app = FastAPI()
     state = {"coordinator_url": coordinator_url.rstrip("/")}
     manager = NodeManager()
+    mcp = McpRegistry()
 
     def _coord() -> str:
         return state["coordinator_url"]
@@ -51,16 +55,65 @@ def create_ui_app(coordinator_url: str) -> FastAPI:
         except Exception as e:
             return JSONResponse({"error": f"coordinator non raggiungibile: {e}"}, status_code=502)
 
+    @app.get("/api/mcp/list")
+    async def mcp_list():
+        servers = mcp.list_servers()
+        tools = []
+        if servers:
+            try:
+                tools = [{"name": t["function"]["name"], "description": t["function"]["description"]}
+                         for t in await asyncio.to_thread(mcp.list_tools)]
+            except Exception as e:
+                return {"servers": servers, "tools": [], "error": f"errore MCP: {e}"}
+        return {"servers": servers, "tools": tools}
+
+    @app.post("/api/mcp/add")
+    async def mcp_add(request: Request):
+        body = await request.json()
+        if not body.get("name") or not body.get("command"):
+            return JSONResponse({"error": "name e command obbligatori"}, status_code=400)
+        mcp.add(body["name"], body["command"], body.get("args", []))
+        return {"ok": True, "servers": mcp.list_servers()}
+
+    @app.post("/api/mcp/remove")
+    async def mcp_remove(request: Request):
+        body = await request.json()
+        mcp.remove(body.get("name", ""))
+        return {"ok": True, "servers": mcp.list_servers()}
+
     @app.post("/api/chat")
     async def chat(request: Request):
-        body = await request.body()
+        body = await request.json()
+        use_mcp = bool(body.get("use_mcp")) and bool(mcp.list_servers())
+        if not use_mcp:
+            try:
+                async with httpx.AsyncClient(timeout=300.0) as client:
+                    r = await client.post(f"{_coord()}/v1/chat/completions", json=body,
+                                          headers={"content-type": "application/json"})
+                return JSONResponse(r.json(), status_code=r.status_code)
+            except Exception as e:
+                return JSONResponse({"error": f"coordinator non raggiungibile: {e}"}, status_code=502)
         try:
-            async with httpx.AsyncClient(timeout=300.0) as client:
-                r = await client.post(f"{_coord()}/v1/chat/completions", content=body,
-                                      headers={"content-type": "application/json"})
-            return JSONResponse(r.json(), status_code=r.status_code)
+            tools = await asyncio.to_thread(mcp.list_tools)
         except Exception as e:
-            return JSONResponse({"error": f"coordinator non raggiungibile: {e}"}, status_code=502)
+            return JSONResponse({"error": f"errore MCP: {e}"}, status_code=502)
+        clean_tools = [{"type": t["type"], "function": t["function"]} for t in tools]
+        coord = _coord()
+        max_tokens = int(body.get("max_tokens", 256))
+        temperature = body.get("temperature", 0.7)
+
+        def call_model(messages, tls):
+            payload = {"messages": messages, "tools": tls, "max_tokens": max_tokens, "temperature": temperature}
+            with httpx.Client(timeout=300.0) as client:
+                rr = client.post(f"{coord}/v1/chat/completions", json=payload)
+            return rr.json()["choices"][0]["message"]
+
+        out = await asyncio.to_thread(
+            run_tool_loop, body.get("messages", []), clean_tools, call_model,
+            lambda name, args: mcp.call_tool(name, args), 6)
+        return {"choices": [{"message": {"role": "assistant", "content": out["content"]},
+                             "finish_reason": "stop"}],
+                "tool_runs": out["tool_runs"]}
 
     @app.get("/api/node/status")
     async def node_status():

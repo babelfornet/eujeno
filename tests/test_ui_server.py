@@ -74,3 +74,13 @@ def test_node_status_empty_initially():
     app = create_ui_app("http://example:9000")
     c = TestClient(app)
     assert c.get("/api/node/status").json() == {}
+
+
+def test_mcp_add_list_remove():
+    app = create_ui_app("http://example:9000")
+    c = TestClient(app)
+    assert c.get("/api/mcp/list").json()["servers"] == []
+    c.post("/api/mcp/add", json={"name": "fs", "command": "echo", "args": ["x"]})
+    assert c.get("/api/mcp/list").json()["servers"] == ["fs"]
+    c.post("/api/mcp/remove", json={"name": "fs"})
+    assert c.get("/api/mcp/list").json()["servers"] == []
