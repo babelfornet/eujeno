@@ -49,7 +49,7 @@
 - [x] **CLI `synapse`** (AI-native) — entry-point per tutte le operazioni — [PRD](./prd/cli.md) · [piano](./plans/2026-06-17-cli-synapse.md). Comandi a parola singola implementati: `version`, `model --info`, `generate`, `selfcheck`, `schema`; output JSON con envelope stabile, exit code deterministici, prompt da stdin, stream puliti. Suite verde.
 - [~] **Discovery & Routing** — due modalità ([ADR-0002](./decisions/ADR-0002-connettivita-nat.md))
   - [x] **P2P puro**: discovery via **gossip** (registry decentralizzato + coverage), `serve --peers/--advertise` + `infer --peer` — [piano](./plans/2026-06-17-part2a-p2p-gossip.md). Nessun server centrale; per LAN/VPN/IP pubblici.
-  - [ ] **Coordinator-relay** (opt-in, NAT-senza-VPN) — [piano](./plans/2026-06-17-part2-coordinator.md)
+  - [x] **Coordinator-relay** (opt-in, NAT-senza-VPN) — [piano](./plans/2026-06-17-part2-coordinator.md) · [quickstart](./examples/coordinator.md). Nodi via WebSocket in uscita; golden via relay verde. Comandi `coordinator`, `serve --coordinator`, `infer --coordinator`.
   - [ ] Failover automatico su nodo caduto (Parte 3) · libp2p nativo per P2P-su-NAT (futuro)
 - [ ] Plan + build **Queue & Load Balancing**: job store durevole, store-and-forward, scheduling su holder ridondanti
 - [ ] Plan + build **Reputazione minimale** (token ⏸ rimandati)

@@ -20,7 +20,13 @@ Tre modi, scegli in base alla rete:
   synapse serve --stages "decoder:12-24,head" --port 8002 --advertise http://127.0.0.1:8002 --peers http://127.0.0.1:8001
   synapse --json infer --peer http://127.0.0.1:8001 --prompt "La capitale dell'Italia è"
   ```
-- **[Coordinator](docs/examples/coordinator.md)** (opt-in) — per macchine dietro NAT su reti diverse **senza VPN**: i nodi si connettono in uscita a un coordinator raggiungibile. *(in arrivo)*
+- **[Coordinator](docs/examples/coordinator.md)** (opt-in) — per macchine dietro NAT su reti diverse **senza VPN**: i nodi si connettono in uscita a un coordinator raggiungibile.
+  ```bash
+  synapse coordinator --port 9000                                                  # macchina raggiungibile
+  synapse serve --coordinator ws://IP:9000/node --stages "embed,decoder:0-12"      # nodo A (qualsiasi rete)
+  synapse serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"      # nodo B (qualsiasi rete)
+  synapse --json infer --coordinator http://IP:9000 --prompt "La capitale dell'Italia è"
+  ```
 - **Topologia statica** — file JSON con gli IP, transport diretto, senza discovery:
   ```bash
   synapse serve --stages "embed,decoder:0-12" --port 8001
