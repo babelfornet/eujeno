@@ -1,0 +1,22 @@
+[project]
+name = "synapse"
+version = "0.0.1"
+description = "Decentralized peer-to-peer LLM inference network"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.2",
+    "transformers==4.46.3",
+    "accelerate>=1.0",
+    "safetensors>=0.4.5",
+    "huggingface_hub>=0.26",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+markers = ["slow: scarica/esegue il modello (lento)"]
+addopts = "-q"
+
+[tool.setuptools.packages.find]
+include = ["synapse*"]
