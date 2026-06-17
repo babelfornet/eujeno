@@ -181,6 +181,7 @@ def serve(
     advertise: str = typer.Option(None, "--advertise", help="URL con cui il nodo si annuncia (es. http://IP:8001). Default http://<host>:<port>"),
     num_layers: int = typer.Option(None, "--num-layers", help="Numero totale layer (per coverage). Default: dal config."),
     coordinator: str = typer.Option(None, "--coordinator", help="URL WS del coordinator (es. ws://host:9000/node). Se presente, il nodo si connette in uscita invece di esporre un server diretto."),
+    dtype: str = typer.Option("float32", "--dtype", help="float32 | bfloat16 | float16 (bf16 per modelli grandi)"),
 ):
     """Avvia un BlockServer che ospita gli stage indicati (processo a lunga durata).
 
@@ -191,8 +192,13 @@ def serve(
         spec = parse_stages(stages)
     except ValueError as e:
         _fail("serve", "USAGE_ERROR", str(e), exit_code=2)
+    from synapse.config import parse_dtype
     try:
-        model, tokenizer = load_partial_model(model_id, spec, DTYPE, DEVICE)
+        _dtype = parse_dtype(dtype)
+    except ValueError as e:
+        _fail("serve", "USAGE_ERROR", str(e), exit_code=2)
+    try:
+        model, tokenizer = load_partial_model(model_id, spec, _dtype, DEVICE)
     except Exception as e:
         _fail("serve", "MODEL_LOAD_FAILED", str(e))
     if coordinator:
