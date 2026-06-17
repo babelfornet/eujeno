@@ -65,3 +65,15 @@ def test_selfcheck_reports_match():
     payload = json.loads(result.stdout)
     assert payload["data"]["match"] is True
     assert payload["data"]["reference"] == payload["data"]["pipeline"]
+
+
+def test_schema_lists_commands():
+    result = runner.invoke(app, ["--json", "schema"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    names = {c["name"] for c in payload["data"]["commands"]}
+    assert {"version", "model", "generate", "selfcheck", "schema"} <= names
+    # ogni comando elenca le sue opzioni con nome
+    model_cmd = next(c for c in payload["data"]["commands"] if c["name"] == "model")
+    opt_names = {o["name"] for o in model_cmd["options"]}
+    assert "info" in opt_names and "blocks" in opt_names

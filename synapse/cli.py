@@ -155,3 +155,26 @@ def selfcheck(
     data = {"model": model_id, "match": reference == pipeline, "reference": reference, "pipeline": pipeline}
     human = f"match: {data['match']}\nreference: {reference}\npipeline: {pipeline}"
     _emit_ok("selfcheck", data, human)
+
+
+@app.command()
+def schema():
+    """Stampa l'albero comandi+opzioni in forma machine-readable (per agenti AI)."""
+    import click
+    import typer.main
+
+    root = typer.main.get_command(app)
+    commands = []
+    for name, cmd in sorted(root.commands.items()):
+        options = []
+        for param in cmd.params:
+            if isinstance(param, click.Argument):
+                continue
+            options.append({
+                "name": param.name,
+                "type": getattr(param.type, "name", str(param.type)),
+                "default": param.default,
+                "required": bool(param.required),
+            })
+        commands.append({"name": name, "help": (cmd.help or "").strip(), "options": options})
+    _emit_ok("schema", {"commands": commands}, human=_json.dumps({"commands": commands}, indent=2))
