@@ -9,7 +9,7 @@ dependencies = [
     "accelerate>=1.0",
     "safetensors>=0.4.5",
     "huggingface_hub>=0.26",
-    "typer>=0.12",
+    "typer>=0.9",
 ]
 
 [project.optional-dependencies]

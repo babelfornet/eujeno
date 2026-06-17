@@ -77,3 +77,15 @@ def test_schema_lists_commands():
     model_cmd = next(c for c in payload["data"]["commands"] if c["name"] == "model")
     opt_names = {o["name"] for o in model_cmd["options"]}
     assert "info" in opt_names and "blocks" in opt_names
+
+
+@pytest.mark.slow
+def test_json_stdout_is_single_pure_json_object():
+    # In modalità --json, stdout deve essere ESATTAMENTE un envelope JSON,
+    # senza barre di progresso o warning di transformers mescolati.
+    result = runner.invoke(app, ["--json", "model", "--info"])
+    assert result.exit_code == 0
+    out = result.stdout.strip()
+    payload = json.loads(out)              # solleva se c'è rumore non-JSON su stdout
+    assert payload["ok"] is True
+    assert out.count("\n") == 0            # una sola riga JSON, nessuna riga extra

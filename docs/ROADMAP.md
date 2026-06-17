@@ -46,7 +46,7 @@
   - [x] **Foundation single-process** (build-order step 1-2-4): split del modello in blocchi (EMBED/DECODER/HEAD), `run_block`, KV-cache per-blocco serializzabile, **golden test** (la pipeline distribuita riproduce esattamente `model.generate`), **capstone** (KV-cache sopravvive a round-trip su byte mid-generazione). 12 test verdi su `Qwen2.5-0.5B`.
   - [ ] Partial-loading reale (`init_empty_weights` + `load_checkpoint_in_model`) — col wire format
   - [ ] Transport di rete (FastAPI + safetensors) — confine con Parte 3
-- [ ] **CLI `synapse`** (AI-native) — entry-point per tutte le operazioni — [PRD](./prd/cli.md). Comandi a parola singola: `version`, `model --info`, `generate`, `selfcheck`, `schema`; output JSON + exit code deterministici.
+- [x] **CLI `synapse`** (AI-native) — entry-point per tutte le operazioni — [PRD](./prd/cli.md) · [piano](./plans/2026-06-17-cli-synapse.md). Comandi a parola singola implementati: `version`, `model --info`, `generate`, `selfcheck`, `schema`; output JSON con envelope stabile, exit code deterministici, prompt da stdin, stream puliti. Suite verde.
 - [ ] Plan + build **Discovery & Routing**: registry DHT, allocazione dinamica blocchi, failover
 - [ ] Plan + build **Queue & Load Balancing**: job store durevole, store-and-forward, scheduling su holder ridondanti
 - [ ] Plan + build **Reputazione minimale** (token ⏸ rimandati)
