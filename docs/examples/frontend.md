@@ -21,6 +21,10 @@ Dal tab **Gestione** puoi controllare il nodo locale senza CLI:
 - **Aggiungiti a una rete**: avvia un nodo `serve` locale che si connette a un coordinator coi tuoi **stage** (es. `embed,decoder:0-12`).
 - **Nodo locale**: vedi lo stato dei processi avviati dalla UI (coordinator/worker, pid) e fermali con **Stop**.
 
+### Modalità P2P (senza coordinator)
+
+Nel tab Gestione, con "Modalità rete → P2P", puoi creare/aggiungerti a una rete **senza coordinator**: i nodi si scoprono via **gossip** e **ogni nodo è interrogabile** (espone sia `/registry` sia `/v1/chat/completions`). La dashboard e la chat funzionano puntando il "Coordinator bersaglio" all'URL di **un peer qualsiasi**. Richiede che i nodi si raggiungano (LAN/VPN/IP pubblici).
+
 > Sicurezza: `synapse ui` è in ascolto su `127.0.0.1` e avvia processi sulla **tua** macchina (`python -m synapse coordinator|serve`). Usalo solo in locale/fidato.
 
 ## Tool MCP (tab "MCP")

@@ -28,6 +28,16 @@ synapse serve --stages "decoder:12-24,head" --port 8002 --advertise http://127.0
 synapse --json infer --peer http://127.0.0.1:8001 --prompt "La capitale dell'Italia è"
 ```
 
+## Ogni nodo è interrogabile (entry simmetrico)
+
+In modalità P2P ogni nodo `serve` espone anche l'**API OpenAI** `POST /v1/chat/completions` (e `/v1/models`): orchestra l'inferenza sulla topologia gossipata via transport diretto, **senza coordinator**. Punta un client OpenAI (o la dashboard) a **un peer qualsiasi**:
+
+```bash
+curl -s http://192.168.1.10:8001/v1/chat/completions -H 'content-type: application/json' \
+  -d '{"model":"synapse","messages":[{"role":"user","content":"Ciao"}],"max_tokens":32}'
+```
+`synapse infer --peer` resta disponibile come alternativa.
+
 ## Quando NON basta
 
 Se i nodi sono dietro NAT su reti diverse **senza VPN**, il transport diretto non li raggiunge: usa la modalità coordinator. Il P2P puro anche dietro NAT (libp2p nativo: hole-punching + relay tra peer) è sul percorso futuro — vedi [ADR-0002](../decisions/ADR-0002-connettivita-nat.md).
