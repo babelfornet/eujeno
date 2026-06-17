@@ -2,7 +2,7 @@
 
 > Documento vivo. Traccia **cosa è stato fatto** e **cosa resta da fare**. Aggiornato a ogni passo significativo.
 >
-> **Ultimo aggiornamento:** 2026-06-17 — Fase 0 architettura completa; Parte 1 foundation single-process implementata (12 test verdi, golden test + resilienza KV-cache).
+> **Ultimo aggiornamento:** 2026-06-17 — Parte 1 networking: inferenza distribuita su 2 nodi via HTTP (`serve`/`infer`), golden distribuito verde. CLI AI-native completa.
 
 ## Legenda
 
@@ -45,7 +45,7 @@
 - [~] **Peer Node** — [piano](./plans/2026-06-17-part-1-peer-node.md)
   - [x] **Foundation single-process** (build-order step 1-2-4): split del modello in blocchi (EMBED/DECODER/HEAD), `run_block`, KV-cache per-blocco serializzabile, **golden test** (la pipeline distribuita riproduce esattamente `model.generate`), **capstone** (KV-cache sopravvive a round-trip su byte mid-generazione). 12 test verdi su `Qwen2.5-0.5B`.
   - [ ] Partial-loading reale (`init_empty_weights` + `load_checkpoint_in_model`) — col wire format
-  - [ ] Transport di rete (FastAPI + safetensors) — confine con Parte 3
+  - [x] **Transport di rete** (FastAPI + safetensors) + **orchestrator distribuito** (Milestone 0) — [piano](./plans/2026-06-17-part1-networking.md). Comandi `serve`/`infer`; golden distribuito su 2 nodi reali verde. Topologia statica (la discovery DHT arriva in Parte 2).
 - [x] **CLI `synapse`** (AI-native) — entry-point per tutte le operazioni — [PRD](./prd/cli.md) · [piano](./plans/2026-06-17-cli-synapse.md). Comandi a parola singola implementati: `version`, `model --info`, `generate`, `selfcheck`, `schema`; output JSON con envelope stabile, exit code deterministici, prompt da stdin, stream puliti. Suite verde.
 - [ ] Plan + build **Discovery & Routing**: registry DHT, allocazione dinamica blocchi, failover
 - [ ] Plan + build **Queue & Load Balancing**: job store durevole, store-and-forward, scheduling su holder ridondanti

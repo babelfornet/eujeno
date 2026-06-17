@@ -1,0 +1,9 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "embed": "http://127.0.0.1:8001",
+  "decoders": [
+    {"block": "0-12", "url": "http://127.0.0.1:8001"},
+    {"block": "12-24", "url": "http://127.0.0.1:8002"}
+  ],
+  "head": "http://127.0.0.1:8002"
+}

@@ -6,9 +6,28 @@
 
 ## Stato
 
-🚧 **Fase di architettura.** Le specifiche complete sono scritte; l'implementazione del PoC non è ancora iniziata.
+🚧 **PoC in costruzione.** Funziona già l'inferenza distribuita su più nodi via HTTP (orchestrator-driven, Milestone 0): un modello viene splittato in blocchi di layer ospitati da `synapse serve` su nodi diversi, e `synapse infer` esegue la generazione attraversando la rete — riproducendo esattamente il modello intero. **Prossimi passi:** discovery DHT (auto-organizzazione dei nodi), queue/store-and-forward durevole con failover. Incentivi a token rimandati (progettati su carta).
 
-**Obiettivo del primo PoC:** inferenza distribuita di un modello **1–3B** su **2–3 nodi reali**, con discovery DHT, queue asincrona e failover automatico. Incentivi a token **rimandati** (progettati su carta).
+**Obiettivo del primo PoC:** inferenza distribuita di un modello **1–3B** su **2–3 nodi reali**, con discovery DHT, queue asincrona e failover automatico.
+
+## Quickstart multi-nodo (PoC)
+
+Inferenza distribuita di un modello su 2 nodi (qui in localhost; su LAN sostituisci gli IP nel file topologia).
+
+```bash
+pip install -e .
+
+# Nodo A (serve embedding + primi 12 layer)
+synapse serve --stages "embed,decoder:0-12" --port 8001
+
+# Nodo B (serve gli ultimi 12 layer + la testa) — altro terminale/macchina
+synapse serve --stages "decoder:12-24,head" --port 8002
+
+# Entry: esegue l'inferenza attraverso i due nodi
+synapse --json infer --topology docs/examples/topology.localhost.json --prompt "La capitale dell'Italia è"
+```
+
+Su 3 macchine: avvia un `synapse serve` per nodo con range di layer diversi, copia `docs/examples/topology.localhost.json` mettendo gli **IP:porta reali** di ogni nodo, e lancia `synapse infer` puntando a quel file. Le macchine devono raggiungersi sulla rete (LAN/VPN) e scaricano il modello da Hugging Face al primo avvio.
 
 ## Documentazione
 
