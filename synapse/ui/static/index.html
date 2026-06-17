@@ -591,6 +591,289 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages }){
   );
 }
 
+/* ---------- Gestione view atoms ---------- */
+const GLabel = txt => h('label', { style: {
+  display: 'block', fontSize: '10.5px', letterSpacing: '.4px', color: '#7f93ab',
+  fontFamily: "'IBM Plex Mono',monospace", marginBottom: '6px',
+}}, txt);
+
+const gInputStyle = {
+  width: '100%', fontFamily: "'IBM Plex Mono',monospace", fontSize: '13px', color: '#dbe6f3',
+  background: '#0b1320', border: '1px solid #1f2e44', borderRadius: '10px',
+  padding: '10px 12px', outline: 'none',
+};
+
+function GButton({ onClick, busy, disabled, children, tone }){
+  const off = busy || disabled;
+  const colors = tone === 'danger'
+    ? { background: '#3a1714', color: '#fca5a5', border: '1px solid #5a241c' }
+    : tone === 'ghost'
+    ? { background: '#0b1320', color: '#aebccd', border: '1px solid #1f2e44' }
+    : { background: '#2dd4bf', color: '#04201c', border: 'none' };
+  return h('button', { onClick, disabled: off, style: Object.assign({
+    cursor: off ? 'not-allowed' : 'pointer', borderRadius: '10px', padding: '10px 18px',
+    fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap',
+  }, off ? { background: '#16202e', color: '#5b6b80', border: '1px solid #1f2e44' } : colors) },
+    busy ? '…' : children);
+}
+
+function GCard({ title, subtitle, children }){
+  return h('section', { className: 'syn-card', style: {
+    background: '#0c1421', border: '1px solid #1b2a3f', borderRadius: '16px',
+    padding: '18px 20px', marginBottom: '16px',
+  }},
+    h('div', { style: { fontSize: '14px', fontWeight: 600, color: '#eaf2fb', letterSpacing: '-.2px' }}, title),
+    subtitle ? h('div', { style: { fontSize: '12px', color: '#647689', marginTop: '5px', lineHeight: 1.5 }}, subtitle) : null,
+    h('div', { style: { marginTop: '15px' }}, children),
+  );
+}
+
+function Feedback({ fb }){
+  if (!fb) return null;
+  const ok = fb.kind === 'ok';
+  return h('div', { style: {
+    marginTop: '13px', fontSize: '12px', lineHeight: 1.5, padding: '10px 13px', borderRadius: '10px',
+    fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+    background: ok ? 'rgba(45,212,191,.08)' : '#2a1410',
+    border: '1px solid ' + (ok ? '#1c5048' : '#5a241c'),
+    color: ok ? '#7ff0e0' : '#fca5a5',
+  }}, (ok ? '✓ ' : '⚠ ') + fb.text);
+}
+
+function StatusDot({ on }){
+  const c = on ? TEAL : RED;
+  return h('span', { style: {
+    width: '8px', height: '8px', borderRadius: '50%', background: c,
+    boxShadow: '0 0 8px ' + c, display: 'inline-block', flex: 'none',
+  }});
+}
+
+/* ---------- Gestione rete view ---------- */
+function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNodeStatus }){
+  const DEFAULT_MODEL = 'Qwen/Qwen2.5-0.5B-Instruct';
+
+  // 1) coordinator target
+  const [target, setTarget] = useState(coordinatorUrl || '');
+  const [applyBusy, setApplyBusy] = useState(false);
+  const [applyFb, setApplyFb] = useState(null);
+  // keep the field in sync if the active target changes elsewhere
+  useEffect(() => { setTarget(coordinatorUrl || ''); }, [coordinatorUrl]);
+
+  // 2) create network
+  const [crModel, setCrModel] = useState(DEFAULT_MODEL);
+  const [crPort, setCrPort] = useState('9000');
+  const [crBusy, setCrBusy] = useState(false);
+  const [crFb, setCrFb] = useState(null);
+
+  // 3) join network
+  const [jnUrl, setJnUrl] = useState(coordinatorUrl || '');
+  const [jnStages, setJnStages] = useState('embed,decoder:0-12');
+  const [jnModel, setJnModel] = useState(DEFAULT_MODEL);
+  const [jnBusy, setJnBusy] = useState(false);
+  const [jnFb, setJnFb] = useState(null);
+  useEffect(() => { setJnUrl(coordinatorUrl || ''); }, [coordinatorUrl]);
+
+  // 4) local node stop busy map
+  const [stopBusy, setStopBusy] = useState({});
+
+  const postJson = async (url, body) => {
+    const res = await fetch(url, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  };
+  const errText = (data, res, fallback) =>
+    (data && (data.error || data.detail)) || (fallback + ' (errore ' + res.status + ')');
+
+  const applyTarget = async () => {
+    const url = target.trim();
+    if (!url){ setApplyFb({ kind: 'err', text: 'inserisci un URL coordinator' }); return; }
+    setApplyBusy(true); setApplyFb(null);
+    try {
+      const { res, data } = await postJson('/api/config', { coordinator_url: url });
+      if (!res.ok){ setApplyFb({ kind: 'err', text: errText(data, res, 'impossibile aggiornare il target') }); }
+      else {
+        const next = (data && data.coordinator_url) || url;
+        setCoordinatorUrl(next);
+        setApplyFb({ kind: 'ok', text: 'target aggiornato: ' + next + ' — il monitoraggio della rete ora punta qui.' });
+      }
+    } catch (e) {
+      setApplyFb({ kind: 'err', text: 'richiesta fallita: ' + (e && e.message || e) });
+    } finally { setApplyBusy(false); }
+  };
+
+  const createNetwork = async () => {
+    const model = crModel.trim() || DEFAULT_MODEL;
+    const portNum = parseInt(crPort, 10);
+    if (isNaN(portNum) || portNum <= 0){ setCrFb({ kind: 'err', text: 'porta non valida' }); return; }
+    setCrBusy(true); setCrFb(null);
+    try {
+      const { res, data } = await postJson('/api/network/create', { model, port: portNum });
+      if (!res.ok){ setCrFb({ kind: 'err', text: errText(data, res, 'impossibile creare la rete') }); }
+      else {
+        const next = (data && data.coordinator_url) || '';
+        if (next) setCoordinatorUrl(next);
+        setCrFb({ kind: 'ok', text: 'rete creata · coordinator locale ' + next + '\nil target è stato spostato qui. La rete è vuota: usa "Aggiungiti a una rete" per avviare i nodi (il pannello "MANCANO" nella vista Rete mostra i pezzi necessari).' });
+        refreshNodeStatus();
+      }
+    } catch (e) {
+      setCrFb({ kind: 'err', text: 'richiesta fallita: ' + (e && e.message || e) });
+    } finally { setCrBusy(false); }
+  };
+
+  const joinNetwork = async () => {
+    const url = jnUrl.trim();
+    const stages = jnStages.trim();
+    const model = jnModel.trim() || DEFAULT_MODEL;
+    if (!url){ setJnFb({ kind: 'err', text: 'inserisci un URL coordinator' }); return; }
+    if (!stages){ setJnFb({ kind: 'err', text: 'specifica almeno uno stage (es. embed,decoder:0-12)' }); return; }
+    setJnBusy(true); setJnFb(null);
+    try {
+      const { res, data } = await postJson('/api/network/join', { coordinator_url: url, stages, model });
+      if (!res.ok){ setJnFb({ kind: 'err', text: errText(data, res, 'impossibile unirsi alla rete') }); }
+      else {
+        setJnFb({ kind: 'ok', text: 'nodo avviato · stages ' + stages + ' → ' + url });
+        refreshNodeStatus();
+      }
+    } catch (e) {
+      setJnFb({ kind: 'err', text: 'richiesta fallita: ' + (e && e.message || e) });
+    } finally { setJnBusy(false); }
+  };
+
+  const stopRole = async (role) => {
+    setStopBusy(b => Object.assign({}, b, { [role]: true }));
+    try {
+      const body = role ? { role } : {};
+      const { res, data } = await postJson('/api/node/stop', body);
+      if (!res.ok){ window.alert(errText(data, res, 'impossibile fermare il processo')); }
+      refreshNodeStatus();
+    } catch (e) {
+      window.alert('richiesta fallita: ' + (e && e.message || e));
+    } finally {
+      setStopBusy(b => Object.assign({}, b, { [role]: false }));
+    }
+  };
+
+  // build local-node rows
+  const ns = nodeStatus || {};
+  const roleRows = [];
+  ['coordinator', 'worker'].forEach(role => {
+    const info = ns[role];
+    if (!info) return;
+    const running = !!info.running;
+    const lines = [];
+    if (typeof info.pid !== 'undefined' && info.pid !== null) lines.push(['pid', String(info.pid)]);
+    if (role === 'coordinator'){
+      if (info.port != null) lines.push(['port', String(info.port)]);
+      if (info.url) lines.push(['url', info.url]);
+      if (info.model) lines.push(['model', info.model]);
+    } else {
+      if (info.stages) lines.push(['stages', String(info.stages)]);
+      if (info.coordinator) lines.push(['coordinator', info.coordinator]);
+      if (info.model) lines.push(['model', info.model]);
+    }
+    roleRows.push({ role, running, lines });
+  });
+
+  const fieldStyle = { flex: 1, minWidth: '200px' };
+
+  return h('main', { style: { flex: 1, minHeight: 0, overflow: 'auto', padding: '20px 24px 40px' }},
+    h('div', { style: { maxWidth: '920px', margin: '0 auto' }},
+
+      // 1 - coordinator target
+      h(GCard, { title: 'Coordinator bersaglio', subtitle: 'Il coordinator verso cui la UI inoltra registry, chat e inferenza. Cambialo per monitorare un\'altra rete.' },
+        h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }},
+          h('div', { style: fieldStyle },
+            GLabel('coordinator url'),
+            h('input', { type: 'text', value: target, spellCheck: false,
+              onChange: e => setTarget(e.target.value),
+              onKeyDown: e => { if (e.key === 'Enter') applyTarget(); },
+              placeholder: 'http://localhost:9000', style: gInputStyle }),
+          ),
+          h(GButton, { onClick: applyTarget, busy: applyBusy }, 'Applica'),
+        ),
+        h(Feedback, { fb: applyFb }),
+      ),
+
+      // 2 - create network
+      h(GCard, { title: 'Crea una rete', subtitle: 'Avvia un coordinator locale e imposta automaticamente il target su di esso.' },
+        h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }},
+          h('div', { style: { flex: 2, minWidth: '220px' }},
+            GLabel('model id'),
+            h('input', { type: 'text', value: crModel, spellCheck: false,
+              onChange: e => setCrModel(e.target.value), placeholder: DEFAULT_MODEL, style: gInputStyle }),
+          ),
+          h('div', { style: { flex: '0 0 120px', minWidth: '100px' }},
+            GLabel('port'),
+            h('input', { type: 'text', value: crPort, spellCheck: false,
+              onChange: e => setCrPort(e.target.value), placeholder: '9000', style: gInputStyle }),
+          ),
+          h(GButton, { onClick: createNetwork, busy: crBusy }, 'Crea rete'),
+        ),
+        h(Feedback, { fb: crFb }),
+      ),
+
+      // 3 - join network
+      h(GCard, { title: 'Aggiungiti a una rete', subtitle: 'Avvia un nodo serve locale che si unisce al coordinator indicato servendo gli stage scelti.' },
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: '13px' }},
+          h('div', null,
+            GLabel('coordinator url'),
+            h('input', { type: 'text', value: jnUrl, spellCheck: false,
+              onChange: e => setJnUrl(e.target.value), placeholder: 'http://localhost:9000', style: gInputStyle }),
+          ),
+          h('div', null,
+            GLabel('stages (es. embed,decoder:0-12 · head)'),
+            h('input', { type: 'text', value: jnStages, spellCheck: false,
+              onChange: e => setJnStages(e.target.value), placeholder: 'embed,decoder:0-12', style: gInputStyle }),
+          ),
+          h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }},
+            h('div', { style: { flex: 1, minWidth: '220px' }},
+              GLabel('model id'),
+              h('input', { type: 'text', value: jnModel, spellCheck: false,
+                onChange: e => setJnModel(e.target.value), placeholder: DEFAULT_MODEL, style: gInputStyle }),
+            ),
+            h(GButton, { onClick: joinNetwork, busy: jnBusy }, 'Aggiungiti'),
+          ),
+        ),
+        h(Feedback, { fb: jnFb }),
+      ),
+
+      // 4 - local node status
+      h(GCard, { title: 'Nodo locale', subtitle: 'Processi avviati da questa UI · aggiornato ogni 2s.' },
+        roleRows.length === 0
+          ? h('div', { style: { padding: '22px', textAlign: 'center', border: '1px dashed #233246', borderRadius: '12px', color: '#647689', fontSize: '13px' }}, 'nessun processo gestito da questa UI')
+          : h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: '13px' }},
+              roleRows.map(r => h('div', { key: r.role, className: 'syn-card', style: {
+                background: '#0a121d', border: '1px solid #182539', borderRadius: '13px', padding: '15px 16px',
+                borderLeft: '3px solid ' + (r.running ? TEAL : RED),
+              }},
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }},
+                  h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' }},
+                    h(StatusDot, { on: r.running }),
+                    h('span', { style: { fontSize: '14px', fontWeight: 600, color: '#eaf2fb' }}, r.role),
+                  ),
+                  h('span', { style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10.5px', color: r.running ? TEAL : RED }}, r.running ? 'in esecuzione' : 'fermo'),
+                ),
+                h('div', { style: { marginTop: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }},
+                  r.lines.length
+                    ? r.lines.map(([k, v], i) => h('div', { key: i, style: { display: 'flex', justifyContent: 'space-between', gap: '12px', fontFamily: "'IBM Plex Mono',monospace", fontSize: '11.5px' }},
+                        h('span', { style: { color: '#566679' }}, k),
+                        h('span', { style: { color: '#aebccd', wordBreak: 'break-all', textAlign: 'right' }}, v),
+                      ))
+                    : h('div', { style: { fontSize: '11.5px', color: '#566679' }}, '—'),
+                ),
+                h('div', { style: { marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #131e2c', display: 'flex', justifyContent: 'flex-end' }},
+                  h(GButton, { onClick: () => stopRole(r.role), busy: !!stopBusy[r.role], disabled: !r.running, tone: 'danger' }, 'Stop'),
+                ),
+              )),
+            ),
+      ),
+    ),
+  );
+}
+
 /* ---------- Header ---------- */
 function Header({ view, setView, coordinatorUrl, updatedAgo, operational, error }){
   const tab = active => Object.assign({
@@ -632,6 +915,7 @@ function Header({ view, setView, coordinatorUrl, updatedAgo, operational, error 
         !operational ? h('span', { style: { fontSize: '11px' }}, '🔒') : null,
         'Chat',
       ),
+      h('button', { onClick: () => setView('gestione'), style: tab(view === 'gestione') }, 'Gestione'),
     ),
     h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', justifyContent: 'flex-end' }},
       h('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }},
@@ -655,6 +939,23 @@ function App(){
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const [now, setNow] = useState(Date.now());
   const [messages, setMessages] = useState([]);
+  const [nodeStatus, setNodeStatus] = useState(null);
+
+  // fetch local node status (used by the Gestione panel)
+  const refreshNodeStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/node/status', { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setNodeStatus(data || {});
+    } catch (e) { /* keep last known status */ }
+  }, []);
+
+  // poll node status every 2s
+  useEffect(() => {
+    refreshNodeStatus();
+    const id = setInterval(refreshNodeStatus, 2000);
+    return () => clearInterval(id);
+  }, [refreshNodeStatus]);
 
   // load config once
   useEffect(() => {
@@ -717,6 +1018,8 @@ function App(){
     ) : null,
     view === 'rete'
       ? h(ReteView, { m, coordinatorUrl, command })
+      : view === 'gestione'
+      ? h(GestioneView, { coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNodeStatus })
       : h(ChatView, { m, coordinatorUrl, command, messages, setMessages }),
   );
 }
