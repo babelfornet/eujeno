@@ -18,6 +18,13 @@ from synapse.net.coordinator import create_coordinator_app
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="Synapse — rete di inferenza LLM decentralizzata.")
 
+# Pre-import MCP stdio transport so its sys.stderr default is captured before any test
+# runner patches sys.stderr (otherwise stdio_client fails with 'fileno' inside CliRunner).
+try:
+    import mcp.client.stdio as _mcp_stdio  # noqa: F401
+except ImportError:
+    pass
+
 # Stato globale impostato dal callback (modalità output).
 _state = {"json": False}
 
@@ -294,6 +301,43 @@ def infer(
         _fail("infer", "GENERATION_FAILED", str(e))
     data = {"model": topo.model, "prompt": prompt, **result}
     _emit_ok("infer", data, human=result["text"])
+
+
+@app.command()
+def mcp(
+    add: str = typer.Option(None, "--add", help="Nome di un server MCP da aggiungere"),
+    command: str = typer.Option(None, "--command", help="Comando del server MCP (con --add)"),
+    args: str = typer.Option(None, "--args", help="Argomenti del comando, separati da spazio"),
+    remove: str = typer.Option(None, "--remove", help="Nome di un server MCP da rimuovere"),
+):
+    """Configura i server MCP (tool) usabili da 'synapse infer --mcp'. Senza switch: elenca."""
+    from synapse.mcp_config import load_servers, add_server, remove_server
+    if add:
+        if not command:
+            _fail("mcp", "USAGE_ERROR", "--command è obbligatorio con --add", exit_code=2)
+        servers = add_server(add, command, (args or "").split())
+        _emit_ok("mcp", {"servers": list(servers.keys())}, human=f"aggiunto server MCP: {add}")
+        return
+    if remove:
+        servers = remove_server(remove)
+        _emit_ok("mcp", {"servers": list(servers.keys())}, human=f"rimosso: {remove}")
+        return
+    servers = load_servers()
+    tools = []
+    if servers:
+        from synapse.ui.mcp import McpRegistry
+        reg = McpRegistry()
+        for name, cfg in servers.items():
+            reg.add(name, cfg["command"], cfg.get("args", []))
+        try:
+            tools = [{"name": t["function"]["name"], "description": t["function"]["description"]}
+                     for t in reg.list_tools()]
+        except Exception as e:
+            _emit_ok("mcp", {"servers": list(servers.keys()), "tools": [], "error": str(e)},
+                     human=f"server: {list(servers.keys())}  (tool non elencabili: {e})")
+            return
+    human = "\n".join([f"server MCP: {list(servers.keys())}"] + [f"  🔧 {t['name']} — {t['description']}" for t in tools])
+    _emit_ok("mcp", {"servers": list(servers.keys()), "tools": tools}, human=human or "nessun server MCP configurato")
 
 
 @app.command()
