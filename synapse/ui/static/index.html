@@ -422,7 +422,7 @@ function ReteView({ m, coordinatorUrl, command }){
 }
 
 /* ---------- Chat view ---------- */
-function ChatView({ m, coordinatorUrl, command, messages, setMessages }){
+function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, setUseMcp, mcp }){
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const msgRef = useRef(null);
@@ -446,10 +446,12 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages }){
     setInput('');
     setLoading(true);
     try {
+      const body = { messages: history.map(mm => ({ role: mm.role, content: mm.content })), max_tokens: 256, temperature: 0.7 };
+      if (useMcp) body.use_mcp = true;
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: history.map(mm => ({ role: mm.role, content: mm.content })), max_tokens: 256, temperature: 0.7 }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok){
@@ -462,14 +464,15 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages }){
         let fail = undefined;
         if (typeof data.failovers === 'number') fail = data.failovers;
         else if (choice && typeof choice.failovers === 'number') fail = choice.failovers;
-        setMessages(h2 => h2.concat([{ role: 'assistant', content, failovers: fail }]));
+        const toolRuns = Array.isArray(data.tool_runs) ? data.tool_runs : [];
+        setMessages(h2 => h2.concat([{ role: 'assistant', content, failovers: fail, toolRuns }]));
       }
     } catch (e) {
       setMessages(h2 => h2.concat([{ role: 'system', content: 'coordinator non raggiungibile: ' + (e && e.message || e) }]));
     } finally {
       setLoading(false);
     }
-  }, [input, loading, m.operational, messages, setMessages]);
+  }, [input, loading, m.operational, messages, setMessages, useMcp]);
 
   const onKey = e => {
     if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); send(); }
@@ -525,9 +528,29 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages }){
       ? { background: '#2a1410', color: '#fca5a5', border: '1px solid #5a241c', borderRadius: '14px', padding: '11px 14px', fontSize: '13px', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }
       : { background: '#0c1626', color: '#dbe6f3', border: '1px solid #1c2a3e', borderRadius: '14px 14px 14px 4px', padding: '11px 14px', fontSize: '14px', lineHeight: 1.55, whiteSpace: 'pre-wrap', wordBreak: 'break-word' };
     const hasFail = mm.role === 'assistant' && typeof mm.failovers === 'number';
+    const runs = (mm.role === 'assistant' && Array.isArray(mm.toolRuns)) ? mm.toolRuns : [];
+    const truncRes = r => {
+      let s = r == null ? '' : (typeof r === 'string' ? r : JSON.stringify(r));
+      if (s.length > 80) s = s.slice(0, 80) + '…';
+      return s;
+    };
     return h('div', { key: idx, style: { display: 'flex', justifyContent: u ? 'flex-end' : (sys ? 'center' : 'flex-start'), marginBottom: '14px' }},
       h('div', { style: { display: 'flex', flexDirection: 'column', alignItems: u ? 'flex-end' : 'flex-start', maxWidth: '78%' }},
         h('div', { style: bubbleStyle }, mm.content),
+        runs.length ? h('div', { style: {
+          marginTop: '7px', display: 'flex', flexDirection: 'column', gap: '5px',
+          background: '#0a131f', border: '1px solid #16314a', borderRadius: '10px', padding: '9px 11px', maxWidth: '100%',
+        }},
+          runs.map((r, ri) => h('div', { key: ri, style: {
+            fontFamily: "'IBM Plex Mono',monospace", fontSize: '11px', color: '#9fd8d0',
+            display: 'flex', gap: '6px', alignItems: 'baseline', flexWrap: 'wrap',
+          }},
+            h('span', null, '🔧'),
+            h('span', { style: { color: '#7ff0e0', fontWeight: 600 }}, r.name || 'tool'),
+            h('span', { style: { color: '#566679' }}, '→'),
+            h('span', { style: { color: '#8b9bb0', wordBreak: 'break-all' }}, '"' + truncRes(r.result) + '"'),
+          )),
+        ) : null,
         hasFail ? h('div', { style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10px', color: '#5b8e88', marginTop: '5px', padding: '0 4px' }}, 'failovers: ' + mm.failovers) : null,
       ),
     );
@@ -546,6 +569,9 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages }){
         h(CopyChip, { prefix: 'CLI', text: cli }),
         h(CopyChip, { prefix: 'cURL', text: curl }),
         h(CopyChip, { prefix: 'OpenAI', text: openai }),
+        h('div', { style: { flex: 1 }}),
+        h('span', { style: { fontSize: '10px', fontFamily: "'IBM Plex Mono',monospace", color: useMcp ? '#7ff0e0' : '#566679', letterSpacing: '.5px' }}, 'MCP'),
+        h(ToggleSwitch, { on: !!useMcp, onChange: setUseMcp }),
       ),
     ),
     // messages
@@ -586,7 +612,19 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages }){
           sendDisabled ? { background: '#16202e', color: '#5b6b80', cursor: 'not-allowed' } : { background: '#2dd4bf', color: '#04201c', cursor: 'pointer' },
         )}, loading ? '…' : 'Invia'),
       ),
-      h('div', { style: { width: 'min(880px,92%)', margin: '7px auto 0', fontSize: '10.5px', color: '#3f5168', fontFamily: "'IBM Plex Mono',monospace" }}, 'Invio per inviare · Maiusc+Invio per andare a capo'),
+      h('div', { style: { width: 'min(880px,92%)', margin: '7px auto 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }},
+        h('span', { style: { fontSize: '10.5px', color: '#3f5168', fontFamily: "'IBM Plex Mono',monospace" }}, 'Invio per inviare · Maiusc+Invio per andare a capo'),
+        (useMcp && mcp && mcp.servers && mcp.servers.length)
+          ? h('span', { style: {
+              display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontWeight: 600, letterSpacing: '.4px',
+              fontFamily: "'IBM Plex Mono',monospace", color: TEAL,
+              background: 'rgba(45,212,191,.10)', border: '1px solid ' + TEAL + '55', borderRadius: '8px', padding: '4px 9px',
+            }},
+              h('span', { style: { width: '6px', height: '6px', borderRadius: '50%', background: TEAL, boxShadow: '0 0 8px ' + TEAL, display: 'inline-block' }}),
+              'MCP attivo · ' + ((mcp.tools && mcp.tools.length) || 0) + ' tool',
+            )
+          : null,
+      ),
     ),
   );
 }
@@ -874,8 +912,177 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
   );
 }
 
+/* ---------- toggle switch ---------- */
+function ToggleSwitch({ on, onChange }){
+  return h('button', { onClick: () => onChange(!on), style: {
+    cursor: 'pointer', border: 'none', padding: 0, flex: 'none',
+    width: '42px', height: '24px', borderRadius: '12px', position: 'relative',
+    transition: 'background .25s ease',
+    background: on ? TEAL : '#1f2e44',
+  }},
+    h('span', { style: {
+      position: 'absolute', top: '3px', left: on ? '21px' : '3px',
+      width: '18px', height: '18px', borderRadius: '50%',
+      background: on ? '#04201c' : '#7f93ab', transition: 'left .25s ease',
+    }}),
+  );
+}
+
+/* ---------- MCP view ---------- */
+function McpView({ mcp, refreshMcp, useMcp, setUseMcp }){
+  const [name, setName] = useState('');
+  const [command, setCommand] = useState('');
+  const [args, setArgs] = useState('');
+  const [addBusy, setAddBusy] = useState(false);
+  const [addFb, setAddFb] = useState(null);
+  const [rmBusy, setRmBusy] = useState({});
+
+  const postJson = async (url, body) => {
+    const res = await fetch(url, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  };
+  const errText = (data, res, fallback) =>
+    (data && (data.error || data.detail)) || (fallback + ' (errore ' + res.status + ')');
+
+  const addServer = async () => {
+    const nm = name.trim();
+    const cmd = command.trim();
+    if (!nm){ setAddFb({ kind: 'err', text: 'inserisci un nome per il server' }); return; }
+    if (!cmd){ setAddFb({ kind: 'err', text: 'inserisci un comando (es. npx)' }); return; }
+    const argList = args.trim() ? args.trim().split(/\s+/) : [];
+    setAddBusy(true); setAddFb(null);
+    try {
+      const { res, data } = await postJson('/api/mcp/add', { name: nm, command: cmd, args: argList });
+      if (!res.ok || (data && data.ok === false)){
+        setAddFb({ kind: 'err', text: errText(data, res, 'impossibile aggiungere il server') });
+      } else {
+        setAddFb({ kind: 'ok', text: 'server "' + nm + '" aggiunto · i tool verranno scoperti al collegamento' });
+        setName(''); setCommand(''); setArgs('');
+        refreshMcp();
+      }
+    } catch (e) {
+      setAddFb({ kind: 'err', text: 'richiesta fallita: ' + (e && e.message || e) });
+    } finally { setAddBusy(false); }
+  };
+
+  const removeServer = async (nm) => {
+    setRmBusy(b => Object.assign({}, b, { [nm]: true }));
+    try {
+      const { res, data } = await postJson('/api/mcp/remove', { name: nm });
+      if (!res.ok || (data && data.ok === false)){ window.alert(errText(data, res, 'impossibile rimuovere il server')); }
+      refreshMcp();
+    } catch (e) {
+      window.alert('richiesta fallita: ' + (e && e.message || e));
+    } finally {
+      setRmBusy(b => Object.assign({}, b, { [nm]: false }));
+    }
+  };
+
+  const servers = (mcp && mcp.servers) || [];
+  const tools = (mcp && mcp.tools) || [];
+  const fieldStyle = { flex: 1, minWidth: '200px' };
+
+  return h('main', { style: { flex: 1, minHeight: 0, overflow: 'auto', padding: '20px 24px 40px' }},
+    h('div', { style: { maxWidth: '920px', margin: '0 auto' }},
+
+      // toggle - enable tools in chat
+      h(GCard, { title: 'Tool MCP nella chat', subtitle: 'Quando attivo, la chat invia le richieste in modalità tool-calling: il modello può chiamare i tool MCP configurati qui sotto.' },
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }},
+          h(ToggleSwitch, { on: useMcp, onChange: setUseMcp }),
+          h('span', { style: { fontSize: '13px', color: useMcp ? '#7ff0e0' : '#8b9bb0', fontWeight: 600 }},
+            useMcp ? 'Tool MCP attivi nella chat' : 'Tool MCP disattivati'),
+          servers.length ? h('span', { style: {
+            fontFamily: "'IBM Plex Mono',monospace", fontSize: '11px', color: '#566679',
+          }}, servers.length + ' server · ' + tools.length + ' tool') : null,
+        ),
+        h('div', { style: { marginTop: '13px', fontSize: '11.5px', color: '#647689', lineHeight: 1.5 }},
+          'I tool MCP sono eseguiti da questa UI; il modello decide quando chiamarli. Richiede un modello che supporti il tool-calling.'),
+      ),
+
+      // add server
+      h(GCard, { title: 'Aggiungi server MCP', subtitle: 'Definisce un server MCP avviato via comando locale (stdio). Gli args sono separati da spazi.' },
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: '13px' }},
+          h('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap' }},
+            h('div', { style: fieldStyle },
+              GLabel('name'),
+              h('input', { type: 'text', value: name, spellCheck: false,
+                onChange: e => setName(e.target.value), placeholder: 'filesystem', style: gInputStyle }),
+            ),
+            h('div', { style: fieldStyle },
+              GLabel('command'),
+              h('input', { type: 'text', value: command, spellCheck: false,
+                onChange: e => setCommand(e.target.value), placeholder: 'npx', style: gInputStyle }),
+            ),
+          ),
+          h('div', null,
+            GLabel('args (separati da spazi)'),
+            h('input', { type: 'text', value: args, spellCheck: false,
+              onChange: e => setArgs(e.target.value),
+              onKeyDown: e => { if (e.key === 'Enter') addServer(); },
+              placeholder: '@modelcontextprotocol/server-filesystem /path', style: gInputStyle }),
+          ),
+          h('div', { style: { display: 'flex', justifyContent: 'flex-end' }},
+            h(GButton, { onClick: addServer, busy: addBusy }, 'Aggiungi'),
+          ),
+        ),
+        h(Feedback, { fb: addFb }),
+      ),
+
+      // configured servers + discovered tools
+      h(GCard, { title: 'Server configurati', subtitle: 'Server MCP registrati in questa UI e tool scoperti.' },
+        mcp && mcp.error
+          ? h('div', { style: {
+              fontSize: '12px', lineHeight: 1.5, padding: '11px 13px', borderRadius: '10px',
+              fontFamily: "'IBM Plex Mono',monospace", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              background: 'rgba(245,158,11,.08)', border: '1px solid #3d300f', color: '#f3c46b',
+            }}, '⚠ ' + mcp.error)
+          : null,
+        servers.length === 0
+          ? h('div', { style: { marginTop: mcp && mcp.error ? '13px' : 0, padding: '22px', textAlign: 'center', border: '1px dashed #233246', borderRadius: '12px', color: '#647689', fontSize: '13px' }}, 'nessun server MCP configurato')
+          : h('div', { style: { marginTop: mcp && mcp.error ? '13px' : 0, display: 'flex', flexDirection: 'column', gap: '11px' }},
+              servers.map(nm => h('div', { key: nm, className: 'syn-card', style: {
+                background: '#0a121d', border: '1px solid #182539', borderRadius: '13px',
+                padding: '14px 16px', borderLeft: '3px solid ' + TEAL,
+              }},
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }},
+                  h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' }},
+                    h(StatusDot, { on: true }),
+                    h('span', { style: { fontSize: '14px', fontWeight: 600, color: '#eaf2fb', fontFamily: "'IBM Plex Mono',monospace" }}, nm),
+                  ),
+                  h(GButton, { onClick: () => removeServer(nm), busy: !!rmBusy[nm], tone: 'danger' }, 'Rimuovi'),
+                ),
+              )),
+            ),
+
+        // discovered tools
+        h('div', { style: { marginTop: '18px' }},
+          h('div', { style: { fontSize: '10.5px', letterSpacing: '.4px', color: '#7f93ab', fontFamily: "'IBM Plex Mono',monospace", marginBottom: '10px' }},
+            'TOOL SCOPERTI' + (tools.length ? ' (' + tools.length + ')' : '')),
+          tools.length === 0
+            ? h('div', { style: { padding: '16px', textAlign: 'center', border: '1px dashed #233246', borderRadius: '12px', color: '#647689', fontSize: '12.5px' }}, 'nessun tool disponibile')
+            : h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(248px,1fr))', gap: '11px' }},
+                tools.map((t, i) => h('div', { key: t.name || i, style: {
+                  background: '#0b1320', border: '1px solid #1c2a3e', borderRadius: '11px', padding: '12px 14px',
+                }},
+                  h('div', { style: { display: 'flex', alignItems: 'center', gap: '7px' }},
+                    h('span', { style: { fontSize: '12px' }}, '🔧'),
+                    h('span', { style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '12px', color: '#7ff0e0', fontWeight: 600, wordBreak: 'break-all' }}, t.name || '—'),
+                  ),
+                  t.description ? h('div', { style: { fontSize: '11.5px', color: '#8b9bb0', marginTop: '7px', lineHeight: 1.5 }}, t.description) : null,
+                )),
+              ),
+        ),
+      ),
+    ),
+  );
+}
+
 /* ---------- Header ---------- */
-function Header({ view, setView, coordinatorUrl, updatedAgo, operational, error }){
+function Header({ view, setView, coordinatorUrl, updatedAgo, operational, error, mcpCount }){
   const tab = active => Object.assign({
     cursor: 'pointer', border: 'none', borderRadius: '8px', padding: '7px 16px',
     fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '13px', fontWeight: 600,
@@ -916,6 +1123,13 @@ function Header({ view, setView, coordinatorUrl, updatedAgo, operational, error 
         'Chat',
       ),
       h('button', { onClick: () => setView('gestione'), style: tab(view === 'gestione') }, 'Gestione'),
+      h('button', { onClick: () => setView('mcp'), style: tab(view === 'mcp') },
+        'MCP',
+        mcpCount ? h('span', { style: {
+          fontFamily: "'IBM Plex Mono',monospace", fontSize: '9.5px', color: '#04201c',
+          background: TEAL, borderRadius: '6px', padding: '1px 5px', fontWeight: 700,
+        }}, mcpCount) : null,
+      ),
     ),
     h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', justifyContent: 'flex-end' }},
       h('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }},
@@ -940,6 +1154,8 @@ function App(){
   const [now, setNow] = useState(Date.now());
   const [messages, setMessages] = useState([]);
   const [nodeStatus, setNodeStatus] = useState(null);
+  const [useMcp, setUseMcp] = useState(false);
+  const [mcp, setMcp] = useState({ servers: [], tools: [], error: null });
 
   // fetch local node status (used by the Gestione panel)
   const refreshNodeStatus = useCallback(async () => {
@@ -948,6 +1164,20 @@ function App(){
       const data = await res.json().catch(() => ({}));
       if (res.ok) setNodeStatus(data || {});
     } catch (e) { /* keep last known status */ }
+  }, []);
+
+  // fetch MCP servers + discovered tools (used by the MCP panel + chat badge)
+  const refreshMcp = useCallback(async () => {
+    try {
+      const res = await fetch('/api/mcp/list', { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setMcp({
+        servers: Array.isArray(data.servers) ? data.servers : [],
+        tools: Array.isArray(data.tools) ? data.tools : [],
+        error: data.error || null,
+      });
+      else setMcp(prev => Object.assign({}, prev, { error: (data && data.error) || ('errore ' + res.status) }));
+    } catch (e) { setMcp(prev => Object.assign({}, prev, { error: 'richiesta fallita: ' + (e && e.message || e) })); }
   }, []);
 
   // poll node status every 2s
@@ -999,6 +1229,10 @@ function App(){
     return () => clearInterval(id);
   }, []);
 
+  // refresh MCP servers/tools on entering the MCP view; also load once for the chat badge
+  useEffect(() => { refreshMcp(); }, [refreshMcp]);
+  useEffect(() => { if (view === 'mcp') refreshMcp(); }, [view, refreshMcp]);
+
   const m = buildChain(registry || {});
   const command = serveCommand(coordinatorUrl, m);
   const updatedAgo = 'aggiornato ' + Math.max(0, Math.round((now - lastUpdate) / 1000)) + 's fa';
@@ -1007,7 +1241,7 @@ function App(){
     height: '100vh', display: 'flex', flexDirection: 'column', background: '#070a10',
     color: '#cdd7e5', fontFamily: "'IBM Plex Sans',system-ui,sans-serif",
   }},
-    h(Header, { view, setView, coordinatorUrl, updatedAgo, operational: m.operational, error }),
+    h(Header, { view, setView, coordinatorUrl, updatedAgo, operational: m.operational, error, mcpCount: mcp.servers.length }),
     error ? h('div', { style: {
       flex: 'none', background: '#2a1410', borderBottom: '1px solid #5a241c', color: '#fca5a5',
       fontFamily: "'IBM Plex Mono',monospace", fontSize: '12px', padding: '9px 24px',
@@ -1020,7 +1254,9 @@ function App(){
       ? h(ReteView, { m, coordinatorUrl, command })
       : view === 'gestione'
       ? h(GestioneView, { coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNodeStatus })
-      : h(ChatView, { m, coordinatorUrl, command, messages, setMessages }),
+      : view === 'mcp'
+      ? h(McpView, { mcp, refreshMcp, useMcp, setUseMcp })
+      : h(ChatView, { m, coordinatorUrl, command, messages, setMessages, useMcp, setUseMcp, mcp }),
   );
 }
 
