@@ -89,3 +89,30 @@ def test_chat_output_has_no_special_tokens(full_model):
         assert r["choices"][0]["finish_reason"] in ("stop", "length")
     finally:
         srv.should_exit = True
+
+
+@pytest.mark.slow
+def test_chat_completions_accepts_tools(full_model):
+    srv, base = _two_node_coordinator(full_model)
+    tools = [{
+        "type": "function",
+        "function": {"name": "get_weather", "description": "Meteo di una città",
+                     "parameters": {"type": "object", "properties": {"city": {"type": "string"}},
+                                    "required": ["city"]}},
+    }]
+    try:
+        with httpx.Client(timeout=60.0) as c:
+            r = c.post(f"{base}/v1/chat/completions", json={
+                "model": "synapse",
+                "messages": [{"role": "user", "content": "Che tempo fa a Roma?"}],
+                "tools": tools, "max_tokens": 64,
+            }).json()
+        choice = r["choices"][0]
+        assert "message" in choice
+        if choice["message"].get("tool_calls"):
+            assert choice["finish_reason"] == "tool_calls"
+            assert choice["message"]["tool_calls"][0]["type"] == "function"
+        else:
+            assert isinstance(choice["message"].get("content"), str)
+    finally:
+        srv.should_exit = True

@@ -10,6 +10,7 @@ from synapse.net.framing import pack, unpack
 from synapse.net.wire import encode_tensors, decode_tensors
 from synapse.net.discovery import build_chain
 from synapse.net.sampling import sample_token
+from synapse.net.tools import extract_tool_calls
 
 
 MAX_FAILOVERS = 5
@@ -162,22 +163,29 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
         body = await request.json()
         messages = body.get("messages", [])
         max_new = int(body.get("max_tokens", 256))
+        tools = body.get("tools")
         sampling = {k: body.get(k) for k in ("temperature", "top_p", "repetition_penalty", "seed")}
         try:
-            prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            prompt = tokenizer.apply_chat_template(messages, tools=tools, tokenize=False,
+                                                   add_generation_prompt=True)
         except Exception:
-            prompt = "\n".join(m.get("content", "") for m in messages)
+            prompt = "\n".join((m.get("content") or "") for m in messages)
         result, err = await _generate_with_failover(prompt, max_new, sampling)
         if err is not None:
             return JSONResponse({"error": {"message": err["error"], "type": "not_operational"}}, status_code=503)
         text = tokenizer.decode(result["tokens"], skip_special_tokens=True)
+        content, tool_calls = extract_tool_calls(text)
+        message = {"role": "assistant", "content": (content if content else None)}
+        finish_reason = result["finish_reason"]
+        if tool_calls:
+            message["tool_calls"] = tool_calls
+            finish_reason = "tool_calls"
         return {
             "id": "chatcmpl-" + _next_id("oa"),
             "object": "chat.completion",
             "created": int(time.time()),
             "model": model_id,
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": text},
-                         "finish_reason": result["finish_reason"]}],
+            "choices": [{"index": 0, "message": message, "finish_reason": finish_reason}],
             "usage": {"prompt_tokens": result["prompt_len"],
                       "completion_tokens": len(result["tokens"]),
                       "total_tokens": result["prompt_len"] + len(result["tokens"])},
