@@ -41,6 +41,12 @@ class DecoderBlock:
             )[0]
         return hidden_states
 
+    def get_cache(self):
+        return self.cache
+
+    def set_cache(self, cache):
+        self.cache = cache
+
 
 class HeadBlock:
     """Ultimo blocco: hidden_states -> logits (final norm + lm_head)."""
