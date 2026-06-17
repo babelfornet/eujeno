@@ -22,7 +22,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
     async def _call(conn_id, header, payload=b""):
         c = conns[conn_id]
         req_id = _next_id("r")
-        fut = asyncio.get_event_loop().create_future()
+        fut = asyncio.get_running_loop().create_future()
         c["pending"][req_id] = fut
         await c["ws"].send_bytes(pack({**header, "req_id": req_id}, payload))
         return await fut   # (resp_header, resp_payload)
@@ -40,7 +40,13 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
                 if fut is not None and not fut.done():
                     fut.set_result((rh, rp))
         except WebSocketDisconnect:
-            conns.pop(conn_id, None)
+            pass
+        finally:
+            c = conns.pop(conn_id, None)
+            if c is not None:   # fai fallire le richieste pendenti invece di lasciarle appese
+                for fut in c["pending"].values():
+                    if not fut.done():
+                        fut.set_exception(ConnectionError(f"nodo {conn_id} disconnesso"))
 
     @app.get("/registry")
     async def registry():

@@ -11,7 +11,7 @@ async def run_node(coordinator_ws_url: str, state):
     gli hop relayati. Il calcolo torch gira in un executor per non bloccare il loop."""
     async with websockets.connect(coordinator_ws_url, max_size=None) as ws:
         await ws.send(pack({"type": "announce", "stages": state.stages_dict()}))
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         async for message in ws:
             header, payload = unpack(message)
             resp_header, resp_payload = await loop.run_in_executor(
