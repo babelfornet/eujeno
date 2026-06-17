@@ -28,7 +28,9 @@ def test_single_node_serving_all_stages_matches_reference(full_model):
                         content=encode_tensors({"hidden_states": h, "cache_position": cache_position}))
         h = decode_tensors(r.content)["hidden_states"]
         r = client.post("/head", params={"job_id": "j"}, content=encode_tensors({"hidden_states": h}))
-        token_id = r.json()["token_id"]
+        hr = r.json()
+        assert "topk_ids" in hr and "topk_logits" in hr
+        token_id = hr["token_id"]
         generated.append(token_id)
         cur_ids = torch.tensor([[token_id]])
         cache_position = torch.tensor([L + step])

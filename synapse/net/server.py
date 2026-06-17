@@ -3,6 +3,7 @@ import time
 from contextlib import asynccontextmanager
 
 import httpx
+import torch
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
@@ -89,13 +90,15 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
         return Response(encode_tensors({"hidden_states": h}), media_type=_OCTET)
 
     @app.post("/head")
-    async def head(job_id: str, request: Request):
+    async def head(job_id: str, request: Request, topk: int = 1):
         if head_block is None:
             return JSONResponse({"error": "questo nodo non serve lo stage head"}, status_code=400)
         t = decode_tensors(await request.body())
-        logits = head_block.run_block(t["hidden_states"])
-        token_id = int(logits[:, -1, :].argmax(-1).item())
-        return JSONResponse({"token_id": token_id})
+        logits = head_block.run_block(t["hidden_states"])[:, -1, :]
+        k = min(int(topk), logits.shape[-1])
+        vals, idx = torch.topk(logits[0], k=k)
+        ids = idx.tolist()
+        return JSONResponse({"token_id": ids[0], "topk_ids": ids, "topk_logits": vals.tolist()})
 
     @app.delete("/job/{job_id}")
     async def end_job(job_id: str):
