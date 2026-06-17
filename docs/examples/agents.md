@@ -52,6 +52,20 @@ r = client.chat.completions.create(model="synapse",
 
 Nota: il tool-calling affidabile richiede un modello capace (7B+). Con Qwen 0.5B serve a verificare il meccanismo. La generazione si ferma alla fine-turno (EOS) e l'output è ripulito dai token speciali.
 
+## Tool MCP da riga di comando
+
+Configura i server MCP e usali nell'inferenza senza frontend:
+
+```bash
+# aggiungi un server MCP (stdio)
+synapse mcp --add fs --command npx --args "@modelcontextprotocol/server-filesystem /percorso"
+synapse --json mcp                 # elenca server + tool scoperti
+# interroga il modello con i tool MCP (loop tool-calling)
+synapse infer --coordinator http://IP:9000 --mcp --prompt "Elenca i file in /percorso"
+synapse mcp --remove fs
+```
+La config è salvata in `~/.synapse/mcp.json` (override con `SYNAPSE_HOME`). `--mcp` richiede `--coordinator` o `--peer` (entrambi espongono `/v1`). Richiede un modello che supporti il tool-calling.
+
 ## Tanti agenti in parallelo
 
 Ogni richiesta è un **job** sulla rete e il coordinator gestisce job concorrenti. Per molti agenti contemporanei conviene:
