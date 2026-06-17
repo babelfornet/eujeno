@@ -6,7 +6,7 @@ import typer
 
 from synapse.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
 from synapse.model.blocks import compute_boundaries, split_into_blocks
-from synapse.model.loader import model_config_dims, load_full_model, model_dims
+from synapse.model.loader import model_config_dims, load_full_model, load_partial_model, model_dims
 from synapse.model.generate import reference_generate, pipeline_generate
 from synapse.net.topology import parse_stages, load_topology, Topology
 from synapse.net.server import create_app
@@ -175,15 +175,17 @@ def serve(
     num_layers: int = typer.Option(None, "--num-layers", help="Numero totale layer (per coverage). Default: dal config."),
     coordinator: str = typer.Option(None, "--coordinator", help="URL WS del coordinator (es. ws://host:9000/node). Se presente, il nodo si connette in uscita invece di esporre un server diretto."),
 ):
-    """Avvia un BlockServer che ospita gli stage indicati (processo a lunga durata)."""
+    """Avvia un BlockServer che ospita gli stage indicati (processo a lunga durata).
+
+    Carica in RAM SOLO i layer assegnati (partial loading): un nodo non deve avere
+    risorse per il modello intero, basta per i suoi stage."""
     import uvicorn
     try:
         spec = parse_stages(stages)
     except ValueError as e:
         _fail("serve", "USAGE_ERROR", str(e), exit_code=2)
     try:
-        model, tokenizer = load_full_model(model_id, DTYPE, DEVICE)
-        model.eval()
+        model, tokenizer = load_partial_model(model_id, spec, DTYPE, DEVICE)
     except Exception as e:
         _fail("serve", "MODEL_LOAD_FAILED", str(e))
     if coordinator:
