@@ -37,6 +37,21 @@ ANTHROPIC_BASE_URL=http://LITELLM:4000 claude
 
 Lo **streaming SSE** e un endpoint Anthropic nativo `/v1/messages` sono i prossimi passi (vedi [ROADMAP](../ROADMAP.md)).
 
+## Tool calling (e tool MCP)
+
+`/v1/chat/completions` accetta il parametro `tools` (formato OpenAI) e, se il modello decide di chiamare un tool, ritorna `tool_calls` con `finish_reason: "tool_calls"`. I **tool MCP li esegue l'agente/host** (Claude Code, ecc.): il modello decide *quale* tool chiamare, l'agente lo esegue e rimanda il risultato come messaggio `role: "tool"`.
+
+```python
+tools = [{"type":"function","function":{
+  "name":"get_weather","description":"Meteo di una città",
+  "parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}]
+r = client.chat.completions.create(model="synapse",
+      messages=[{"role":"user","content":"Che tempo fa a Roma?"}], tools=tools)
+# r.choices[0].message.tool_calls -> [{function:{name:"get_weather", arguments:'{"city":"Roma"}'}}]
+```
+
+Nota: il tool-calling affidabile richiede un modello capace (7B+). Con Qwen 0.5B serve a verificare il meccanismo. La generazione si ferma alla fine-turno (EOS) e l'output è ripulito dai token speciali.
+
 ## Tanti agenti in parallelo
 
 Ogni richiesta è un **job** sulla rete e il coordinator gestisce job concorrenti. Per molti agenti contemporanei conviene:
