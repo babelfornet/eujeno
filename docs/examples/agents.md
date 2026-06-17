@@ -1,5 +1,7 @@
 # Collegare agenti AI a Synapse (API OpenAI-compatibile)
 
+> Un agente può anche **portare su una rete da zero**: `synapse models` elenca i modelli compatibili e `synapse up --model <id> [--dtype bfloat16]` avvia coordinator + un nodo che copre tutti i layer in un comando (`--dry-run` per anteprima). Vedi [CLAUDE.md](../../CLAUDE.md).
+
 Quando il modello è OPERATIVO, il coordinator espone un'API **OpenAI-compatibile**: punta qualsiasi client/SDK OpenAI a `http://IL_COORDINATOR:9000/v1`.
 
 Endpoint disponibili: `GET /v1/models`, `POST /v1/chat/completions` (con `temperature`, `top_p`, `max_tokens`, `repetition_penalty`, `seed`). Il chat template viene applicato automaticamente ai `messages`.

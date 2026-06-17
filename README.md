@@ -4,6 +4,30 @@
 
 > **Idea guida:** Synapse non è "Petals in tempo reale". È **"BOINC / SETI@home per i layer di un LLM"** — tollera latenze altissime (ore, giorni, settimane) e tratta l'inferenza come un job asincrono che avanza hop-by-hop in *store-and-forward*. Questa rinuncia al real-time rende failover e accodamento più semplici, non più difficili.
 
+## Installazione / Getting started
+
+Dopo `git clone`, parti subito con il launcher auto-bootstrap (crea `.venv` e installa al primo avvio):
+
+```bash
+./bin/synapse --help                 # primo avvio: crea .venv + pip install -e . , poi esegue
+```
+
+In alternativa, installazione manuale:
+
+```bash
+python -m venv .venv && . .venv/bin/activate && pip install -e .
+synapse --help
+```
+
+Quickstart a nodo singolo (avvia coordinator + un nodo che copre tutto il modello, in un comando):
+
+```bash
+synapse models                                   # quali modelli posso usare?
+synapse up --model Qwen/Qwen2.5-0.5B-Instruct    # bring-up; --dtype bfloat16 per modelli grandi
+```
+
+> **Agenti AI:** la CLI è AI-native (`--json` su ogni comando). Vedi **[CLAUDE.md](CLAUDE.md)** per la guida pensata per pilotare Synapse da un agente.
+
 ## Stato
 
 🚧 **PoC in costruzione.** Funziona già l'inferenza distribuita su più nodi via HTTP (orchestrator-driven, Milestone 0): un modello viene splittato in blocchi di layer ospitati da `synapse serve` su nodi diversi, e `synapse infer` esegue la generazione attraversando la rete — riproducendo esattamente il modello intero. **Prossimi passi:** discovery DHT (auto-organizzazione dei nodi), queue/store-and-forward durevole con failover. Incentivi a token rimandati (progettati su carta).
