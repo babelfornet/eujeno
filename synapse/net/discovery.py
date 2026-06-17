@@ -18,16 +18,18 @@ class Registry:
         return {u: e["stages"] for u, e in self.entries.items() if e["expiry"] > now}
 
 
-def build_chain(stages_by_url: dict, num_layers: int):
+def build_chain(stages_by_url: dict, num_layers: int, exclude=None):
     """Da {url: {'embed','head','decoders':[block_key]}} costruisce
-    (embed_url, [(block_key, url)...], head_url) che tassella [0, num_layers).
-    Ritorna None se la coverage è incompleta o manca embed/head."""
-    embed = next((u for u, s in stages_by_url.items() if s.get("embed")), None)
-    head = next((u for u, s in stages_by_url.items() if s.get("head")), None)
+    (embed_url, [(block_key, url)...], head_url) che tassella [0, num_layers),
+    ignorando gli id in `exclude`. Ritorna None se la coverage è incompleta."""
+    exclude = exclude or set()
+    items = {u: s for u, s in stages_by_url.items() if u not in exclude}
+    embed = next((u for u, s in items.items() if s.get("embed")), None)
+    head = next((u for u, s in items.items() if s.get("head")), None)
     if embed is None or head is None:
         return None
     ranges = []
-    for u, s in stages_by_url.items():
+    for u, s in items.items():
         for bk in s.get("decoders", []):
             lo, hi = (int(x) for x in bk.split("-"))
             ranges.append((lo, hi, bk, u))
