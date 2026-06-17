@@ -79,3 +79,19 @@ def split_into_blocks(model, boundaries: list[int]):
         decoders.append(DecoderBlock(layers, inner.rotary_emb))
 
     return embed, decoders, head
+
+
+def compute_boundaries(num_layers: int, n_blocks: int) -> list[int]:
+    """Divide num_layers in n_blocks blocchi decoder contigui il più possibile
+    uguali. Ritorna i confini, es. (24, 2) -> [0, 12, 24]. Copre sempre
+    [0, num_layers] in modo strettamente crescente."""
+    if n_blocks < 1:
+        raise ValueError(f"n_blocks deve essere >= 1, ricevuto {n_blocks}")
+    if n_blocks > num_layers:
+        raise ValueError(f"n_blocks ({n_blocks}) non può superare num_layers ({num_layers})")
+    base, extra = divmod(num_layers, n_blocks)
+    boundaries = [0]
+    for i in range(n_blocks):
+        size = base + (1 if i < extra else 0)   # i primi `extra` blocchi hanno un layer in più
+        boundaries.append(boundaries[-1] + size)
+    return boundaries
