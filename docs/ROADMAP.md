@@ -53,7 +53,8 @@
   - [x] **Coordinator-relay** (opt-in, NAT-senza-VPN) — [piano](./plans/2026-06-17-part2-coordinator.md) · [quickstart](./examples/coordinator.md). Nodi via WebSocket in uscita; golden via relay verde. Comandi `coordinator`, `serve --coordinator`, `infer --coordinator`.
   - [x] **Failover automatico** su nodo caduto (coordinator): ridondanza + re-instradamento su holder ridondante — [piano](./plans/2026-06-17-part3-failover.md). e2e: nodo che crasha mid-hop → job completa via ridondante.
   - [ ] Failover per-hop con replay prefisso + store-and-forward durevole SQLite (Parte 3 piena) · failover P2P-diretto · libp2p nativo per P2P-su-NAT (futuro)
-- [ ] Plan + build **Queue & Load Balancing**: job store durevole, store-and-forward, scheduling su holder ridondanti
+- [x] **API OpenAI-compatibile** (`/v1/chat/completions` + `/v1/models`) sul coordinator: chat template + sampling (temperature/top_p/repetition_penalty/seed) — [piano](./plans/2026-06-17-openai-api.md) · [guida agenti](./examples/agents.md). Collega client/agenti OpenAI. *(streaming SSE + Anthropic/LiteLLM per Claude Code = prossimi passi)*
+- [ ] Plan + build **Queue & Load Balancing**: job store durevole, store-and-forward, scheduling su holder ridondanti (per molti agenti concorrenti)
 - [ ] Plan + build **Reputazione minimale** (token ⏸ rimandati)
 - [ ] Integrazione end-to-end su 2–3 nodi + test di failover
 - [x] Setup repo GitHub privato → [albertoferrazzoli/synapse](https://github.com/albertoferrazzoli/synapse) (pubblico al primo funzionamento)

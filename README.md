@@ -36,6 +36,8 @@ Tre modi, scegli in base alla rete:
 
 Le macchine scaricano il modello da Hugging Face al primo avvio.
 
+Quando il modello è operativo, il coordinator espone un'**API OpenAI-compatibile** (`/v1/chat/completions`): puoi collegarci agenti e client OpenAI (e Claude Code via LiteLLM). Vedi **[docs/examples/agents.md](docs/examples/agents.md)**.
+
 ## Documentazione
 
 Tutto in [`docs/`](./docs/):
