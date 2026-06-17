@@ -38,3 +38,30 @@ def test_model_invalid_blocks_returns_error_envelope():
     payload = json.loads(result.stdout)
     assert payload["ok"] is False
     assert payload["error"]["code"] == "INVALID_BOUNDARIES"
+
+
+@pytest.mark.slow
+def test_generate_json_produces_text():
+    result = runner.invoke(app, ["--json", "generate", "--prompt", "La capitale dell'Italia è", "--max-new-tokens", "8"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["ok"] is True
+    assert isinstance(payload["data"]["text"], str) and payload["data"]["text"]
+    assert len(payload["data"]["tokens"]) == 8
+
+
+@pytest.mark.slow
+def test_generate_reads_prompt_from_stdin():
+    result = runner.invoke(app, ["--json", "generate", "--prompt", "-", "--max-new-tokens", "4"], input="La capitale dell'Italia è")
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["data"]["prompt"] == "La capitale dell'Italia è"
+
+
+@pytest.mark.slow
+def test_selfcheck_reports_match():
+    result = runner.invoke(app, ["--json", "selfcheck", "--max-new-tokens", "8"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["data"]["match"] is True
+    assert payload["data"]["reference"] == payload["data"]["pipeline"]

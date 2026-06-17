@@ -4,9 +4,10 @@ import sys
 
 import typer
 
-from synapse.config import DEFAULT_MODEL_ID
-from synapse.model.blocks import compute_boundaries
-from synapse.model.loader import model_config_dims
+from synapse.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
+from synapse.model.blocks import compute_boundaries, split_into_blocks
+from synapse.model.loader import model_config_dims, load_full_model, model_dims
+from synapse.model.generate import reference_generate, pipeline_generate
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="Synapse — rete di inferenza LLM decentralizzata.")
 
@@ -82,3 +83,75 @@ def model(
         f"blocchi: {blocks}  confini: {boundaries}"
     )
     _emit_ok("model", data, human)
+
+
+def _read_prompt(prompt: str) -> str:
+    """'-' legge il prompt da stdin (pipe da un agente)."""
+    if prompt == "-":
+        return sys.stdin.read().strip()
+    return prompt
+
+
+def _prepare_pipeline(model_id: str, blocks: int, command: str):
+    """Carica il modello, calcola i confini, splitta. Solleva via _fail su errore."""
+    try:
+        model, tokenizer = load_full_model(model_id, DTYPE, DEVICE)
+        model.eval()
+    except Exception as e:
+        _fail(command, "MODEL_LOAD_FAILED", str(e))
+    try:
+        boundaries = compute_boundaries(model_dims(model)["num_layers"], blocks)
+    except ValueError as e:
+        _fail(command, "INVALID_BOUNDARIES", str(e))
+    embed, decoders, head = split_into_blocks(model, boundaries)
+    return model, tokenizer, embed, decoders, head
+
+
+@app.command()
+def generate(
+    prompt: str = typer.Option(..., "--prompt", help="Testo del prompt ('-' legge da stdin)"),
+    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="ID del modello Hugging Face"),
+    max_new_tokens: int = typer.Option(8, "--max-new-tokens", help="Numero di token da generare"),
+    blocks: int = typer.Option(2, "--blocks", help="Numero di blocchi decoder"),
+):
+    """Genera testo eseguendo la pipeline splittata in-process."""
+    prompt = _read_prompt(prompt)
+    model, tokenizer, embed, decoders, head = _prepare_pipeline(model_id, blocks, "generate")
+    try:
+        ids = tokenizer(prompt, return_tensors="pt").input_ids
+        tokens = pipeline_generate(embed, decoders, head, ids, max_new_tokens)
+        text = tokenizer.decode(tokens)
+    except Exception as e:
+        _fail("generate", "GENERATION_FAILED", str(e))
+    data = {"model": model_id, "prompt": prompt, "text": text, "tokens": tokens}
+    _emit_ok("generate", data, human=text)
+
+
+@app.command()
+def selfcheck(
+    prompt: str = typer.Option("La capitale dell'Italia è", "--prompt", help="Prompt di verifica ('-' = stdin)"),
+    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="ID del modello Hugging Face"),
+    max_new_tokens: int = typer.Option(8, "--max-new-tokens", help="Numero di token da generare"),
+    blocks: int = typer.Option(2, "--blocks", help="Numero di blocchi decoder"),
+):
+    """Confronta la pipeline splittata col modello intero (golden equivalence)."""
+    prompt = _read_prompt(prompt)
+    try:
+        model, tokenizer = load_full_model(model_id, DTYPE, DEVICE)
+        model.eval()
+    except Exception as e:
+        _fail("selfcheck", "MODEL_LOAD_FAILED", str(e))
+    try:
+        boundaries = compute_boundaries(model_dims(model)["num_layers"], blocks)
+    except ValueError as e:
+        _fail("selfcheck", "INVALID_BOUNDARIES", str(e))
+    try:
+        ids = tokenizer(prompt, return_tensors="pt").input_ids
+        reference = reference_generate(model, ids, max_new_tokens)        # PRIMA dello split (split muta layer_idx)
+        embed, decoders, head = split_into_blocks(model, boundaries)
+        pipeline = pipeline_generate(embed, decoders, head, ids, max_new_tokens)
+    except Exception as e:
+        _fail("selfcheck", "GENERATION_FAILED", str(e))
+    data = {"model": model_id, "match": reference == pipeline, "reference": reference, "pipeline": pipeline}
+    human = f"match: {data['match']}\nreference: {reference}\npipeline: {pipeline}"
+    _emit_ok("selfcheck", data, human)
