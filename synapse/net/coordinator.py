@@ -28,6 +28,14 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
     conns = {}        # conn_id -> {"ws", "stages", "pending": {req_id: Future}}
     counter = {"n": 0}
 
+    stop_ids = set()
+    if tokenizer.eos_token_id is not None:
+        stop_ids.add(int(tokenizer.eos_token_id))
+    for _tok in ("<|im_end|>", "<|endoftext|>"):
+        _tid = tokenizer.convert_tokens_to_ids(_tok)
+        if isinstance(_tid, int) and _tid >= 0 and _tid != tokenizer.unk_token_id:
+            stop_ids.add(int(_tid))
+
     def _next_id(prefix):
         counter["n"] += 1
         return f"{prefix}{counter['n']}"
@@ -89,6 +97,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
         cache_position = torch.arange(seq_len)
         cur = ids
         tokens = []
+        finish_reason = "length"
         for step in range(max_new):
             _, p = await _call(embed_c, {"op": "embed", "job_id": job_id},
                                encode_tensors({"input_ids": cur}))
@@ -99,11 +108,10 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
                 h = decode_tensors(p)["hidden_states"]
             rh, _ = await _call(head_c, {"op": "head", "job_id": job_id, "topk": topk},
                                 encode_tensors({"hidden_states": h}))
-            if do_sample:
-                tok = sample_token(rh["topk_ids"], rh["topk_logits"], tokens,
-                                   temperature, top_p, rep, generator)
-            else:
-                tok = rh["token_id"]
+            tok = sample_token(rh["topk_ids"], rh["topk_logits"], tokens, temperature, top_p, rep, generator) if do_sample else rh["token_id"]
+            if tok in stop_ids:
+                finish_reason = "stop"
+                break
             tokens.append(tok)
             cur = torch.tensor([[tok]])
             cache_position = torch.tensor([seq_len + step])
@@ -112,7 +120,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
                 await _call(cid, {"op": "end", "job_id": job_id})
             except _NodeFailure:
                 pass
-        return tokens, seq_len
+        return tokens, seq_len, finish_reason
 
     async def _generate_with_failover(prompt, max_new, sampling):
         excluded = set()
@@ -123,8 +131,8 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
             if chain is None:
                 return None, {"error": "modello non operativo: coverage incompleta", "excluded": sorted(excluded)}
             try:
-                tokens, prompt_len = await _run_generation(chain, prompt, max_new, sampling, _next_id("job"))
-                return {"tokens": tokens, "prompt_len": prompt_len, "failovers": attempt}, None
+                tokens, prompt_len, finish_reason = await _run_generation(chain, prompt, max_new, sampling, _next_id("job"))
+                return {"tokens": tokens, "prompt_len": prompt_len, "failovers": attempt, "finish_reason": finish_reason}, None
             except _NodeFailure as e:
                 excluded.add(e.conn_id)
                 last_failed = e.conn_id
@@ -140,7 +148,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
         if err is not None:
             return {"ok": False, **err}
         return {"ok": True, "model": model_id, "prompt": prompt,
-                "text": tokenizer.decode(result["tokens"]), "tokens": result["tokens"],
+                "text": tokenizer.decode(result["tokens"], skip_special_tokens=True), "tokens": result["tokens"],
                 "failovers": result["failovers"]}
 
     @app.get("/v1/models")
@@ -162,14 +170,14 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
         result, err = await _generate_with_failover(prompt, max_new, sampling)
         if err is not None:
             return JSONResponse({"error": {"message": err["error"], "type": "not_operational"}}, status_code=503)
-        text = tokenizer.decode(result["tokens"])
+        text = tokenizer.decode(result["tokens"], skip_special_tokens=True)
         return {
             "id": "chatcmpl-" + _next_id("oa"),
             "object": "chat.completion",
             "created": int(time.time()),
             "model": model_id,
             "choices": [{"index": 0, "message": {"role": "assistant", "content": text},
-                         "finish_reason": "stop"}],
+                         "finish_reason": result["finish_reason"]}],
             "usage": {"prompt_tokens": result["prompt_len"],
                       "completion_tokens": len(result["tokens"]),
                       "total_tokens": result["prompt_len"] + len(result["tokens"])},

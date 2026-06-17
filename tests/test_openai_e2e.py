@@ -72,3 +72,20 @@ def test_openai_chat_completions(full_model):
         assert body["usage"]["completion_tokens"] >= 1
     finally:
         srv.should_exit = True
+
+
+@pytest.mark.slow
+def test_chat_output_has_no_special_tokens(full_model):
+    srv, base = _two_node_coordinator(full_model)
+    try:
+        with httpx.Client(timeout=60.0) as c:
+            r = c.post(f"{base}/v1/chat/completions", json={
+                "model": "synapse",
+                "messages": [{"role": "user", "content": "Di' ciao."}],
+                "max_tokens": 64,
+            }).json()
+        content = r["choices"][0]["message"]["content"]
+        assert "<|im_end|>" not in content and "<|endoftext|>" not in content
+        assert r["choices"][0]["finish_reason"] in ("stop", "length")
+    finally:
+        srv.should_exit = True
