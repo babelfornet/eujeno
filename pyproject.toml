@@ -28,3 +28,6 @@ addopts = "-q"
 
 [tool.setuptools.packages.find]
 include = ["synapse*"]
+
+[tool.setuptools.package-data]
+"synapse.ui" = ["static/*.html"]

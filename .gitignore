@@ -35,6 +35,9 @@ data/
 job_store/
 blobs/
 
+# Mock del frontend (riferimento Claude Design, estratto dallo zip)
+frontend/_mock/
+
 # OS / editor
 .DS_Store
 .idea/

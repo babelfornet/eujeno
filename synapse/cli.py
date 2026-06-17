@@ -221,6 +221,19 @@ def coordinator(
 
 
 @app.command()
+def ui(
+    coordinator: str = typer.Option("http://127.0.0.1:9000", "--coordinator", help="URL HTTP del coordinator a cui collegarsi"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host della UI"),
+    port: int = typer.Option(8500, "--port", help="Porta della UI"),
+):
+    """Avvia il frontend di controllo locale (dashboard rete + chat)."""
+    import uvicorn
+    from synapse.ui.server import create_ui_app
+    typer.echo(f"synapse ui: http://{host}:{port}  (coordinator={coordinator})", err=True)
+    uvicorn.run(create_ui_app(coordinator), host=host, port=port, log_level="info")
+
+
+@app.command()
 def infer(
     topology: str = typer.Option(None, "--topology", help="Path al file JSON di topologia"),
     prompt: str = typer.Option(..., "--prompt", help="Prompt ('-' legge da stdin)"),
