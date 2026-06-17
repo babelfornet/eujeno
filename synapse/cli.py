@@ -254,6 +254,59 @@ def coordinator(
 
 
 @app.command()
+def up(
+    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="ID del modello Hugging Face"),
+    dtype: str = typer.Option("float32", "--dtype", help="float32 | bfloat16 | float16"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host del coordinator"),
+    port: int = typer.Option(9000, "--port", help="Porta del coordinator"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Stampa i comandi senza avviare nulla"),
+):
+    """Avvia in un colpo una rete operativa a nodo singolo (coordinator + un nodo che copre tutto il modello)."""
+    nl = model_config_dims(model_id)["num_layers"]
+    coord_cmd = [sys.executable, "-m", "synapse", "coordinator", "--model", model_id,
+                 "--host", host, "--port", str(port)]
+    ws = f"ws://{host}:{port}/node"
+    serve_cmd = [sys.executable, "-m", "synapse", "serve", "--coordinator", ws,
+                 "--stages", f"embed,decoder:0-{nl},head", "--model", model_id, "--dtype", dtype]
+    if dry_run:
+        _emit_ok("up", {"commands": [coord_cmd, serve_cmd],
+                        "coordinator_url": f"http://{host}:{port}"},
+                 human="comandi:\n  " + "\n  ".join(" ".join(c) for c in [coord_cmd, serve_cmd]))
+        return
+    import subprocess
+    import time as _t
+    import httpx
+    procs = [subprocess.Popen(coord_cmd)]
+    _t.sleep(4)
+    procs.append(subprocess.Popen(serve_cmd))
+    base = f"http://{host}:{port}"
+    typer.echo(f"synapse up: avvio rete per {model_id} (dtype={dtype})…", err=True)
+    operational = False
+    for _ in range(120):
+        try:
+            reg = httpx.get(f"{base}/registry", timeout=5).json()
+            if reg.get("nodes"):
+                operational = True
+                break
+        except Exception:
+            pass
+        _t.sleep(2)
+    if operational:
+        typer.echo(f"PRONTO. Interroga: synapse infer --coordinator {base} --prompt \"...\"", err=True)
+        typer.echo(f"Frontend:        synapse ui --coordinator {base}", err=True)
+    else:
+        typer.echo("rete non ancora operativa (controlla i log).", err=True)
+    try:
+        procs[0].wait()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        for p in procs:
+            if p.poll() is None:
+                p.terminate()
+
+
+@app.command()
 def ui(
     coordinator: str = typer.Option("http://127.0.0.1:9000", "--coordinator", help="URL HTTP del coordinator a cui collegarsi"),
     host: str = typer.Option("127.0.0.1", "--host", help="Host della UI"),
