@@ -119,6 +119,64 @@ def models():
     _emit_ok("models", data, human=human)
 
 
+@app.command()
+def fit(
+    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="ID del modello Hugging Face"),
+    ram: float = typer.Option(..., "--ram", help="RAM disponibile sul nodo, in GB"),
+    dtype: str = typer.Option("float32", "--dtype", help="float32 | bfloat16 | float16"),
+    reserve: float = typer.Option(0.2, "--reserve", help="Frazione di RAM riservata ad attivazioni/KV-cache/OS (0-0.9)"),
+):
+    """Quanti layer reggi con la RAM data? Suggerisce uno stage spec per --stages."""
+    from synapse.config import parse_dtype
+    try:
+        _dt = parse_dtype(dtype)
+    except ValueError as e:
+        _fail("fit", "USAGE_ERROR", str(e), exit_code=2)
+        return
+    import torch
+    bytes_per = torch.finfo(_dt).bits // 8
+    d = model_config_dims(model_id)
+    hidden = d["hidden_size"]
+    nl = d["num_layers"]
+    heads = d["num_attention_heads"]
+    kv = d.get("num_key_value_heads") or heads
+    inter = d.get("intermediate_size") or (4 * hidden)
+    vocab = d.get("vocab_size") or 0
+    kv_dim = hidden * kv / heads
+    params_layer = 2 * hidden ** 2 + 2 * hidden * kv_dim + 3 * hidden * inter
+    ram_layer = params_layer * bytes_per
+    ram_embed_head = vocab * hidden * bytes_per
+    gb = 1024 ** 3
+    usable = ram * (1 - reserve) * gb
+    max_layers = max(0, int(usable // ram_layer)) if ram_layer > 0 else 0
+    k = min(max_layers, nl)
+    fits_whole = (nl * ram_layer + ram_embed_head) <= usable
+    if fits_whole:
+        suggested = f"embed,decoder:0-{nl},head"
+    elif k > 0:
+        suggested = f"decoder:0-{k}"
+    else:
+        suggested = ""
+    data = {
+        "model": model_id, "dtype": dtype, "num_layers": nl, "hidden_size": hidden,
+        "ram_gb": ram, "reserve": reserve,
+        "ram_per_layer_gb": round(ram_layer / gb, 3),
+        "ram_embed_head_gb": round(ram_embed_head / gb, 3),
+        "max_decoder_layers": k, "fits_whole_model": fits_whole,
+        "suggested_stages": suggested,
+    }
+    if not suggested:
+        human = (f"Con {ram} GB ({dtype}) non regge nemmeno un layer "
+                 f"(~{data['ram_per_layer_gb']} GB/layer). Usa --dtype bfloat16 o più RAM.")
+    elif fits_whole:
+        human = (f"Con {ram} GB ({dtype}) regge l'INTERO modello ({nl} layer, "
+                 f"~{data['ram_per_layer_gb']} GB/layer). Stage: {suggested}")
+    else:
+        human = (f"Con {ram} GB ({dtype}) reggi ~{k}/{nl} layer decoder "
+                 f"(~{data['ram_per_layer_gb']} GB/layer). Stage consigliato: {suggested}")
+    _emit_ok("fit", data, human=human)
+
+
 def _read_prompt(prompt: str) -> str:
     """'-' legge il prompt da stdin (pipe da un agente)."""
     if prompt == "-":
