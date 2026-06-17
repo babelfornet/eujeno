@@ -1,3 +1,4 @@
+import torch
 from synapse.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
 from synapse.net.wire import encode_tensors, decode_tensors
 
@@ -36,8 +37,12 @@ def handle_request(state: NodeState, header: dict, payload: bytes):
         return {"ok": True}, encode_tensors({"hidden_states": h})
     if op == "head":
         t = decode_tensors(payload)
-        logits = state.head_block.run_block(t["hidden_states"])
-        return {"ok": True, "token_id": int(logits[:, -1, :].argmax(-1).item())}, b""
+        logits = state.head_block.run_block(t["hidden_states"])[:, -1, :]
+        k = min(int(header.get("topk", 1)), logits.shape[-1])
+        vals, idx = torch.topk(logits[0], k=k)
+        ids = idx.tolist()
+        return {"ok": True, "token_id": ids[0],
+                "topk_ids": ids, "topk_logits": vals.tolist()}, b""
     if op == "end":
         state.jobs.pop(header["job_id"], None)
         return {"ok": True}, b""
