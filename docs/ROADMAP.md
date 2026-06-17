@@ -44,7 +44,8 @@
 
 - [~] **Peer Node** — [piano](./plans/2026-06-17-part-1-peer-node.md)
   - [x] **Foundation single-process** (build-order step 1-2-4): split del modello in blocchi (EMBED/DECODER/HEAD), `run_block`, KV-cache per-blocco serializzabile, **golden test** (la pipeline distribuita riproduce esattamente `model.generate`), **capstone** (KV-cache sopravvive a round-trip su byte mid-generazione). 12 test verdi su `Qwen2.5-0.5B`.
-  - [ ] Partial-loading reale (`init_empty_weights` + `load_checkpoint_in_model`) — col wire format
+  - [x] **Partial-loading reale** (`init_empty_weights` + caricamento selettivo dai shard safetensors): un nodo materializza in RAM SOLO i layer assegnati, il resto resta su `meta` (zero memoria). `serve` lo usa. Golden test: 2 nodi parziali == modello intero. → gira su macchine con poca RAM/GPU.
+  - [x] **Test 3 nodi (1 host + 2 container Docker)** — [docker/](../docker/) · [quickstart](./examples/docker.md)
   - [x] **Transport di rete** (FastAPI + safetensors) + **orchestrator distribuito** (Milestone 0) — [piano](./plans/2026-06-17-part1-networking.md). Comandi `serve`/`infer`; golden distribuito su 2 nodi reali verde. Topologia statica (la discovery DHT arriva in Parte 2).
 - [x] **CLI `synapse`** (AI-native) — entry-point per tutte le operazioni — [PRD](./prd/cli.md) · [piano](./plans/2026-06-17-cli-synapse.md). Comandi a parola singola implementati: `version`, `model --info`, `generate`, `selfcheck`, `schema`; output JSON con envelope stabile, exit code deterministici, prompt da stdin, stream puliti. Suite verde.
 - [~] **Discovery & Routing** — due modalità ([ADR-0002](./decisions/ADR-0002-connettivita-nat.md))

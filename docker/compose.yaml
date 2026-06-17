@@ -1,0 +1,27 @@
+# 2 nodi worker Synapse in container, ciascuno carica SOLO i suoi layer.
+# Si connettono in uscita al coordinator che gira sull'host (host.docker.internal:9000).
+# Il 3° nodo (embed + decoder:0-8) gira sull'host, insieme al coordinator.
+name: synapse-demo
+
+x-node: &node
+  image: synapse-node
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+  volumes:
+    - ${HOME}/.cache/huggingface:/hf      # riusa il modello già scaricato sull'host
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
+  restart: "no"
+
+services:
+  node-mid:
+    <<: *node
+    command: ["serve", "--coordinator", "ws://host.docker.internal:9000/node",
+              "--stages", "decoder:8-16", "--model", "Qwen/Qwen2.5-0.5B-Instruct"]
+
+  node-tail:
+    <<: *node
+    command: ["serve", "--coordinator", "ws://host.docker.internal:9000/node",
+              "--stages", "decoder:16-24,head", "--model", "Qwen/Qwen2.5-0.5B-Instruct"]
+    depends_on: [node-mid]
