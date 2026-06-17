@@ -2,7 +2,7 @@
 
 > Documento vivo. Traccia **cosa è stato fatto** e **cosa resta da fare**. Aggiornato a ogni passo significativo.
 >
-> **Ultimo aggiornamento:** 2026-06-17 — completate Fase 0 architettura: ADR-0001 + PRD Parti 1-5.
+> **Ultimo aggiornamento:** 2026-06-17 — Fase 0 architettura completa; Parte 1 foundation single-process implementata (12 test verdi, golden test + resilienza KV-cache).
 
 ## Legenda
 
@@ -42,12 +42,21 @@
 
 > Si parte solo dopo l'approvazione delle PRD. Ogni modulo: plan → build → verify.
 
-- [ ] Plan + build **Peer Node**: download modello HF, sharding in blocchi, esecuzione layer, RPC inferenza
+- [~] **Peer Node** — [piano](./plans/2026-06-17-part-1-peer-node.md)
+  - [x] **Foundation single-process** (build-order step 1-2-4): split del modello in blocchi (EMBED/DECODER/HEAD), `run_block`, KV-cache per-blocco serializzabile, **golden test** (la pipeline distribuita riproduce esattamente `model.generate`), **capstone** (KV-cache sopravvive a round-trip su byte mid-generazione). 12 test verdi su `Qwen2.5-0.5B`.
+  - [ ] Partial-loading reale (`init_empty_weights` + `load_checkpoint_in_model`) — col wire format
+  - [ ] Transport di rete (FastAPI + safetensors) — confine con Parte 3
 - [ ] Plan + build **Discovery & Routing**: registry DHT, allocazione dinamica blocchi, failover
 - [ ] Plan + build **Queue & Load Balancing**: job store durevole, store-and-forward, scheduling su holder ridondanti
 - [ ] Plan + build **Reputazione minimale** (token ⏸ rimandati)
 - [ ] Integrazione end-to-end su 2–3 nodi + test di failover
-- [ ] Setup repo GitHub (privato → pubblico al primo funzionamento)
+- [x] Setup repo GitHub privato → [albertoferrazzoli/synapse](https://github.com/albertoferrazzoli/synapse) (pubblico al primo funzionamento)
+
+### Limiti noti della foundation Parte 1 (da affrontare nei moduli successivi)
+
+- `build_causal_mask` assume **batch=1, no padding, no sliding-window** (corretto per Qwen2.5-0.5B e il PoC single-stream). Batch>1 / left-padding / SWA fuori scope per ora.
+- `split_into_blocks` **muta `layer.self_attn.layer_idx` in place**: ok perché ogni nodo reale carica la propria copia del modello; nei test l'isolamento è garantito da `conftest.py` che ripristina gli indici. Da irrobustire: validare che i `boundaries` coprano `[0, num_layers]` in modo contiguo.
+- Failover KV-cache: alla morte di un holder mid-generazione si ricomputa il prefisso (O(seq_len)); checkpoint periodico per-blocco rimandato (vedi [ADR-0001](./decisions/ADR-0001-implementation-forks.md) Q3).
 
 ## Milestone — "Modello operativo"
 
