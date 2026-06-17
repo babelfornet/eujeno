@@ -31,6 +31,7 @@ synapse --json model --info --model Qwen/Qwen2.5-0.5B-Instruct
 |---|---|
 | `synapse models` | Elenca i modelli/famiglie **compatibili** (Llama/Qwen2) con esempi. |
 | `synapse model --info --model <id>` | Dimensioni del modello (num_layers, hidden, ...) + `architecture` + `compatible`. Usalo per **decidere lo split**. |
+| `synapse fit --model <id> --ram <GB> [--dtype bfloat16]` | Quanti layer regge un nodo con N GB di RAM + **stage spec suggerito** per `--stages`. |
 | `synapse up --model <id> [--dtype bfloat16]` | Bring-up in un comando: avvia coordinator + un nodo che copre tutti i layer. `--dry-run` stampa i comandi senza avviare. |
 | `synapse serve --stages "<spec>" ...` | Avvia un nodo che ospita certi blocchi. `--dtype` per modelli grandi. |
 | `synapse coordinator --port 9000` | Avvia un coordinator (relay per nodi dietro NAT). |
@@ -60,6 +61,13 @@ ram_nodo  ≈ Σ ram_layer dei layer ospitati (+ embed/head se assegnati)
 ```
 
 `synapse model --info` dà `num_layers` e `hidden_size` per ricavare `params_per_layer`. Per modelli grandi usa `--dtype bfloat16` (dimezza la RAM) e/o splitta su più nodi. Coverage completa = `embed` + tutti i range `decoder:0-N` contigui + `head`.
+
+Scorciatoia: `synapse fit --model <id> --ram 4 --dtype bfloat16` fa il calcolo per te e stampa lo **stage spec consigliato** (es. `decoder:0-7`) e quanti layer reggi. I layer decoder sono ~uguali tra loro; gli outlier di memoria sono `embed`/`head` (matrice `vocab × hidden`).
+
+```bash
+synapse --json fit --model Qwen/Qwen2.5-7B-Instruct --ram 4 --dtype bfloat16
+# -> {"max_decoder_layers": 7, "suggested_stages": "decoder:0-7", "ram_per_layer_gb": 0.434, ...}
+```
 
 ## Workflow tipici
 
