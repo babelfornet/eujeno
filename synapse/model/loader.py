@@ -19,3 +19,15 @@ def model_dims(model) -> dict:
         "num_attention_heads": cfg.num_attention_heads,
         "num_key_value_heads": getattr(cfg, "num_key_value_heads", cfg.num_attention_heads),
     }
+
+
+def model_config_dims(model_id: str) -> dict:
+    """Dimensioni del modello dalla sola AutoConfig (NIENTE pesi scaricati)."""
+    from transformers import AutoConfig
+    cfg = AutoConfig.from_pretrained(model_id)
+    return {
+        "num_layers": cfg.num_hidden_layers,
+        "hidden_size": cfg.hidden_size,
+        "num_attention_heads": cfg.num_attention_heads,
+        "num_key_value_heads": getattr(cfg, "num_key_value_heads", cfg.num_attention_heads),
+    }
