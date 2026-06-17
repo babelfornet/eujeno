@@ -1,20 +1,61 @@
+import asyncio
+import time
+from contextlib import asynccontextmanager
+
+import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
 from synapse.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
 from synapse.net.wire import encode_tensors, decode_tensors
+from synapse.net.discovery import Registry
 
 _OCTET = "application/octet-stream"
 
 
-def create_app(model, tokenizer, stages):
-    """Crea l'app FastAPI di un BlockServer che serve gli `stages` dati, sopra un
-    `model` GIA' caricato (condiviso tra i job in questo processo)."""
-    app = FastAPI()
+def create_app(model, tokenizer, stages, node_url=None, peers=None,
+               num_layers=None, gossip_interval=2.0, ttl=30.0):
+    """Crea l'app FastAPI di un BlockServer. Con node_url/peers attiva la gossip
+    discovery decentralizzata (Modalità A); senza, comportamento di Parte 1."""
     embed_block = EmbedBlock(model.model.embed_tokens) if stages.embed else None
     head_block = HeadBlock(model.model.norm, model.lm_head) if stages.head else None
     prepared = {f"{lo}-{hi}": prepare_decoder_block(model, lo, hi) for (lo, hi) in stages.decoders}
-    jobs = {}   # job_id -> {block_key: DecoderBlock}  (KV-cache per-job)
+    jobs = {}
+    own_stages = {"embed": stages.embed, "head": stages.head, "decoders": list(prepared.keys())}
+    registry = Registry()
+    if node_url:
+        registry.upsert(node_url, own_stages, now=time.time(), ttl=ttl)
+
+    async def _gossip_loop():
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            while True:
+                now = time.time()
+                if node_url:
+                    registry.upsert(node_url, own_stages, now=now, ttl=ttl)
+                for peer in (peers or []):
+                    try:
+                        resp = await client.get(f"{peer}/registry")
+                        registry.merge(resp.json().get("nodes", {}), now=now, ttl=ttl)
+                    except Exception:
+                        pass
+                registry.prune(now)
+                await asyncio.sleep(gossip_interval)
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        task = asyncio.create_task(_gossip_loop()) if node_url else None
+        try:
+            yield
+        finally:
+            if task:
+                task.cancel()
+
+    app = FastAPI(lifespan=lifespan)
+
+    @app.get("/registry")
+    async def get_registry():
+        return {"num_layers": num_layers, "model": getattr(model.config, "_name_or_path", "?"),
+                "nodes": registry.stages_by_url(time.time())}
 
     @app.get("/health")
     async def health():
