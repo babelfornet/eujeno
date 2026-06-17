@@ -15,9 +15,21 @@ La Parte 2 deve fornire **discovery automatica** (niente più file di topologia 
 3. **libp2p nativo (hole-punching + relay) è la soluzione decentralizzata completa ma pesante/rischiosa** (daemon p2pd, relay, cross-arch — vedi ADR-0001 Fork A e Q1). Non è una prova rapida.
 4. **Le connessioni in uscita attraversano sempre il NAT.** Un worker dietro NAT può sempre aprire una connessione *outbound* verso un endpoint pubblico.
 
-## Decisione
+## Decisione — due modalità selezionabili
 
-Introdurre un **coordinator-relay** leggero come livello di connettività di Milestone 0:
+Synapse supporta **due modalità di connettività**, scelte dall'utente; il coordinator è **opt-in**, mai obbligatorio.
+
+### Modalità A — P2P puro (decentralizzato, default)
+
+**Nessun server centrale.** Ogni nodo è un `synapse serve` simmetrico che:
+- esegue una **discovery automatica via gossip**: conosce uno o più *seed peer*, scambia periodicamente il proprio registry (chi-serve-quale-blocco) con i vicini, con TTL/refresh per la liveness; un nuovo nodo impara l'intera rete transitivamente da un seed;
+- riceve attivazioni via **transport diretto nodo-a-nodo** (HTTP di Parte 1).
+
+`synapse infer --peer <qualsiasi-nodo>` interroga un peer, riceve il registry gossipato, costruisce la topologia da solo (coverage gate) ed esegue. **Funziona dove i nodi sono mutuamente raggiungibili** (LAN, VPN, o IP pubblici/port-forwarding). Per il P2P puro **anche dietro NAT senza VPN** serve un transport con NAT traversal (**libp2p nativo**: hole-punching + relay tra peer) — è il percorso futuro, dietro la stessa interfaccia.
+
+### Modalità B — coordinator-relay (opt-in, per internet-senza-VPN subito)
+
+Un **coordinator-relay** leggero come livello di connettività di Milestone 0:
 
 - Un processo **`synapse coordinator`** pubblicamente raggiungibile (su internet: una macchina con IP pubblico o un VPS, o un solo port-forward; su LAN: un nodo qualsiasi).
 - Ogni **`synapse serve`** apre una **connessione WebSocket in uscita** verso il coordinator, **annuncia i propri stage** (embed / decoder:lo-hi / head) e poi serve le richieste di hop relayate. Outbound ⇒ funziona dietro qualsiasi NAT, **senza port-forwarding sui worker**.
