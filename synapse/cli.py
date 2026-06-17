@@ -8,6 +8,9 @@ from synapse.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
 from synapse.model.blocks import compute_boundaries, split_into_blocks
 from synapse.model.loader import model_config_dims, load_full_model, model_dims
 from synapse.model.generate import reference_generate, pipeline_generate
+from synapse.net.topology import parse_stages, load_topology
+from synapse.net.server import create_app
+from synapse.net.orchestrator import distributed_generate
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="Synapse — rete di inferenza LLM decentralizzata.")
 
@@ -155,6 +158,58 @@ def selfcheck(
     data = {"model": model_id, "match": reference == pipeline, "reference": reference, "pipeline": pipeline}
     human = f"match: {data['match']}\nreference: {reference}\npipeline: {pipeline}"
     _emit_ok("selfcheck", data, human)
+
+
+@app.command()
+def serve(
+    stages: str = typer.Option(..., "--stages", help="Stage serviti, es. 'embed,decoder:0-12'"),
+    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="ID del modello Hugging Face"),
+    host: str = typer.Option("0.0.0.0", "--host", help="Host di ascolto"),
+    port: int = typer.Option(8001, "--port", help="Porta di ascolto"),
+):
+    """Avvia un BlockServer che ospita gli stage indicati (processo a lunga durata)."""
+    import uvicorn
+    try:
+        spec = parse_stages(stages)
+    except ValueError as e:
+        _fail("serve", "USAGE_ERROR", str(e), exit_code=2)
+    try:
+        model, tokenizer = load_full_model(model_id, DTYPE, DEVICE)
+        model.eval()
+    except Exception as e:
+        _fail("serve", "MODEL_LOAD_FAILED", str(e))
+    fastapi_app = create_app(model, tokenizer, spec)
+    typer.echo(f"synapse serve: stages={stages} su http://{host}:{port}  (model={model_id})", err=True)
+    uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
+
+
+@app.command()
+def infer(
+    topology: str = typer.Option(..., "--topology", help="Path al file JSON di topologia"),
+    prompt: str = typer.Option(..., "--prompt", help="Prompt ('-' legge da stdin)"),
+    max_new_tokens: int = typer.Option(8, "--max-new-tokens", help="Numero di token da generare"),
+):
+    """Esegue inferenza distribuita su una topologia di BlockServer."""
+    import httpx
+    from transformers import AutoTokenizer
+
+    prompt = _read_prompt(prompt)
+    try:
+        with open(topology) as f:
+            topo = load_topology(_json.loads(f.read()))
+    except Exception as e:
+        _fail("infer", "USAGE_ERROR", f"topologia non leggibile: {e}", exit_code=2)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(topo.model)
+    except Exception as e:
+        _fail("infer", "MODEL_LOAD_FAILED", str(e))
+    try:
+        with httpx.Client(timeout=120.0) as client:
+            result = distributed_generate(topo, prompt, max_new_tokens, client, tokenizer)
+    except Exception as e:
+        _fail("infer", "GENERATION_FAILED", str(e))
+    data = {"model": topo.model, "prompt": prompt, **result}
+    _emit_ok("infer", data, human=result["text"])
 
 
 @app.command()
