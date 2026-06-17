@@ -76,7 +76,8 @@ def test_schema_lists_commands():
     # ogni comando elenca le sue opzioni con nome
     model_cmd = next(c for c in payload["data"]["commands"] if c["name"] == "model")
     opt_names = {o["name"] for o in model_cmd["options"]}
-    assert "info" in opt_names and "blocks" in opt_names
+    # i nomi delle opzioni DEVONO essere i flag CLI reali, usabili verbatim da un agente
+    assert "--info" in opt_names and "--blocks" in opt_names and "--model" in opt_names
 
 
 @pytest.mark.slow

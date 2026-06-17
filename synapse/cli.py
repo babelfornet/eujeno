@@ -170,8 +170,11 @@ def schema():
         for param in cmd.params:
             if isinstance(param, click.Argument):
                 continue
+            # Esponi il flag CLI reale (es. "--model"), non il nome della
+            # variabile Python (es. "model_id"): un agente lo usa verbatim.
+            flag = param.opts[0] if param.opts else param.name
             options.append({
-                "name": param.name,
+                "name": flag,
                 "type": getattr(param.type, "name", str(param.type)),
                 "default": param.default,
                 "required": bool(param.required),
