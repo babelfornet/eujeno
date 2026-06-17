@@ -1,4 +1,5 @@
 import asyncio
+import random
 
 import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
@@ -6,6 +7,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from synapse.net.framing import pack, unpack
 from synapse.net.wire import encode_tensors, decode_tensors
 from synapse.net.discovery import build_chain
+from synapse.net.sampling import sample_token
 
 
 MAX_FAILOVERS = 5
@@ -67,8 +69,19 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
         return {"num_layers": num_layers,
                 "nodes": [{"conn": cid, "stages": c["stages"]} for cid, c in conns.items()]}
 
-    async def _run_generation(chain, prompt, max_new, job_id):
+    async def _run_generation(chain, prompt, max_new, sampling, job_id):
         embed_c, decoders, head_c = chain
+        temperature = float(sampling.get("temperature", 0.0) or 0.0)
+        top_p = float(sampling.get("top_p", 1.0) or 1.0)
+        rep = float(sampling.get("repetition_penalty", 1.0) or 1.0)
+        do_sample = temperature > 0.0
+        generator = None
+        if do_sample:
+            seed = sampling.get("seed")
+            seed = int(seed) if seed is not None else random.randint(0, 2**31 - 1)
+            generator = torch.Generator().manual_seed(seed)
+        topk = 100 if do_sample else 1
+
         ids = tokenizer(prompt, return_tensors="pt").input_ids
         seq_len = ids.shape[1]
         cache_position = torch.arange(seq_len)
@@ -82,38 +95,50 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
                 _, p = await _call(cid, {"op": "decode", "block_key": block_key, "job_id": job_id},
                                    encode_tensors({"hidden_states": h, "cache_position": cache_position}))
                 h = decode_tensors(p)["hidden_states"]
-            rh, _ = await _call(head_c, {"op": "head", "job_id": job_id},
+            rh, _ = await _call(head_c, {"op": "head", "job_id": job_id, "topk": topk},
                                 encode_tensors({"hidden_states": h}))
-            tokens.append(rh["token_id"])
-            cur = torch.tensor([[rh["token_id"]]])
+            if do_sample:
+                tok = sample_token(rh["topk_ids"], rh["topk_logits"], tokens,
+                                   temperature, top_p, rep, generator)
+            else:
+                tok = rh["token_id"]
+            tokens.append(tok)
+            cur = torch.tensor([[tok]])
             cache_position = torch.tensor([seq_len + step])
         for cid in {embed_c, head_c, *(c for _, c in decoders)}:
             try:
                 await _call(cid, {"op": "end", "job_id": job_id})
             except _NodeFailure:
                 pass
-        return tokens
+        return tokens, seq_len
 
-    @app.post("/infer")
-    async def infer(request: Request):
-        body = await request.json()
-        prompt = body["prompt"]
-        max_new = int(body.get("max_new_tokens", 8))
+    async def _generate_with_failover(prompt, max_new, sampling):
         excluded = set()
         last_failed = None
         for attempt in range(MAX_FAILOVERS + 1):
             stages = {cid: c["stages"] for cid, c in conns.items() if cid not in excluded}
             chain = build_chain(stages, num_layers)
             if chain is None:
-                return {"ok": False, "error": "modello non operativo: coverage incompleta",
-                        "excluded": sorted(excluded)}
+                return None, {"error": "modello non operativo: coverage incompleta", "excluded": sorted(excluded)}
             try:
-                tokens = await _run_generation(chain, prompt, max_new, _next_id("job"))
-                return {"ok": True, "model": model_id, "prompt": prompt,
-                        "text": tokenizer.decode(tokens), "tokens": tokens, "failovers": attempt}
+                tokens, prompt_len = await _run_generation(chain, prompt, max_new, sampling, _next_id("job"))
+                return {"tokens": tokens, "prompt_len": prompt_len, "failovers": attempt}, None
             except _NodeFailure as e:
                 excluded.add(e.conn_id)
                 last_failed = e.conn_id
-        return {"ok": False, "error": f"troppi failover (ultimo nodo fallito: {last_failed})"}
+        return None, {"error": f"troppi failover (ultimo nodo fallito: {last_failed})"}
+
+    @app.post("/infer")
+    async def infer(request: Request):
+        body = await request.json()
+        prompt = body["prompt"]
+        max_new = int(body.get("max_new_tokens", 8))
+        sampling = {k: body.get(k) for k in ("temperature", "top_p", "repetition_penalty", "seed")}
+        result, err = await _generate_with_failover(prompt, max_new, sampling)
+        if err is not None:
+            return {"ok": False, **err}
+        return {"ok": True, "model": model_id, "prompt": prompt,
+                "text": tokenizer.decode(result["tokens"]), "tokens": result["tokens"],
+                "failovers": result["failovers"]}
 
     return app
