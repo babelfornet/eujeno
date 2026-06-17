@@ -51,3 +51,24 @@ def test_infer_sampling_seeded_is_reproducible(full_model):
         assert a["tokens"] == b["tokens"]
     finally:
         srv.should_exit = True
+
+
+@pytest.mark.slow
+def test_openai_chat_completions(full_model):
+    srv, base = _two_node_coordinator(full_model)
+    try:
+        with httpx.Client(timeout=60.0) as c:
+            models = c.get(f"{base}/v1/models").json()
+            assert models["object"] == "list" and len(models["data"]) >= 1
+            r = c.post(f"{base}/v1/chat/completions", json={
+                "model": "synapse",
+                "messages": [{"role": "user", "content": "Di' ciao in una parola"}],
+                "max_tokens": 8,
+            })
+            body = r.json()
+        assert body["object"] == "chat.completion"
+        assert body["choices"][0]["message"]["role"] == "assistant"
+        assert isinstance(body["choices"][0]["message"]["content"], str)
+        assert body["usage"]["completion_tokens"] >= 1
+    finally:
+        srv.should_exit = True
