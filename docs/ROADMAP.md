@@ -57,6 +57,7 @@
 - `build_causal_mask` assume **batch=1, no padding, no sliding-window** (corretto per Qwen2.5-0.5B e il PoC single-stream). Batch>1 / left-padding / SWA fuori scope per ora.
 - `split_into_blocks` **muta `layer.self_attn.layer_idx` in place**: ok perché ogni nodo reale carica la propria copia del modello; nei test l'isolamento è garantito da `conftest.py` che ripristina gli indici. Da irrobustire: validare che i `boundaries` coprano `[0, num_layers]` in modo contiguo.
 - Failover KV-cache: alla morte di un holder mid-generazione si ricomputa il prefisso (O(seq_len)); checkpoint periodico per-blocco rimandato (vedi [ADR-0001](./decisions/ADR-0001-implementation-forks.md) Q3).
+- API `run_block`: la foundation la implementa **stateful** (la KV-cache è stato del blocco, costruisce maschera/position_ids internamente e ritorna solo `hidden_states`) — scelta comoda in-process. La [PRD Parte 1](./prd/part-1-peer-node.md) §3 descrive la forma **pura** `(activation, kv) -> (activation, kv)`. Da riconciliare quando arriva il wire transport (Parte 3): o si ripristina la firma pura o si aggiorna la PRD.
 
 ## Milestone — "Modello operativo"
 
