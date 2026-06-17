@@ -8,9 +8,10 @@ from synapse.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
 from synapse.model.blocks import compute_boundaries, split_into_blocks
 from synapse.model.loader import model_config_dims, load_full_model, model_dims
 from synapse.model.generate import reference_generate, pipeline_generate
-from synapse.net.topology import parse_stages, load_topology
+from synapse.net.topology import parse_stages, load_topology, Topology
 from synapse.net.server import create_app
 from synapse.net.orchestrator import distributed_generate
+from synapse.net.discovery import build_chain
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="Synapse — rete di inferenza LLM decentralizzata.")
 
@@ -166,6 +167,9 @@ def serve(
     model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="ID del modello Hugging Face"),
     host: str = typer.Option("0.0.0.0", "--host", help="Host di ascolto"),
     port: int = typer.Option(8001, "--port", help="Porta di ascolto"),
+    peers: str = typer.Option(None, "--peers", help="Seed peer per la discovery gossip, separati da virgola"),
+    advertise: str = typer.Option(None, "--advertise", help="URL con cui il nodo si annuncia (es. http://IP:8001). Default http://<host>:<port>"),
+    num_layers: int = typer.Option(None, "--num-layers", help="Numero totale layer (per coverage). Default: dal config."),
 ):
     """Avvia un BlockServer che ospita gli stage indicati (processo a lunga durata)."""
     import uvicorn
@@ -178,22 +182,46 @@ def serve(
         model.eval()
     except Exception as e:
         _fail("serve", "MODEL_LOAD_FAILED", str(e))
-    fastapi_app = create_app(model, tokenizer, spec)
-    typer.echo(f"synapse serve: stages={stages} su http://{host}:{port}  (model={model_id})", err=True)
+    own_url = advertise or f"http://{host}:{port}"
+    seeds = [p.strip() for p in peers.split(",")] if peers else []
+    nl = num_layers if num_layers is not None else model_config_dims(model_id)["num_layers"]
+    fastapi_app = create_app(model, tokenizer, spec, node_url=own_url, peers=seeds, num_layers=nl)
+    typer.echo(f"synapse serve (P2P): stages={stages} su http://{host}:{port} advertise={own_url} peers={seeds}", err=True)
     uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
 
 
 @app.command()
 def infer(
-    topology: str = typer.Option(..., "--topology", help="Path al file JSON di topologia"),
+    topology: str = typer.Option(None, "--topology", help="Path al file JSON di topologia"),
     prompt: str = typer.Option(..., "--prompt", help="Prompt ('-' legge da stdin)"),
     max_new_tokens: int = typer.Option(8, "--max-new-tokens", help="Numero di token da generare"),
+    peer: str = typer.Option(None, "--peer", help="[P2P] URL di un nodo qualsiasi: scopre la topologia via gossip ed esegue diretto"),
 ):
     """Esegue inferenza distribuita su una topologia di BlockServer."""
     import httpx
     from transformers import AutoTokenizer
 
     prompt = _read_prompt(prompt)
+    if peer:
+        try:
+            reg = httpx.get(f"{peer}/registry", timeout=30.0).json()
+        except Exception as e:
+            _fail("infer", "USAGE_ERROR", f"peer non raggiungibile: {e}", exit_code=2)
+        chain = build_chain(reg["nodes"], reg["num_layers"])
+        if chain is None:
+            _fail("infer", "NOT_OPERATIONAL", "coverage incompleta: il modello non è ancora operativo sulla rete")
+        embed_url, decoders, head_url = chain
+        topo = Topology(model=reg["model"], embed=embed_url, head=head_url, decoders=decoders)
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(topo.model)
+            with httpx.Client(timeout=120.0) as client:
+                result = distributed_generate(topo, prompt, max_new_tokens, client, tokenizer)
+        except Exception as e:
+            _fail("infer", "GENERATION_FAILED", str(e))
+        _emit_ok("infer", {"model": topo.model, "prompt": prompt, **result}, human=result["text"])
+        return
+    if not topology:
+        _fail("infer", "USAGE_ERROR", "specificare --topology o --peer", exit_code=2)
     try:
         with open(topology) as f:
             topo = load_topology(_json.loads(f.read()))
