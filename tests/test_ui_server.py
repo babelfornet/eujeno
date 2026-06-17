@@ -60,3 +60,17 @@ def test_proxies_registry_and_chat():
         assert chat["choices"][0]["message"]["content"] == "ciao!"
     finally:
         srv.should_exit = True
+
+
+def test_config_can_be_updated():
+    app = create_ui_app("http://example:9000")
+    c = TestClient(app)
+    r = c.post("/api/config", json={"coordinator_url": "http://nuovo:9100"})
+    assert r.status_code == 200
+    assert c.get("/api/config").json()["coordinator_url"] == "http://nuovo:9100"
+
+
+def test_node_status_empty_initially():
+    app = create_ui_app("http://example:9000")
+    c = TestClient(app)
+    assert c.get("/api/node/status").json() == {}
