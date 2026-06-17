@@ -2,7 +2,7 @@
 
 > Documento vivo. Traccia **cosa è stato fatto** e **cosa resta da fare**. Aggiornato a ogni passo significativo.
 >
-> **Ultimo aggiornamento:** 2026-06-17 — Parte 2 P2P puro: discovery automatica via gossip (`serve --peers` / `infer --peer`), nessun server centrale. Coordinator-relay (NAT) in arrivo.
+> **Ultimo aggiornamento:** 2026-06-17 — Parte 2 completa (P2P puro + coordinator-relay NAT) e **failover automatico** nel coordinator (caduta nodo → re-instradamento su ridondante).
 
 ## Legenda
 
@@ -50,7 +50,8 @@
 - [~] **Discovery & Routing** — due modalità ([ADR-0002](./decisions/ADR-0002-connettivita-nat.md))
   - [x] **P2P puro**: discovery via **gossip** (registry decentralizzato + coverage), `serve --peers/--advertise` + `infer --peer` — [piano](./plans/2026-06-17-part2a-p2p-gossip.md). Nessun server centrale; per LAN/VPN/IP pubblici.
   - [x] **Coordinator-relay** (opt-in, NAT-senza-VPN) — [piano](./plans/2026-06-17-part2-coordinator.md) · [quickstart](./examples/coordinator.md). Nodi via WebSocket in uscita; golden via relay verde. Comandi `coordinator`, `serve --coordinator`, `infer --coordinator`.
-  - [ ] Failover automatico su nodo caduto (Parte 3) · libp2p nativo per P2P-su-NAT (futuro)
+  - [x] **Failover automatico** su nodo caduto (coordinator): ridondanza + re-instradamento su holder ridondante — [piano](./plans/2026-06-17-part3-failover.md). e2e: nodo che crasha mid-hop → job completa via ridondante.
+  - [ ] Failover per-hop con replay prefisso + store-and-forward durevole SQLite (Parte 3 piena) · failover P2P-diretto · libp2p nativo per P2P-su-NAT (futuro)
 - [ ] Plan + build **Queue & Load Balancing**: job store durevole, store-and-forward, scheduling su holder ridondanti
 - [ ] Plan + build **Reputazione minimale** (token ⏸ rimandati)
 - [ ] Integrazione end-to-end su 2–3 nodi + test di failover
