@@ -1,136 +1,136 @@
-# PRD — CLI `synapse` (AI-native)
+# PRD — `axyn` CLI (AI-native)
 
-> Riferimenti: [ADR-0001](../decisions/ADR-0001-implementation-forks.md), [PRD Parte 1](./part-1-peer-node.md), [piano Parte 1](../plans/2026-06-17-part-1-peer-node.md). Visione: [00-vision-architecture.md](../00-vision-architecture.md).
+> References: [ADR-0001](../decisions/ADR-0001-implementation-forks.md), [PRD Part 1](./part-1-peer-node.md), [Part 1 plan](../plans/2026-06-17-part-1-peer-node.md). Vision: [00-vision-architecture.md](../00-vision-architecture.md).
 >
-> **Stato:** progettata; non ancora implementata.
+> **Status:** designed; not yet implemented.
 
-## 1. Scopo
+## 1. Purpose
 
-Fornire un singolo entry-point eseguibile — il comando `synapse` — per tutte le operazioni del progetto, così da **non dover invocare Python su file singoli**. La CLI è progettata per essere **usabile direttamente da un AI/agente**: output strutturato, stream puliti, non-interattiva, auto-descrittiva.
+Provide a single executable entry point — the `axyn` command — for all project operations, so there is **no need to invoke Python on individual files**. The CLI is designed to be **usable directly by an AI/agent**: structured output, clean streams, non-interactive, self-describing.
 
-## 2. In scope / Fuori scope
+## 2. In scope / Out of scope
 
-**In scope:** entry-point `synapse`; framework **Typer**; comandi `version`, `model` (con `--info`), `generate`, `selfcheck`, `schema`; modalità output **JSON** vs testo; exit code deterministici; lettura prompt da stdin; due helper riusabili (`compute_boundaries`, `model_config_dims`).
+**In scope:** `axyn` entry point; **Typer** framework; `version`, `model` (with `--info`), `generate`, `selfcheck`, `schema` commands; **JSON** vs text output modes; deterministic exit codes; reading the prompt from stdin; two reusable helpers (`compute_boundaries`, `model_config_dims`).
 
-**Fuori scope (deferred):** sottocomandi `node serve/join`, `dht`, qualsiasi networking (Parte 2-3); autenticazione; configurazione persistente su file; quantizzazione/opzioni di runtime avanzate.
+**Out of scope (deferred):** `node serve/join`, `dht` subcommands, any networking (Parts 2-3); authentication; persistent file-based configuration; quantization/advanced runtime options.
 
-## 3. Principi
+## 3. Principles
 
-1. **Layer di presentazione sottile** — nessuna logica di business nella CLI. Ogni comando chiama il codice in `synapse/model/` e formatta l'output. La logica resta riusabile e testabile in isolamento.
-2. **AI-native** — il consumatore di riferimento è un agente automatico, non solo un umano (vedi §5).
-3. **YAGNI** — si espone solo ciò che il codice attuale già fa; i comandi futuri si appendono allo stesso `app`.
-4. **Comandi a parola singola** — ove possibile ogni comando è una sola parola (`version`, `model`, `generate`, `selfcheck`, `schema`); le varianti/azioni si esprimono con **switch**, non con nomi composti né sottocomandi nidificati. Es.: `synapse model --info` (non `model-info`). Questo mantiene la superficie piatta, prevedibile e facile da comporre per un agente.
+1. **Thin presentation layer** — no business logic in the CLI. Each command calls the code in `axyn/model/` and formats the output. The logic stays reusable and testable in isolation.
+2. **AI-native** — the reference consumer is an automated agent, not just a human (see §5).
+3. **YAGNI** — only expose what the current code already does; future commands are appended to the same `app`.
+4. **Single-word commands** — wherever possible each command is a single word (`version`, `model`, `generate`, `selfcheck`, `schema`); variants/actions are expressed with **switches**, not with compound names or nested subcommands. E.g.: `axyn model --info` (not `model-info`). This keeps the surface flat, predictable, and easy for an agent to compose.
 
-## 4. Packaging & invocazione
+## 4. Packaging & invocation
 
-- Entry-point in `pyproject.toml`:
+- Entry point in `pyproject.toml`:
   ```toml
   [project.scripts]
-  synapse = "synapse.cli:app"
+  axyn = "axyn.cli:app"
   ```
-  Dopo `pip install -e .`, il comando `synapse` è nel PATH.
-- Nuova dipendenza: `typer`.
-- Modulo: `synapse/cli.py` con l'oggetto `app` (Typer) e una funzione per comando.
+  After `pip install -e .`, the `axyn` command is on the PATH.
+- New dependency: `typer`.
+- Module: `axyn/cli.py` with the `app` object (Typer) and one function per command.
 
-## 5. Contratto AI-native (requisiti)
+## 5. AI-native contract (requirements)
 
-### 5.1 Modalità output
-- Flag **globale** `--json / -j` (default: **testo** umano). Quando attivo, ogni comando emette esclusivamente un envelope JSON su stdout.
-- Onorato anche via variabile d'ambiente `SYNAPSE_JSON=1` (comodo per agenti che settano l'env una volta).
+### 5.1 Output mode
+- **Global** flag `--json / -j` (default: human **text**). When active, every command emits exclusively a JSON envelope on stdout.
+- Also honored via the `AXYN_JSON=1` environment variable (convenient for agents that set the env once).
 
-### 5.2 Envelope JSON (stabile)
-Successo:
+### 5.2 JSON envelope (stable)
+Success:
 ```json
-{ "ok": true, "command": "<nome>", "data": { /* specifico del comando */ } }
+{ "ok": true, "command": "<name>", "data": { /* command-specific */ } }
 ```
-Errore:
+Error:
 ```json
-{ "ok": false, "command": "<nome>", "error": { "code": "<CODICE>", "message": "<testo>" } }
+{ "ok": false, "command": "<name>", "error": { "code": "<CODE>", "message": "<text>" } }
 ```
-In modalità JSON, **anche gli errori** sono envelope (`ok:false`) su stdout, con exit code non-zero. L'agente legge sempre e solo `ok` + `data`/`error.code`.
+In JSON mode, **errors too** are envelopes (`ok:false`) on stdout, with a non-zero exit code. The agent always reads only `ok` + `data`/`error.code`.
 
-### 5.3 Disciplina degli stream
-- In modalità `--json`, **stdout porta SOLO l'envelope JSON** (una riga / un oggetto). Tutto il resto — progress bar di Hugging Face, warning, log di transformers — va su **stderr** o viene silenziato:
+### 5.3 Stream discipline
+- In `--json` mode, **stdout carries ONLY the JSON envelope** (one line / one object). Everything else — Hugging Face progress bars, warnings, transformers logs — goes to **stderr** or is silenced:
   - `HF_HUB_DISABLE_PROGRESS_BARS=1`
   - `transformers.logging.set_verbosity_error()`
-- In modalità testo l'output è formattato per umani; i log restano su stderr.
+- In text mode the output is formatted for humans; logs stay on stderr.
 
-### 5.4 Exit code deterministici
-| Code | Significato |
-|------|-------------|
-| `0` | successo |
-| `1` | errore runtime (es. caricamento modello, generazione) |
-| `2` | errore d'uso/argomenti (default Typer/Click) |
+### 5.4 Deterministic exit codes
+| Code | Meaning |
+|------|---------|
+| `0` | success |
+| `1` | runtime error (e.g. model loading, generation) |
+| `2` | usage/argument error (Typer/Click default) |
 
-### 5.5 Non-interattività & input
-- Nessun prompt interattivo, mai. Ogni input passa da flag.
-- `--prompt -` (oppure prompt assente in `generate`/`selfcheck`) legge il prompt da **stdin**, per pipe da un agente.
+### 5.5 Non-interactivity & input
+- No interactive prompts, ever. Every input is passed via a flag.
+- `--prompt -` (or an absent prompt in `generate`/`selfcheck`) reads the prompt from **stdin**, for piping from an agent.
 
-### 5.6 Auto-descrizione
-- `synapse schema` (rispetta `--json`) stampa l'albero comandi+opzioni come JSON, così un AI scopre le capacità senza parsare l'help umano.
-- Restano disponibili gli `--help` standard di Typer per gli umani.
+### 5.6 Self-description
+- `axyn schema` (respects `--json`) prints the command+option tree as JSON, so an AI can discover the capabilities without parsing the human help.
+- The standard Typer `--help` options remain available for humans.
 
-## 6. Comandi & schema `data`
+## 6. Commands & `data` schema
 
-Default condivisi: `--model` default da `config.py` (`Qwen/Qwen2.5-0.5B-Instruct`), `--blocks 2`, `--max-new-tokens 8`.
+Shared defaults: `--model` defaults from `config.py` (`Qwen/Qwen2.5-0.5B-Instruct`), `--blocks 2`, `--max-new-tokens 8`.
 
-| Comando | Opzioni | `data` (modalità JSON) |
-|---------|---------|------------------------|
+| Command | Options | `data` (JSON mode) |
+|---------|---------|--------------------|
 | `version` | — | `{ "version": "0.0.1" }` |
 | `model` | `--info`, `--model`, `--blocks` | `{ "model": str, "num_layers": int, "hidden_size": int, "num_attention_heads": int, "num_key_value_heads": int, "blocks": int, "boundaries": [int, ...] }` |
 | `generate` | `--model`, `--prompt`, `--max-new-tokens`, `--blocks` | `{ "model": str, "prompt": str, "text": str, "tokens": [int, ...] }` |
 | `selfcheck` | `--model`, `--prompt`, `--max-new-tokens`, `--blocks` | `{ "model": str, "match": bool, "reference": [int, ...], "pipeline": [int, ...] }` |
 | `schema` | — | `{ "commands": [ { "name": str, "help": str, "options": [ { "name", "type", "default", "required" } ] } ] }` |
 
-- `model` espone le operazioni sul modello tramite switch d'azione. In v1 l'unica azione è **`--info`** (dims + split proposto); se non si passa alcuno switch d'azione, `model` esegue `--info` di default. Azioni future (es. `--download`) saranno nuovi switch sullo stesso comando.
-- `model --info` usa `model_config_dims` (solo `AutoConfig`, **niente pesi**) → veloce, non scarica il modello intero.
-- `generate` usa `load_full_model` → `split_into_blocks(compute_boundaries(...))` → `pipeline_generate` → `tokenizer.decode`.
-- `selfcheck` esegue `reference_generate` **e** `pipeline_generate` e confronta le liste di token: `match` è il segnale chiave per un AI.
+- `model` exposes the model operations via action switches. In v1 the only action is **`--info`** (dims + proposed split); if no action switch is passed, `model` runs `--info` by default. Future actions (e.g. `--download`) will be new switches on the same command.
+- `model --info` uses `model_config_dims` (only `AutoConfig`, **no weights**) → fast, does not download the whole model.
+- `generate` uses `load_full_model` → `split_into_blocks(compute_boundaries(...))` → `pipeline_generate` → `tokenizer.decode`.
+- `selfcheck` runs `reference_generate` **and** `pipeline_generate` and compares the token lists: `match` is the key signal for an AI.
 
-## 7. Helper riusabili (in `synapse/model/`)
+## 7. Reusable helpers (in `axyn/model/`)
 
-- **`compute_boundaries(num_layers: int, n_blocks: int) -> list[int]`** in `blocks.py` — divide i layer in `n_blocks` blocchi contigui il più possibile uguali (es. `24, 2 → [0, 12, 24]`; `24, 5 → [0,5,10,15,20,24]`). Valida gli input: `n_blocks ≥ 1`, `n_blocks ≤ num_layers`; il risultato copre sempre `[0, num_layers]` in modo contiguo e strettamente crescente (chiude il "footgun" segnalato nella review di Parte 1).
-- **`model_config_dims(model_id: str) -> dict`** in `loader.py` — legge `AutoConfig.from_pretrained` e ritorna `{num_layers, hidden_size, num_attention_heads, num_key_value_heads}` senza scaricare i pesi.
+- **`compute_boundaries(num_layers: int, n_blocks: int) -> list[int]`** in `blocks.py` — splits the layers into `n_blocks` contiguous blocks that are as equal as possible (e.g. `24, 2 → [0, 12, 24]`; `24, 5 → [0,5,10,15,20,24]`). Validates the inputs: `n_blocks ≥ 1`, `n_blocks ≤ num_layers`; the result always covers `[0, num_layers]` contiguously and strictly increasing (closes the "footgun" flagged in the Part 1 review).
+- **`model_config_dims(model_id: str) -> dict`** in `loader.py` — reads `AutoConfig.from_pretrained` and returns `{num_layers, hidden_size, num_attention_heads, num_key_value_heads}` without downloading the weights.
 
-## 8. Gestione errori (codici stabili)
+## 8. Error handling (stable codes)
 
-| `error.code` | Quando | Exit |
-|--------------|--------|------|
-| `USAGE_ERROR` | argomenti mancanti/invalidi | 2 (Typer) |
-| `INVALID_BOUNDARIES` | `--blocks` fuori range vs num_layers | 1 |
-| `MODEL_LOAD_FAILED` | download/caricamento modello fallito | 1 |
-| `GENERATION_FAILED` | errore durante l'inferenza | 1 |
+| `error.code` | When | Exit |
+|--------------|------|------|
+| `USAGE_ERROR` | missing/invalid arguments | 2 (Typer) |
+| `INVALID_BOUNDARIES` | `--blocks` out of range vs num_layers | 1 |
+| `MODEL_LOAD_FAILED` | model download/loading failed | 1 |
+| `GENERATION_FAILED` | error during inference | 1 |
 
-Un handler top-level cattura le eccezioni note, le mappa a un `code`, e — in modalità JSON — emette l'envelope `ok:false`; in modalità testo stampa un messaggio leggibile su stderr. Le eccezioni inattese diventano `code` generico con exit `1` (mai stack trace su stdout in modalità JSON).
+A top-level handler catches the known exceptions, maps them to a `code`, and — in JSON mode — emits the `ok:false` envelope; in text mode it prints a readable message on stderr. Unexpected exceptions become a generic `code` with exit `1` (never a stack trace on stdout in JSON mode).
 
 ## 9. Testing
 
-- **Unit (veloci):** `compute_boundaries` (split uniforme, casi limite, validazione che solleva su input invalidi). `schema` output è JSON valido con la struttura attesa.
-- **Slow (col modello piccolo):** test CLI via `typer.testing.CliRunner`:
-  - `version` (veloce, no modello): exit 0, e con `--json` produce envelope valido con `data.version`.
-  - `selfcheck --json`: exit 0, **stdout è JSON valido** (parsabile), `data.match == true`.
-  - `generate --json`: exit 0, `data.text` non vuoto, `stdout` parsabile.
-  - Un caso di errore (`--blocks 999`): exit `1`, envelope `ok:false` con `error.code == "INVALID_BOUNDARIES"`.
-- **Disciplina stream:** un test verifica che in `--json` lo stdout sia JSON puro (nessuna barra di progresso / warning mescolati).
+- **Unit (fast):** `compute_boundaries` (uniform split, edge cases, validation that raises on invalid inputs). The `schema` output is valid JSON with the expected structure.
+- **Slow (with the small model):** CLI tests via `typer.testing.CliRunner`:
+  - `version` (fast, no model): exit 0, and with `--json` produces a valid envelope with `data.version`.
+  - `selfcheck --json`: exit 0, **stdout is valid JSON** (parsable), `data.match == true`.
+  - `generate --json`: exit 0, `data.text` non-empty, `stdout` parsable.
+  - An error case (`--blocks 999`): exit `1`, `ok:false` envelope with `error.code == "INVALID_BOUNDARIES"`.
+- **Stream discipline:** a test verifies that in `--json` mode stdout is pure JSON (no progress bars / warnings mixed in).
 
-## 10. Criteri di accettazione
+## 10. Acceptance criteria
 
-1. Dopo `pip install -e .`, `synapse --help` funziona e `synapse version --json` stampa `{"ok": true, ...}`.
-2. `synapse generate --json --prompt "..."` produce su stdout **solo** JSON valido parsabile, con il testo generato.
-3. `synapse selfcheck --json` riporta `match: true` sul modello di default (equivalenza pipeline vs reference).
-4. Un errore d'uso o di runtime produce exit code non-zero e — in `--json` — un envelope `ok:false` con un `error.code` stabile.
-5. `synapse schema --json` elenca i comandi e le loro opzioni in forma machine-readable.
+1. After `pip install -e .`, `axyn --help` works and `axyn version --json` prints `{"ok": true, ...}`.
+2. `axyn generate --json --prompt "..."` produces on stdout **only** valid parsable JSON, with the generated text.
+3. `axyn selfcheck --json` reports `match: true` on the default model (pipeline vs reference equivalence).
+4. A usage or runtime error produces a non-zero exit code and — in `--json` mode — an `ok:false` envelope with a stable `error.code`.
+5. `axyn schema --json` lists the commands and their options in machine-readable form.
 
-## 11. Dipendenze
+## 11. Dependencies
 
-- **Parte 1** (`loader`, `blocks`, `generate`): la CLI ne è consumatrice diretta.
-- Nuova dipendenza runtime: `typer`.
+- **Part 1** (`loader`, `blocks`, `generate`): the CLI is a direct consumer of it.
+- New runtime dependency: `typer`.
 
-## 12. Domande aperte
+## 12. Open questions
 
-- Auto-attivazione JSON quando stdout non è una TTY (comodo per agenti) vs solo flag/env esplicito? (Per ora: esplicito, più prevedibile.)
-- Esporre `selfcheck` anche come check di salute generico (più prompt, soglie) o tenerlo minimale? (Per ora: minimale.)
+- Auto-enable JSON when stdout is not a TTY (convenient for agents) vs. only an explicit flag/env? (For now: explicit, more predictable.)
+- Expose `selfcheck` also as a generic health check (more prompts, thresholds) or keep it minimal? (For now: minimal.)
 
-## 13. Comandi futuri (placeholder, non implementati)
+## 13. Future commands (placeholder, not implemented)
 
-Allo stesso `app` si appenderanno, in Parte 2-3, comandi a parola singola con switch (coerenti col principio §3.4): `synapse serve` (avvio peer + registrazione blocchi), `synapse join` (ingresso nella rete + self-assignment), `synapse dht` con switch d'azione (`--coverage`, `--peers`) per ispezionare registry e coverage. Erediteranno lo stesso contratto AI-native (envelope JSON, exit code, stream puliti).
+In Parts 2-3, single-word commands with switches (consistent with principle §3.4) will be appended to the same `app`: `axyn serve` (start peer + register blocks), `axyn join` (join the network + self-assignment), `axyn dht` with action switches (`--coverage`, `--peers`) to inspect the registry and coverage. They will inherit the same AI-native contract (JSON envelope, exit codes, clean streams).

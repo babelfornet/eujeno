@@ -1,12 +1,12 @@
-# CLI `synapse` (AI-native) Implementation Plan
+# CLI `axyn` (AI-native) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Un entry-point eseguibile `synapse` per tutte le operazioni del progetto, progettato per essere usato direttamente da un agente AI (output JSON con envelope stabile, stream puliti, exit code deterministici, non-interattivo, auto-descrittivo).
+**Goal:** Un entry-point eseguibile `axyn` per tutte le operazioni del progetto, progettato per essere usato direttamente da un agente AI (output JSON con envelope stabile, stream puliti, exit code deterministici, non-interattivo, auto-descrittivo).
 
-**Architecture:** La CLI è un layer di presentazione sottile in `synapse/cli.py` (Typer): ogni comando chiama il codice esistente in `synapse/model/` e formatta l'output tramite un unico helper-envelope condiviso (`_emit_ok`/`_fail`) che rispetta il flag globale `--json`. Due helper puri riusabili (`compute_boundaries`, `model_config_dims`) vengono aggiunti a `synapse/model/` con i loro test. L'entry-point è registrato in `pyproject.toml`.
+**Architecture:** La CLI è un layer di presentazione sottile in `axyn/cli.py` (Typer): ogni comando chiama il codice esistente in `axyn/model/` e formatta l'output tramite un unico helper-envelope condiviso (`_emit_ok`/`_fail`) che rispetta il flag globale `--json`. Due helper puri riusabili (`compute_boundaries`, `model_config_dims`) vengono aggiunti a `axyn/model/` con i loro test. L'entry-point è registrato in `pyproject.toml`.
 
-**Tech Stack:** Python 3.12 · Typer · esistente `synapse/model/` (loader, blocks, generate) · transformers 4.46.3 · pytest + `typer.testing.CliRunner`.
+**Tech Stack:** Python 3.12 · Typer · esistente `axyn/model/` (loader, blocks, generate) · transformers 4.46.3 · pytest + `typer.testing.CliRunner`.
 
 **Spec di riferimento:** [docs/prd/cli.md](../prd/cli.md). Build sulla foundation di [docs/prd/part-1-peer-node.md](../prd/part-1-peer-node.md).
 
@@ -15,8 +15,8 @@
 ## File Structure
 
 ```
-pyproject.toml                 # MODIFICA: + dipendenza typer, + [project.scripts] synapse
-synapse/
+pyproject.toml                 # MODIFICA: + dipendenza typer, + [project.scripts] axyn
+axyn/
   model/
     blocks.py                  # MODIFICA: + compute_boundaries()
     loader.py                  # MODIFICA: + model_config_dims()
@@ -34,7 +34,7 @@ Responsabilità: gli helper puri stanno in `model/` (riusabili, testabili senza 
 ## Task 1: `compute_boundaries` (helper puro)
 
 **Files:**
-- Modify: `synapse/model/blocks.py` (aggiungi funzione in fondo)
+- Modify: `axyn/model/blocks.py` (aggiungi funzione in fondo)
 - Test: `tests/test_boundaries.py`
 
 - [ ] **Step 1: Scrivi i test che falliscono**
@@ -42,7 +42,7 @@ Responsabilità: gli helper puri stanno in `model/` (riusabili, testabili senza 
 `tests/test_boundaries.py`:
 ```python
 import pytest
-from synapse.model.blocks import compute_boundaries
+from axyn.model.blocks import compute_boundaries
 
 
 def test_even_split():
@@ -78,10 +78,10 @@ def test_rejects_non_positive_blocks():
 
 - [ ] **Step 2: Esegui per vederli fallire**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_boundaries.py -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_boundaries.py -v`
 Expected: FAIL con `ImportError`/`AttributeError` su `compute_boundaries`.
 
-- [ ] **Step 3: Implementa in `synapse/model/blocks.py`**
+- [ ] **Step 3: Implementa in `axyn/model/blocks.py`**
 
 Aggiungi in fondo al file:
 ```python
@@ -103,13 +103,13 @@ def compute_boundaries(num_layers: int, n_blocks: int) -> list[int]:
 
 - [ ] **Step 4: Esegui per vederli passare**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_boundaries.py -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_boundaries.py -v`
 Expected: 6 passed.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/model/blocks.py tests/test_boundaries.py && git commit -m "feat(model): compute_boundaries per split uniforme dei layer in N blocchi"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/model/blocks.py tests/test_boundaries.py && git commit -m "feat(model): compute_boundaries per split uniforme dei layer in N blocchi"
 ```
 
 ---
@@ -117,7 +117,7 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/model/blocks.py tests/t
 ## Task 2: `model_config_dims` (helper puro, solo config)
 
 **Files:**
-- Modify: `synapse/model/loader.py` (aggiungi funzione)
+- Modify: `axyn/model/loader.py` (aggiungi funzione)
 - Test: `tests/test_config_dims.py`
 
 - [ ] **Step 1: Scrivi il test che fallisce**
@@ -125,7 +125,7 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/model/blocks.py tests/t
 `tests/test_config_dims.py`:
 ```python
 import pytest
-from synapse.model.loader import model_config_dims
+from axyn.model.loader import model_config_dims
 
 
 @pytest.mark.slow
@@ -139,10 +139,10 @@ def test_config_dims_without_loading_weights():
 
 - [ ] **Step 2: Esegui per vederlo fallire**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_config_dims.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_config_dims.py -m slow -v`
 Expected: FAIL con `ImportError`/`AttributeError` su `model_config_dims`.
 
-- [ ] **Step 3: Implementa in `synapse/model/loader.py`**
+- [ ] **Step 3: Implementa in `axyn/model/loader.py`**
 
 Aggiungi in fondo (riusa la stessa forma del dict di `model_dims`):
 ```python
@@ -160,13 +160,13 @@ def model_config_dims(model_id: str) -> dict:
 
 - [ ] **Step 4: Esegui per vederlo passare**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_config_dims.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_config_dims.py -m slow -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/model/loader.py tests/test_config_dims.py && git commit -m "feat(model): model_config_dims (dims da AutoConfig senza pesi)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/model/loader.py tests/test_config_dims.py && git commit -m "feat(model): model_config_dims (dims da AutoConfig senza pesi)"
 ```
 
 ---
@@ -175,7 +175,7 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/model/loader.py tests/t
 
 **Files:**
 - Modify: `pyproject.toml` (dipendenza typer + scripts)
-- Create: `synapse/cli.py`
+- Create: `axyn/cli.py`
 - Test: `tests/test_cli.py`
 
 - [ ] **Step 1: Aggiungi `typer` e l'entry-point in `pyproject.toml`**
@@ -183,11 +183,11 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/model/loader.py tests/t
 Nella tabella `[project] dependencies` aggiungi `"typer>=0.12"`. Dopo la sezione `[project.optional-dependencies]` aggiungi:
 ```toml
 [project.scripts]
-synapse = "synapse.cli:app"
+axyn = "axyn.cli:app"
 ```
 Poi reinstalla per registrare lo script ed installare typer:
 ```bash
-cd /Users/alberto/Projects/AI/synapse && .venv/bin/pip install -e ".[dev]"
+cd /Users/alberto/Projects/AI/axyn && .venv/bin/pip install -e ".[dev]"
 ```
 
 - [ ] **Step 2: Scrivi il test che fallisce**
@@ -196,7 +196,7 @@ cd /Users/alberto/Projects/AI/synapse && .venv/bin/pip install -e ".[dev]"
 ```python
 import json
 from typer.testing import CliRunner
-from synapse.cli import app
+from axyn.cli import app
 
 runner = CliRunner()
 
@@ -213,15 +213,15 @@ def test_version_json_is_valid_envelope():
 def test_version_text_mode():
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "synapse" in result.stdout
+    assert "axyn" in result.stdout
 ```
 
 - [ ] **Step 3: Esegui per vederlo fallire**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_cli.py -v`
-Expected: FAIL con `ImportError` su `synapse.cli`.
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli.py -v`
+Expected: FAIL con `ImportError` su `axyn.cli`.
 
-- [ ] **Step 4: Implementa `synapse/cli.py`**
+- [ ] **Step 4: Implementa `axyn/cli.py`**
 
 ```python
 import json as _json
@@ -230,9 +230,9 @@ import sys
 
 import typer
 
-from synapse.config import DEFAULT_MODEL_ID
+from axyn.config import DEFAULT_MODEL_ID
 
-app = typer.Typer(add_completion=False, no_args_is_help=True, help="Synapse — rete di inferenza LLM decentralizzata.")
+app = typer.Typer(add_completion=False, no_args_is_help=True, help="Axyn — rete di inferenza LLM decentralizzata.")
 
 # Stato globale impostato dal callback (modalità output).
 _state = {"json": False}
@@ -241,7 +241,7 @@ _state = {"json": False}
 def _json_enabled(flag: bool) -> bool:
     if flag:
         return True
-    return os.environ.get("SYNAPSE_JSON", "").lower() in ("1", "true", "yes")
+    return os.environ.get("AXYN_JSON", "").lower() in ("1", "true", "yes")
 
 
 @app.callback()
@@ -277,26 +277,26 @@ def version():
     """Stampa la versione del pacchetto."""
     from importlib.metadata import version as _pkg_version
     try:
-        v = _pkg_version("synapse")
+        v = _pkg_version("axyn")
     except Exception:
         v = "0.0.1"
-    _emit_ok("version", {"version": v}, human=f"synapse {v}")
+    _emit_ok("version", {"version": v}, human=f"axyn {v}")
 ```
 
 - [ ] **Step 5: Esegui per vederlo passare + verifica lo script installato**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_cli.py -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli.py -v`
 Expected: 2 passed.
 Poi verifica l'entry-point reale:
 ```bash
-cd /Users/alberto/Projects/AI/synapse && .venv/bin/synapse version && .venv/bin/synapse --json version
+cd /Users/alberto/Projects/AI/axyn && .venv/bin/axyn version && .venv/bin/axyn --json version
 ```
-Expected: prima riga `synapse 0.0.1`; seconda riga `{"ok": true, "command": "version", "data": {"version": "0.0.1"}}`.
+Expected: prima riga `axyn 0.0.1`; seconda riga `{"ok": true, "command": "version", "data": {"version": "0.0.1"}}`.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add pyproject.toml synapse/cli.py tests/test_cli.py && git commit -m "feat(cli): entry-point synapse + envelope JSON + comando version"
+cd /Users/alberto/Projects/AI/axyn && git add pyproject.toml axyn/cli.py tests/test_cli.py && git commit -m "feat(cli): entry-point axyn + envelope JSON + comando version"
 ```
 
 ---
@@ -304,7 +304,7 @@ cd /Users/alberto/Projects/AI/synapse && git add pyproject.toml synapse/cli.py t
 ## Task 4: Comando `model` (`--info`)
 
 **Files:**
-- Modify: `synapse/cli.py`
+- Modify: `axyn/cli.py`
 - Test: `tests/test_cli.py`
 
 - [ ] **Step 1: Aggiungi i test (in coda a `tests/test_cli.py`)**
@@ -332,15 +332,15 @@ aggiungi `import pytest` in cima al file (se non già presente) e decora entramb
 
 - [ ] **Step 2: Esegui per vederli fallire**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_cli.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli.py -m slow -v`
 Expected: FAIL (comando `model` inesistente → exit 2 / no such command).
 
-- [ ] **Step 3: Implementa il comando in `synapse/cli.py`**
+- [ ] **Step 3: Implementa il comando in `axyn/cli.py`**
 
 Aggiungi gli import in cima (sotto quelli esistenti):
 ```python
-from synapse.model.blocks import compute_boundaries
-from synapse.model.loader import model_config_dims
+from axyn.model.blocks import compute_boundaries
+from axyn.model.loader import model_config_dims
 ```
 Aggiungi il comando dopo `version`:
 ```python
@@ -371,13 +371,13 @@ def model(
 
 - [ ] **Step 4: Esegui per vederli passare**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_cli.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli.py -m slow -v`
 Expected: i due nuovi test passano.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py tests/test_cli.py && git commit -m "feat(cli): comando 'model --info' (dims + split, errore INVALID_BOUNDARIES)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli.py && git commit -m "feat(cli): comando 'model --info' (dims + split, errore INVALID_BOUNDARIES)"
 ```
 
 ---
@@ -385,7 +385,7 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py tests/test_cli.p
 ## Task 5: Comandi `generate` e `selfcheck` (+ stdin)
 
 **Files:**
-- Modify: `synapse/cli.py`
+- Modify: `axyn/cli.py`
 - Test: `tests/test_cli.py`
 
 - [ ] **Step 1: Aggiungi i test (in coda a `tests/test_cli.py`)**
@@ -420,17 +420,17 @@ def test_selfcheck_reports_match():
 
 - [ ] **Step 2: Esegui per vederli fallire**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_cli.py -m slow -v -k "generate or selfcheck"`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli.py -m slow -v -k "generate or selfcheck"`
 Expected: FAIL (comandi inesistenti).
 
-- [ ] **Step 3: Implementa in `synapse/cli.py`**
+- [ ] **Step 3: Implementa in `axyn/cli.py`**
 
 Aggiungi questi import in cima (sotto gli altri):
 ```python
-from synapse.config import DTYPE, DEVICE
-from synapse.model.loader import load_full_model, model_dims
-from synapse.model.blocks import split_into_blocks
-from synapse.model.generate import reference_generate, pipeline_generate
+from axyn.config import DTYPE, DEVICE
+from axyn.model.loader import load_full_model, model_dims
+from axyn.model.blocks import split_into_blocks
+from axyn.model.generate import reference_generate, pipeline_generate
 ```
 Aggiungi un helper per lo stdin e i due comandi, dopo `model`:
 ```python
@@ -514,13 +514,13 @@ def selfcheck(
 
 - [ ] **Step 4: Esegui per vederli passare**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_cli.py -m slow -v -k "generate or selfcheck"`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli.py -m slow -v -k "generate or selfcheck"`
 Expected: i 3 nuovi test passano.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py tests/test_cli.py && git commit -m "feat(cli): comandi generate e selfcheck (+ prompt da stdin)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli.py && git commit -m "feat(cli): comandi generate e selfcheck (+ prompt da stdin)"
 ```
 
 ---
@@ -528,7 +528,7 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py tests/test_cli.p
 ## Task 6: Comando `schema` (auto-descrizione per AI)
 
 **Files:**
-- Modify: `synapse/cli.py`
+- Modify: `axyn/cli.py`
 - Test: `tests/test_cli.py`
 
 - [ ] **Step 1: Aggiungi il test (in coda a `tests/test_cli.py`)**
@@ -549,10 +549,10 @@ def test_schema_lists_commands():
 
 - [ ] **Step 2: Esegui per vederlo fallire**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_cli.py::test_schema_lists_commands -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli.py::test_schema_lists_commands -v`
 Expected: FAIL (comando `schema` inesistente).
 
-- [ ] **Step 3: Implementa `schema` in `synapse/cli.py`**
+- [ ] **Step 3: Implementa `schema` in `axyn/cli.py`**
 
 Aggiungi in fondo:
 ```python
@@ -581,13 +581,13 @@ def schema():
 
 - [ ] **Step 4: Esegui per vederlo passare**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_cli.py::test_schema_lists_commands -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli.py::test_schema_lists_commands -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py tests/test_cli.py && git commit -m "feat(cli): comando schema (auto-descrizione machine-readable)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli.py && git commit -m "feat(cli): comando schema (auto-descrizione machine-readable)"
 ```
 
 ---
@@ -613,22 +613,22 @@ def test_json_stdout_is_pure_json_no_progress_noise():
 
 - [ ] **Step 2: Esegui il nuovo test**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_cli.py::test_json_stdout_is_pure_json_no_progress_noise -m slow -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli.py::test_json_stdout_is_pure_json_no_progress_noise -m slow -v`
 Expected: PASS. Se fallisce perché stdout contiene rumore, verifica che `_main` (callback) imposti `HF_HUB_DISABLE_PROGRESS_BARS` e `transformers.logging.set_verbosity_error()`.
 
 - [ ] **Step 3: Esegui l'INTERA suite**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest -q`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q`
 Expected: tutti i test PASS (foundation Parte 1 + helper + CLI).
 
 - [ ] **Step 4: Smoke test manuale dell'entry-point reale**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse
-.venv/bin/synapse --help
-.venv/bin/synapse --json schema
-.venv/bin/synapse --json model --info
-echo "La capitale dell'Italia è" | .venv/bin/synapse --json generate --prompt - --max-new-tokens 6
+cd /Users/alberto/Projects/AI/axyn
+.venv/bin/axyn --help
+.venv/bin/axyn --json schema
+.venv/bin/axyn --json model --info
+echo "La capitale dell'Italia è" | .venv/bin/axyn --json generate --prompt - --max-new-tokens 6
 ```
 Expected: ogni comando esce 0; le invocazioni `--json` stampano envelope JSON valido su stdout.
 
@@ -639,7 +639,7 @@ Spunta la voce CLI in "Fase 1" (`[ ]` → `[x]`) e annota: comandi `version`/`mo
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add tests/test_cli.py docs/ROADMAP.md && git commit -m "test(cli): stream JSON puri + suite completa verde; ROADMAP CLI completata"
+cd /Users/alberto/Projects/AI/axyn && git add tests/test_cli.py docs/ROADMAP.md && git commit -m "test(cli): stream JSON puri + suite completa verde; ROADMAP CLI completata"
 ```
 
 ---
@@ -648,7 +648,7 @@ cd /Users/alberto/Projects/AI/synapse && git add tests/test_cli.py docs/ROADMAP.
 
 **Spec coverage (docs/prd/cli.md):**
 - §4 packaging/entry-point → Task 3 ✓
-- §5.1 modalità output `--json` + env `SYNAPSE_JSON` → Task 3 (`_json_enabled`, callback) ✓
+- §5.1 modalità output `--json` + env `AXYN_JSON` → Task 3 (`_json_enabled`, callback) ✓
 - §5.2 envelope ok/error → Task 3 (`_emit_ok`/`_fail`) ✓
 - §5.3 stream puliti → Task 3 (callback) + Task 7 (test) ✓
 - §5.4 exit code (0/1/2) → Task 3/4/5 (`_fail` exit 1; Typer exit 2 per usage) ✓

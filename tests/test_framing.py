@@ -1,4 +1,4 @@
-from synapse.net.framing import pack, unpack
+from axyn.net.framing import pack, unpack
 
 
 def test_roundtrip_header_and_payload():

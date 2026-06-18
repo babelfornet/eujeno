@@ -1,5 +1,5 @@
 import pytest
-from synapse.net.topology import parse_stages, StageSpec, Topology, load_topology
+from axyn.net.topology import parse_stages, StageSpec, Topology, load_topology
 
 
 def test_parse_stages_all_kinds():

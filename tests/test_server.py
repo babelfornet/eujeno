@@ -1,10 +1,10 @@
 import pytest
 import torch
 from fastapi.testclient import TestClient
-from synapse.net.wire import encode_tensors, decode_tensors
-from synapse.net.topology import StageSpec
-from synapse.net.server import create_app
-from synapse.model.generate import reference_generate
+from axyn.net.wire import encode_tensors, decode_tensors
+from axyn.net.topology import StageSpec
+from axyn.net.server import create_app
+from axyn.model.generate import reference_generate
 
 
 @pytest.mark.slow

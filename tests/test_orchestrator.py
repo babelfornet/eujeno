@@ -6,10 +6,10 @@ import pytest
 import httpx
 import uvicorn
 
-from synapse.net.topology import StageSpec, Topology
-from synapse.net.server import create_app
-from synapse.net.orchestrator import distributed_generate
-from synapse.model.generate import reference_generate
+from axyn.net.topology import StageSpec, Topology
+from axyn.net.server import create_app
+from axyn.net.orchestrator import distributed_generate
+from axyn.model.generate import reference_generate
 
 
 def _free_port():

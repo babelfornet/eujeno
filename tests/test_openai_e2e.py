@@ -1,9 +1,9 @@
 import socket, threading, time, asyncio
 import pytest, httpx, uvicorn
-from synapse.net.coordinator import create_coordinator_app
-from synapse.net.node import run_node
-from synapse.net.node_exec import NodeState
-from synapse.net.topology import StageSpec
+from axyn.net.coordinator import create_coordinator_app
+from axyn.net.node import run_node
+from axyn.net.node_exec import NodeState
+from axyn.net.topology import StageSpec
 
 
 def _free_port():
@@ -61,7 +61,7 @@ def test_openai_chat_completions(full_model):
             models = c.get(f"{base}/v1/models").json()
             assert models["object"] == "list" and len(models["data"]) >= 1
             r = c.post(f"{base}/v1/chat/completions", json={
-                "model": "synapse",
+                "model": "axyn",
                 "messages": [{"role": "user", "content": "Di' ciao in una parola"}],
                 "max_tokens": 8,
             })
@@ -80,7 +80,7 @@ def test_chat_output_has_no_special_tokens(full_model):
     try:
         with httpx.Client(timeout=60.0) as c:
             r = c.post(f"{base}/v1/chat/completions", json={
-                "model": "synapse",
+                "model": "axyn",
                 "messages": [{"role": "user", "content": "Di' ciao."}],
                 "max_tokens": 64,
             }).json()
@@ -103,7 +103,7 @@ def test_chat_completions_accepts_tools(full_model):
     try:
         with httpx.Client(timeout=60.0) as c:
             r = c.post(f"{base}/v1/chat/completions", json={
-                "model": "synapse",
+                "model": "axyn",
                 "messages": [{"role": "user", "content": "Che tempo fa a Roma?"}],
                 "tools": tools, "max_tokens": 64,
             }).json()

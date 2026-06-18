@@ -1,17 +1,19 @@
-# Collegare agenti AI a Synapse (API OpenAI-compatibile)
+# Connecting AI agents to Axyn (OpenAI-compatible API)
 
-Quando il modello è OPERATIVO, il coordinator espone un'API **OpenAI-compatibile**: punta qualsiasi client/SDK OpenAI a `http://IL_COORDINATOR:9000/v1`.
+> An agent can even **bring up a network from scratch**: `axyn models` lists the compatible models, and `axyn up --model <id> [--dtype bfloat16]` starts a coordinator plus a node covering all layers in a single command (`--dry-run` for a preview). See [CLAUDE.md](../../CLAUDE.md).
 
-Endpoint disponibili: `GET /v1/models`, `POST /v1/chat/completions` (con `temperature`, `top_p`, `max_tokens`, `repetition_penalty`, `seed`). Il chat template viene applicato automaticamente ai `messages`.
+When the model is OPERATIONAL, the coordinator exposes an **OpenAI-compatible** API: point any OpenAI client/SDK at `http://YOUR_COORDINATOR:9000/v1`.
 
-## SDK OpenAI (Python)
+Available endpoints: `GET /v1/models`, `POST /v1/chat/completions` (with `temperature`, `top_p`, `max_tokens`, `repetition_penalty`, `seed`). The chat template is applied automatically to the `messages`.
+
+## OpenAI SDK (Python)
 
 ```python
 from openai import OpenAI
-client = OpenAI(base_url="http://127.0.0.1:9000/v1", api_key="qualsiasi")
+client = OpenAI(base_url="http://127.0.0.1:9000/v1", api_key="anything")
 r = client.chat.completions.create(
-    model="synapse",
-    messages=[{"role": "user", "content": "Scrivi un haiku sul mare"}],
+    model="axyn",
+    messages=[{"role": "user", "content": "Write a haiku about the sea"}],
     temperature=0.8, top_p=0.9, max_tokens=80,
 )
 print(r.choices[0].message.content)
@@ -21,55 +23,55 @@ print(r.choices[0].message.content)
 
 ```bash
 curl -s http://127.0.0.1:9000/v1/chat/completions -H 'content-type: application/json' -d '{
-  "model": "synapse",
-  "messages": [{"role":"user","content":"Ciao!"}],
+  "model": "axyn",
+  "messages": [{"role":"user","content":"Hi!"}],
   "temperature": 0.7, "max_tokens": 64
 }'
 ```
 
-## Claude Code e client Anthropic
+## Claude Code and Anthropic clients
 
-Claude Code parla l'API **Anthropic**, non OpenAI. Mettici davanti **LiteLLM** come gateway (traduce Anthropic↔OpenAI) puntandolo a `http://IL_COORDINATOR:9000/v1`, poi:
+Claude Code speaks the **Anthropic** API, not OpenAI. Put **LiteLLM** in front of it as a gateway (it translates Anthropic↔OpenAI) and point it at `http://YOUR_COORDINATOR:9000/v1`, then:
 
 ```bash
 ANTHROPIC_BASE_URL=http://LITELLM:4000 claude
 ```
 
-Lo **streaming SSE** e un endpoint Anthropic nativo `/v1/messages` sono i prossimi passi (vedi [ROADMAP](../ROADMAP.md)).
+**SSE streaming** and a native Anthropic `/v1/messages` endpoint are next on the list (see [ROADMAP](../ROADMAP.md)).
 
-## Tool calling (e tool MCP)
+## Tool calling (and MCP tools)
 
-`/v1/chat/completions` accetta il parametro `tools` (formato OpenAI) e, se il modello decide di chiamare un tool, ritorna `tool_calls` con `finish_reason: "tool_calls"`. I **tool MCP li esegue l'agente/host** (Claude Code, ecc.): il modello decide *quale* tool chiamare, l'agente lo esegue e rimanda il risultato come messaggio `role: "tool"`.
+`/v1/chat/completions` accepts the `tools` parameter (OpenAI format) and, if the model decides to call a tool, it returns `tool_calls` with `finish_reason: "tool_calls"`. **MCP tools are executed by the agent/host** (Claude Code, etc.): the model decides *which* tool to call, the agent runs it and sends the result back as a `role: "tool"` message.
 
 ```python
 tools = [{"type":"function","function":{
-  "name":"get_weather","description":"Meteo di una città",
+  "name":"get_weather","description":"Weather for a city",
   "parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}]
-r = client.chat.completions.create(model="synapse",
-      messages=[{"role":"user","content":"Che tempo fa a Roma?"}], tools=tools)
-# r.choices[0].message.tool_calls -> [{function:{name:"get_weather", arguments:'{"city":"Roma"}'}}]
+r = client.chat.completions.create(model="axyn",
+      messages=[{"role":"user","content":"What's the weather in Rome?"}], tools=tools)
+# r.choices[0].message.tool_calls -> [{function:{name:"get_weather", arguments:'{"city":"Rome"}'}}]
 ```
 
-Nota: il tool-calling affidabile richiede un modello capace (7B+). Con Qwen 0.5B serve a verificare il meccanismo. La generazione si ferma alla fine-turno (EOS) e l'output è ripulito dai token speciali.
+Note: reliable tool calling requires a capable model (7B+). With Qwen 0.5B it's only good for verifying the mechanism. Generation stops at the end of the turn (EOS) and the output is stripped of special tokens.
 
-## Tool MCP da riga di comando
+## MCP tools from the command line
 
-Configura i server MCP e usali nell'inferenza senza frontend:
+Configure MCP servers and use them in inference without a frontend:
 
 ```bash
-# aggiungi un server MCP (stdio)
-synapse mcp --add fs --command npx --args "@modelcontextprotocol/server-filesystem /percorso"
-synapse --json mcp                 # elenca server + tool scoperti
-# interroga il modello con i tool MCP (loop tool-calling)
-synapse infer --coordinator http://IP:9000 --mcp --prompt "Elenca i file in /percorso"
-synapse mcp --remove fs
+# add an MCP server (stdio)
+axyn mcp --add fs --command npx --args "@modelcontextprotocol/server-filesystem /path"
+axyn --json mcp                 # list servers + discovered tools
+# query the model with the MCP tools (tool-calling loop)
+axyn infer --coordinator http://IP:9000 --mcp --prompt "List the files in /path"
+axyn mcp --remove fs
 ```
-La config è salvata in `~/.synapse/mcp.json` (override con `SYNAPSE_HOME`). `--mcp` richiede `--coordinator` o `--peer` (entrambi espongono `/v1`). Richiede un modello che supporti il tool-calling.
+The config is saved in `~/.axyn/mcp.json` (override with `AXYN_HOME`). `--mcp` requires `--coordinator` or `--peer` (both expose `/v1`). Requires a model that supports tool calling.
 
-## Tanti agenti in parallelo
+## Many agents in parallel
 
-Ogni richiesta è un **job** sulla rete e il coordinator gestisce job concorrenti. Per molti agenti contemporanei conviene:
-- aggiungere **coda + repliche dei blocchi** (Parte 3) così le richieste si distribuiscono e c'è failover;
-- per la **qualità**, splittare un **modello più grande** (es. Llama 3.x 8B/70B) su più nodi — l'infrastruttura è identica, cambiano solo dimensione e numero di nodi.
+Each request is a **job** on the network, and the coordinator handles concurrent jobs. For many simultaneous agents, it's best to:
+- add a **queue + block replicas** (Part 3) so requests are distributed and there's failover;
+- for **quality**, split a **larger model** (e.g. Llama 3.x 8B/70B) across multiple nodes — the infrastructure is identical, only the size and number of nodes change.
 
-Il framing async/"BOINC" è ideale qui: molti agenti accodano e ricevono le risposte nel tempo, anche con latenze alte.
+The async/"BOINC" framing is ideal here: many agents enqueue and receive their responses over time, even with high latencies.

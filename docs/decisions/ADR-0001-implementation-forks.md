@@ -1,41 +1,41 @@
-# ADR-0001 — Strade implementative per il PoC
+# ADR-0001 — Implementation paths for the PoC
 
-- **Stato:** Accettato
-- **Data:** 2026-06-17
-- **Decisori:** team di agent `synapse-impl-forks` (9 agent: 5 specialisti per-forcella, 3 architetti di stack, 1 lead architect di sintesi) + revisione utente
-- **Contesto:** [00-vision-architecture.md](../00-vision-architecture.md)
+- **Status:** Accepted
+- **Date:** 2026-06-17
+- **Deciders:** `axyn-impl-forks` agent team (9 agents: 5 per-fork specialists, 3 stack architects, 1 synthesis lead architect) + user review
+- **Context:** [00-vision-architecture.md](../00-vision-architecture.md)
 
-## Contesto
+## Context
 
-Cinque decisioni implementative trasversali ("forcelle") gating l'intera architettura erano contese. Un team di agent le ha confrontate in profondità (con verifica web sullo stato delle librerie a giugno 2026) e ha prodotto una raccomandazione integrata. Questo ADR cristallizza l'esito.
+Five cross-cutting implementation decisions ("forks") gating the entire architecture were contested. A team of agents compared them in depth (with web verification of library status as of June 2026) and produced an integrated recommendation. This ADR crystallizes the outcome.
 
-I criteri di valutazione, in ordine di peso: (1) time-to-runnable-PoC, (2) correttezza dell'inferenza autoregressiva distribuita + KV-cache, (3) allineamento col framing async/store-and-forward, (4) estensibilità verso le parti rimandate, (5) rischio operativo / maturità librerie.
+The evaluation criteria, in order of weight: (1) time-to-runnable-PoC, (2) correctness of distributed autoregressive inference + KV-cache, (3) alignment with the async/store-and-forward framing, (4) extensibility toward the deferred parts, (5) operational risk / library maturity.
 
-## Decisioni per forcella
+## Decisions per fork
 
-| # | Forcella | Decisione | Alternative scartate |
+| # | Fork | Decision | Rejected alternatives |
 |---|----------|-----------|----------------------|
-| **A** | Substrate P2P/DHT | **`hivemind.DHT` come piano discovery/metadati SOLO**, dietro interfaccia `DiscoveryProvider`. `bmuller/kademlia` vendored come fallback LAN/VPN. **Mai** instradare attivazioni via hivemind RPC/streaming. | `kademlia` come primario (UDP-only, no NAT traversal, dormiente dal 2021); py-libp2p (kad-DHT immaturo nel 2026); go-libp2p sidecar (1-2 settimane di bridge IPC, fase sbagliata) |
-| **B** | Runtime esecuzione layer | **Block-runner sottile su HF transformers**: `init_empty_weights()` + `load_checkpoint_in_model()` per materializzare solo i layer assegnati `model.model.layers[i:j]`. Embedding e lm_head sono blocchi anch'essi. KV-cache = `DynamicCache` serializzabile che possediamo, persistita per `(job_id, stage)`. | Riuso interni Petals (frozen a 2.2.0, no Llama 3.2/Qwen2.5, KV-cache saldata a sessione hivemind live = il modello low-latency che abbiamo rilassato); forward pass custom (re-derivare ogni architettura, fase sbagliata) |
-| **C** | Modello job async | **Store-and-forward come nord; entry-node orchestrator-driven come Milestone 0**, entrambi scrivono sullo stesso substrato durevole: **SQLite (WAL) job log per-nodo + blob safetensors su disco** keyed `(job_id, stage)`. Hop idempotenti (ACK-after-persist, dedup su `(job_id, stage)`). Migrazione M0→peer-driven = cancellare il loop centrale, non riscrivere la persistenza. | Orchestrator-driven come design finale (entry node = SPOF multi-day); Temporal/Ray/Celery (broker centrale = SPOF, contro la tesi decentralizzata); Redis Streams (daemon extra per nessun beneficio PoC) |
-| **D** | Verifica / BFT | **Reputazione always-on** (campo `reputation` nel record DHT) **+ recompute ridondante campionato ~5-10%** (biased verso nodi nuovi/low-score), confronto attivazioni promosse a **fp32 con tolleranza** (`torch.allclose` atol~1e-2 / rtol~1e-3). **Mai hash-compare.** Verifica solo hop stateless/prefill. | Verifica di ogni stage (~2x compute, kill del vantaggio async); commit-reveal di hash (fatalmente incompatibile con non-determinismo FP tra hardware eterogeneo — nodi onesti producono byte diversi) |
-| **E** | Allocazione / coverage | **Conteggio diretto chiavi DHT** per il PoC: `coverage = all(DHT.get(block_i) restituisce ≥1 holder vivo)`. Self-assign di un blocco scoperto random (o least-replicated) con backoff jitterato. Cache locale TTL 2-5s sul hot path. Mappa CRDT via gossip = upgrade v1.1. | Mappa gossip-CRDT come primario (over-engineered per 2-3 nodi); coordinatore eletto/Raft (reintroduce un punto centrale, viola la simmetria dei peer) |
+| **A** | P2P/DHT substrate | **`hivemind.DHT` as the discovery/metadata plane ONLY**, behind a `DiscoveryProvider` interface. `bmuller/kademlia` vendored as a LAN/VPN fallback. **Never** route activations via hivemind RPC/streaming. | `kademlia` as primary (UDP-only, no NAT traversal, dormant since 2021); py-libp2p (kad-DHT immature in 2026); go-libp2p sidecar (1-2 weeks of IPC bridge, wrong phase) |
+| **B** | Layer execution runtime | **Thin block-runner over HF transformers**: `init_empty_weights()` + `load_checkpoint_in_model()` to materialize only the assigned layers `model.model.layers[i:j]`. Embedding and lm_head are blocks too. KV-cache = a serializable `DynamicCache` that we own, persisted per `(job_id, stage)`. | Reusing Petals internals (frozen at 2.2.0, no Llama 3.2/Qwen2.5, KV-cache welded to a live hivemind session = the low-latency model we relaxed); custom forward pass (re-deriving each architecture, wrong phase) |
+| **C** | Async job model | **Store-and-forward as the north star; orchestrator-driven entry-node as Milestone 0**, both writing to the same durable substrate: **SQLite (WAL) per-node job log + safetensors blobs on disk** keyed `(job_id, stage)`. Idempotent hops (ACK-after-persist, dedup on `(job_id, stage)`). M0→peer-driven migration = deleting the central loop, not rewriting the persistence. | Orchestrator-driven as the final design (entry node = multi-day SPOF); Temporal/Ray/Celery (central broker = SPOF, against the decentralized thesis); Redis Streams (extra daemon for no PoC benefit) |
+| **D** | Verification / BFT | **Always-on reputation** (`reputation` field in the DHT record) **+ sampled redundant recompute ~5-10%** (biased toward new/low-score nodes), comparing activations promoted to **fp32 with tolerance** (`torch.allclose` atol~1e-2 / rtol~1e-3). **Never hash-compare.** Verify stateless/prefill hops only. | Verifying every stage (~2x compute, kills the async advantage); commit-reveal of hashes (fatally incompatible with FP non-determinism across heterogeneous hardware — honest nodes produce different bytes) |
+| **E** | Allocation / coverage | **Direct DHT key counting** for the PoC: `coverage = all(DHT.get(block_i) returns ≥1 live holder)`. Self-assign an uncovered block at random (or least-replicated) with jittered backoff. Local TTL 2-5s cache on the hot path. CRDT map via gossip = v1.1 upgrade. | Gossip-CRDT map as primary (over-engineered for 2-3 nodes); elected coordinator/Raft (reintroduces a central point, violates peer symmetry) |
 
-## Stack integrato — i 3 primitivi condivisi
+## Integrated stack — the 3 shared primitives
 
-Le cinque scelte compongono **un unico seam** attorno a tre primitivi che tutto il sistema condivide:
+The five choices compose into **a single seam** around three primitives that the whole system shares:
 
-1. **Schema record DHT** — `block:{lo-hi} → {peer_id, queue_url, block, expiry, load, reputation}` con TTL ~60s. Letto/scritto da A (discovery), D (reputation), E (coverage).
-2. **Substrato durevole SQLite + safetensors** — job log per-nodo + blob attivazioni/KV su disco. Condiviso da C (store-and-forward) e dal failover-and-verify di D.
-3. **Chiave di idempotenza `(job_id, stage)`** — allinea hop, KV-cache, re-dispatch e verifica su un unico code path.
+1. **DHT record schema** — `block:{lo-hi} → {peer_id, queue_url, block, expiry, load, reputation}` with TTL ~60s. Read/written by A (discovery), D (reputation), E (coverage).
+2. **Durable SQLite + safetensors substrate** — per-node job log + activation/KV blobs on disk. Shared by C (store-and-forward) and D's failover-and-verify.
+3. **`(job_id, stage)` idempotency key** — aligns hops, KV-cache, re-dispatch, and verification on a single code path.
 
-> **Il taglio architetturale decisivo:** separare i due contributi di Petals. Riusiamo l'*idea* di eseguire blocchi via moduli decoder HF (Fork B) ma **scartiamo** l'RPC/streaming sincrono low-latency di Petals — esattamente la proprietà che abbiamo rilassato. hivemind serve solo i metadati; le attivazioni viaggiano sul **nostro** transport durevole.
+> **The decisive architectural cut:** separating Petals' two contributions. We reuse the *idea* of running blocks via HF decoder modules (Fork B) but **discard** Petals' synchronous low-latency RPC/streaming — exactly the property we relaxed. hivemind only serves metadata; activations travel over **our** durable transport.
 
 ```mermaid
 graph LR
-    subgraph Shared["3 primitivi condivisi"]
+    subgraph Shared["3 shared primitives"]
         REC["DHT record schema<br/>block:{lo-hi} → {...}"]
-        SUB["SQLite + safetensors<br/>substrato durevole"]
+        SUB["SQLite + safetensors<br/>durable substrate"]
         KEY["(job_id, stage)<br/>idempotency key"]
     end
     A[Fork A: discovery] --> REC
@@ -48,45 +48,45 @@ graph LR
     D --> KEY
 ```
 
-## Sequencing — Milestone 0 → decentralizzazione
+## Sequencing — Milestone 0 → decentralization
 
-Si compra velocità (criterio 1) senza sacrificare l'allineamento async (criterio 3): si spedisce **prima** un entry-node orchestrator-driven che scrive sullo **stesso** substrato durevole, **poi** si decentralizza cancellando il loop centrale. Nessun broker, nessun coordinatore, nessuna dipendenza da Petals.
+We buy speed (criterion 1) without sacrificing async alignment (criterion 3): we ship **first** an orchestrator-driven entry-node that writes to the **same** durable substrate, **then** decentralize by deleting the central loop. No broker, no coordinator, no Petals dependency.
 
 ## Build order (prototype-first)
 
-Questi step diventano i milestone di implementazione (vedi [ROADMAP](../ROADMAP.md)):
+These steps become the implementation milestones (see [ROADMAP](../ROADMAP.md)):
 
-1. **Golden reference single-process** — carica un modello piccolo (Qwen2.5-0.5B o Llama 3.2 1B), genera, cattura logits/token di riferimento per un prompt fisso.
-2. **Block-split manuale single-process** — split in 2-3 block-runner in-process chiamati in sequenza con `DynamicCache` passata a mano; assert `torch.allclose` vs step 1. **De-risk di KV-cache/RoPE/position_ids prima di qualsiasi networking.**
-3. **Due processi reali su localhost** — FastAPI + safetensors in-memory, routing statico, single forward, attivazione persistita su SQLite+disco; ri-assert equality vs golden.
-4. **Loop autoregressivo con session affinity** — KV-cache pinnata per `(job_id, block)`; il messaggio porta solo l'hidden state del nuovo token. Ri-assert sequenza == golden.
-5. **Smoke test p2pd/hivemind.DHT** sui 2-3 nodi REALI (laptop + VM/container): store/get di un record, verifica NAT traversal + TTL liveness. **Gate prima di proseguire.**
-6. **DHT lookup + self-assignment + coverage gate** — sostituisce il routing statico; prova che un job va in `WAITING_COVERAGE` quando un blocco è scoperto e riprende quando un nodo si auto-assegna.
-7. **Failover store-and-forward durevole** — uccidi un holder a metà generazione, prova che lo stage si re-dispaccia dall'attivazione persistita (con recompute del prefisso) e la generazione completa correttamente.
-8. **Reputazione light + recompute campionato** su hop di prefill; declassa un nodo deliberatamente difettoso.
-9. **Refactor finale** — cancella il loop orchestrator, ogni nodo pull/forward peer-to-peer sullo stesso substrato SQLite (migrazione M0 → store-and-forward).
+1. **Single-process golden reference** — load a small model (Qwen2.5-0.5B or Llama 3.2 1B), generate, capture reference logits/tokens for a fixed prompt.
+2. **Single-process manual block-split** — split into 2-3 in-process block-runners called in sequence with a `DynamicCache` passed by hand; assert `torch.allclose` vs step 1. **De-risk KV-cache/RoPE/position_ids before any networking.**
+3. **Two real processes on localhost** — FastAPI + in-memory safetensors, static routing, single forward, activation persisted to SQLite+disk; re-assert equality vs golden.
+4. **Autoregressive loop with session affinity** — KV-cache pinned per `(job_id, block)`; the message carries only the new token's hidden state. Re-assert sequence == golden.
+5. **p2pd/hivemind.DHT smoke test** on the 2-3 REAL nodes (laptop + VM/container): store/get a record, verify NAT traversal + TTL liveness. **Gate before proceeding.**
+6. **DHT lookup + self-assignment + coverage gate** — replaces static routing; prove that a job goes to `WAITING_COVERAGE` when a block is uncovered and resumes when a node self-assigns.
+7. **Durable store-and-forward failover** — kill a holder mid-generation, prove that the stage re-dispatches from the persisted activation (with prefix recompute) and the generation completes correctly.
+8. **Light reputation + sampled recompute** on prefill hops; demote a deliberately faulty node.
+9. **Final refactor** — delete the orchestrator loop, each node pull/forward peer-to-peer over the same SQLite substrate (M0 → store-and-forward migration).
 
-## Rischi principali & mitigazioni
+## Main risks & mitigations
 
-| Rischio | Mitigazione |
+| Risk | Mitigation |
 |---------|-------------|
-| **Correttezza KV-cache tra hop e restart/failover** — qui il PoC vive o muore. Off-by-one in `position_ids`/`cache_position` dopo un hop ripreso, o double-append su re-dispatch, corrompe silenziosamente la generazione. | `golden_test` single-process **per primo**, ri-eseguito a **ogni** step prima di aggiungere networking/failover. Scritture cache idempotenti keyed `(job_id, stage, token_position)`. KV-cache come oggetto serializzabile (mai handle di sessione live). |
-| **Perdita KV-cache su morte mid-pipeline** → recompute O(seq_len) del prefisso; sotto churn diventa patologico. | PoC: accetta recompute-from-prompt sul solo blocco fallito. Policy di checkpointing per-blocco come item v1.1. Self-assign least-replicated per tenere i blocchi caldi a replication ≥2. |
-| **`p2pd` arch-mismatch** (Apple Silicon laptop vs x86 VM) → hang silenzioso; bootstrap irraggiungibile → split-brain DHT. | Smoke test p2pd come **gate di build-order** prima del lavoro sul modello. Pin `initial_peers` a un seed noto. Interfaccia `DiscoveryProvider` come escape hatch verso kademlia su VPN flat. |
-| **Non-determinismo FP** rende la verifica per uguaglianza fragile. | Mai hash-compare. Promuovi a fp32, `torch.allclose` (atol~1e-2, rtol~1e-3). Campiona solo ~5-10% di hop stateless/prefill, reputation-gated. |
-| **Scope creep nel transport hand-owned** mangia il budget criterio-1. | Transport minimale: HTTP via FastAPI/uvicorn con body safetensors-bytes, model id + dtype **fissi** in v1, no negoziazione di protocollo, no quantizzazione. SQLite (non Redis/NATS) = ops a zero. |
+| **KV-cache correctness across hops and restart/failover** — this is where the PoC lives or dies. An off-by-one in `position_ids`/`cache_position` after a resumed hop, or a double-append on re-dispatch, silently corrupts the generation. | `golden_test` single-process **first**, re-run at **every** step before adding networking/failover. Idempotent cache writes keyed `(job_id, stage, token_position)`. KV-cache as a serializable object (never a live session handle). |
+| **KV-cache loss on mid-pipeline death** → O(seq_len) recompute of the prefix; under churn this becomes pathological. | PoC: accept recompute-from-prompt on the failed block only. Per-block checkpointing policy as a v1.1 item. Least-replicated self-assign to keep blocks warm at replication ≥2. |
+| **`p2pd` arch-mismatch** (Apple Silicon laptop vs x86 VM) → silent hang; unreachable bootstrap → DHT split-brain. | p2pd smoke test as a **build-order gate** before model work. Pin `initial_peers` to a known seed. `DiscoveryProvider` interface as an escape hatch toward kademlia on a flat VPN. |
+| **FP non-determinism** makes equality-based verification fragile. | Never hash-compare. Promote to fp32, `torch.allclose` (atol~1e-2, rtol~1e-3). Sample only ~5-10% of stateless/prefill hops, reputation-gated. |
+| **Scope creep in the hand-owned transport** eats the criterion-1 budget. | Minimal transport: HTTP via FastAPI/uvicorn with safetensors-bytes body, **fixed** model id + dtype in v1, no protocol negotiation, no quantization. SQLite (not Redis/NATS) = zero ops. |
 
-## Domande aperte (da risolvere in fase di implementazione)
+## Open questions (to resolve during implementation)
 
-1. **Matrice nodi del PoC:** i 2-3 nodi sono su LAN/VPN flat (fallback kademlia viabile) o dietro NAT reale (NAT traversal di hivemind load-bearing)? Decide quanto conta il fallback `DiscoveryProvider`.
-2. **Versione API Cache di transformers:** pinnare una versione e confermare che `DynamicCache` faccia round-trip di serializzazione pulito per architettura.
-3. **Policy failover KV-cache oltre il PoC:** accettare recompute completo del prefisso, o checkpoint periodico per-blocco? Decidere la soglia trigger v1.1 (es. `seq_len > N`).
-4. **Valori empirici di tolleranza fp32** (atol/rtol) sul hardware eterogeneo reale: vanno **misurati**, non assunti.
-5. **Granularità blocchi & edge-node:** embedding e lm_head come blocchi standalone (più semplice) o co-locati col primo/ultimo slab decoder? Impatta coverage math e fit RAM.
-6. **Firma dei record DHT:** aggiungere record firmati ora (forward-compat economico per reputation/BFT) o rimandare? hivemind lo supporta.
-7. **Policy di retention/pruning dell'outbox** e limiti di backpressure per evitare crescita illimitata quando un blocco downstream resta scoperto.
+1. **PoC node matrix:** are the 2-3 nodes on a flat LAN/VPN (kademlia fallback viable) or behind real NAT (hivemind's NAT traversal load-bearing)? Decides how much the `DiscoveryProvider` fallback matters.
+2. **transformers Cache API version:** pin a version and confirm that `DynamicCache` round-trips serialization cleanly per architecture.
+3. **KV-cache failover policy beyond the PoC:** accept a full prefix recompute, or periodic per-block checkpointing? Decide the v1.1 trigger threshold (e.g. `seq_len > N`).
+4. **Empirical fp32 tolerance values** (atol/rtol) on real heterogeneous hardware: these must be **measured**, not assumed.
+5. **Block granularity & edge-node:** embedding and lm_head as standalone blocks (simpler) or co-located with the first/last decoder slab? Impacts coverage math and RAM fit.
+6. **DHT record signing:** add signed records now (cheap forward-compat for reputation/BFT) or defer? hivemind supports it.
+7. **Outbox retention/pruning policy** and backpressure limits to avoid unbounded growth when a downstream block stays uncovered.
 
-## Riferimenti
+## References
 
 - [hivemind · PyPI](https://pypi.org/project/hivemind/) (release 2026-01-03, Py3.9-3.12) · [learning-at-home/hivemind](https://github.com/learning-at-home/hivemind)
 - [Petals releases](https://github.com/bigscience-workshop/petals/releases) (frozen 2.2.0)

@@ -8,12 +8,12 @@ import pytest
 import uvicorn
 
 from typer.testing import CliRunner
-from synapse.cli import app as cli_app
-from synapse.net.coordinator import create_coordinator_app
-from synapse.net.node import run_node
-from synapse.net.node_exec import NodeState
-from synapse.net.topology import StageSpec
-from synapse.model.generate import reference_generate
+from axyn.cli import app as cli_app
+from axyn.net.coordinator import create_coordinator_app
+from axyn.net.node import run_node
+from axyn.net.node_exec import NodeState
+from axyn.net.topology import StageSpec
+from axyn.model.generate import reference_generate
 
 runner = CliRunner()
 

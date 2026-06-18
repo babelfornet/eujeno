@@ -1,63 +1,63 @@
-# PRD Parte 4 — Incentivi & Reputazione
+# PRD Part 4 — Incentives & Reputation
 
-> Decisioni di riferimento: [ADR-0001](../decisions/ADR-0001-implementation-forks.md) (Fork D). Visione: [00-vision-architecture.md](../00-vision-architecture.md).
+> Reference decisions: [ADR-0001](../decisions/ADR-0001-implementation-forks.md) (Fork D). Vision: [00-vision-architecture.md](../00-vision-architecture.md).
 >
-> **Stato:** Reputazione **light implementata** nel PoC. Token/criptovaluta **progettati su carta, rimandati** (vedi §5).
+> **Status:** **Light reputation implemented** in the PoC. Token/cryptocurrency **designed on paper, deferred** (see §5).
 
-## 1. Scopo
+## 1. Purpose
 
-Misurare e premiare il contributo dei nodi (tempo di calcolo + banda) e penalizzare i nodi inaffidabili o disonesti. Nel PoC la parte **operativa** è una **reputazione leggera** che guida routing e allocazione; la parte **economica** (token) è specificata ma non implementata.
+Measure and reward node contribution (compute time + bandwidth) and penalize unreliable or dishonest nodes. In the PoC the **operational** part is a **lightweight reputation** that drives routing and allocation; the **economic** part (token) is specified but not implemented.
 
-## 2. In scope (PoC) / Fuori scope
+## 2. In scope (PoC) / Out of scope
 
-**In scope (PoC):** campo `reputation` nel record DHT; regole di aggiornamento (successo/liveness ↑, timeout/failover/divergenza ↓); uso della reputazione come input di routing (Parte 2) e self-assignment (Parte 2); contabilità locale delle ricevute di hop (per il futuro ledger).
+**In scope (PoC):** `reputation` field in the DHT record; update rules (success/liveness ↑, timeout/failover/divergence ↓); use of reputation as a routing input (Part 2) and self-assignment (Part 2); local accounting of hop receipts (for the future ledger).
 
-**Fuori scope (deferred):** token on-chain, settlement, staking/slashing economico, proof-of-compute crittografico, mercato/pricing.
+**Out of scope (deferred):** on-chain tokens, settlement, economic staking/slashing, cryptographic proof-of-compute, market/pricing.
 
-## 3. Reputazione (operativa nel PoC)
+## 3. Reputation (operational in the PoC)
 
-- Vive come campo `reputation` nello **stesso record DHT** (primitivo condiviso #1) — costo quasi nullo, già necessaria per routing/allocazione.
-- **Aggiornamento:**
-  - `+` per hop completato e ACKato, per liveness (refresh TTL puntuale).
-  - `−` per timeout, per essere causa di failover, per **divergenza** in un recompute campionato (Parte 5).
-- **Uso:** il router preferisce alta reputazione; il recompute campionato (Parte 5) è **biased verso nodi nuovi/low-score**; cold-start gestito con score neutro iniziale.
+- Lives as a `reputation` field in the **same DHT record** (shared primitive #1) — nearly zero cost, already needed for routing/allocation.
+- **Update:**
+  - `+` for a completed and ACKed hop, for liveness (timely TTL refresh).
+  - `−` for a timeout, for being the cause of a failover, for **divergence** in a sampled recompute (Part 5).
+- **Use:** the router prefers high reputation; sampled recompute (Part 5) is **biased toward new/low-score nodes**; cold-start handled with a neutral initial score.
 
 ```mermaid
 flowchart LR
-    HOP[hop ACKato / liveness] -->|+| REP[(reputation nel DHT record)]
-    TO[timeout / causa failover] -->|−| REP
-    DIV[divergenza recompute - Parte 5] -->|−| REP
-    REP --> ROUTE[preferenza routing - Parte 2]
-    REP --> SAMP[bias campionamento verifica - Parte 5]
+    HOP[ACKed hop / liveness] -->|+| REP[(reputation in the DHT record)]
+    TO[timeout / cause of failover] -->|−| REP
+    DIV[recompute divergence - Part 5] -->|−| REP
+    REP --> ROUTE[routing preference - Part 2]
+    REP --> SAMP[verification sampling bias - Part 5]
 ```
 
-## 4. Ricevute di hop (hook per il futuro ledger)
+## 4. Hop receipts (hook for the future ledger)
 
-Ogni hop ACKato genera una **ricevuta locale** `{job_id, stage_idx, peer_id, bytes, t_compute}` nel job log SQLite. Non ha valore economico nel PoC, ma è il **punto di aggancio** dove il ledger a token si innesterà (il job log è anche dove vive lo stato del job — Parte 3).
+Every ACKed hop generates a **local receipt** `{job_id, stage_idx, peer_id, bytes, t_compute}` in the SQLite job log. It has no economic value in the PoC, but it is the **attachment point** where the token ledger will plug in (the job log is also where the job state lives — Part 3).
 
-## 5. Design del token (su carta — deferred)
+## 5. Token design (on paper — deferred)
 
-Specifica di riferimento per la fase post-PoC; **non** implementata ora.
+Reference specification for the post-PoC phase; **not** implemented now.
 
-- **Cosa si premia:** tempo di calcolo (per layer × token processati) + banda (bytes di attivazione trasferiti).
-- **Unità:** credito off-chain firmato e gossipato → in seguito ancorato a una chain (EVM/Solana/Cosmos).
-- **Slashing:** una divergenza provata in un recompute (Parte 5) è il **trigger di slashing**; la ricevuta di hop è la prova.
-- **Sybil resistance:** costo di partecipazione / stake; oggi assente (nessun costo di identità) — rischio documentato in Parte 5.
-- **Precondizione aperta:** un eventuale schema basato su hash/commit-reveal richiede kernel deterministici (canonical-fp32) — vedi ADR-0001 Fork D.
+- **What is rewarded:** compute time (per layer × tokens processed) + bandwidth (activation bytes transferred).
+- **Unit:** signed, gossiped off-chain credit → later anchored to a chain (EVM/Solana/Cosmos).
+- **Slashing:** a proven divergence in a recompute (Part 5) is the **slashing trigger**; the hop receipt is the proof.
+- **Sybil resistance:** participation cost / stake; absent today (no identity cost) — risk documented in Part 5.
+- **Open precondition:** any hash/commit-reveal-based scheme requires deterministic kernels (canonical-fp32) — see ADR-0001 Fork D.
 
-## 6. Criteri di accettazione (PoC)
+## 6. Acceptance criteria (PoC)
 
-1. La reputazione di un nodo sale con hop riusciti e scende con timeout/divergenze.
-2. Il router de-prioritizza un nodo a bassa reputazione.
-3. Ogni hop ACKato lascia una ricevuta nel job log.
+1. A node's reputation rises with successful hops and falls with timeouts/divergences.
+2. The router de-prioritizes a low-reputation node.
+3. Every ACKed hop leaves a receipt in the job log.
 
-## 7. Dipendenze
+## 7. Dependencies
 
-- **Parte 2:** campo `reputation` nel record; uso in routing/allocazione.
-- **Parte 3:** ricevute nel job log.
-- **Parte 5:** la divergenza nel recompute alimenta la reputazione (ed è il futuro trigger di slashing).
+- **Part 2:** `reputation` field in the record; use in routing/allocation.
+- **Part 3:** receipts in the job log.
+- **Part 5:** recompute divergence feeds the reputation (and is the future slashing trigger).
 
-## 8. Domande aperte
+## 8. Open questions
 
-- Forma esatta delle regole di aggiornamento (decay, finestra temporale, bounding).
-- Quando ancorare il credito a una chain reale e quale (post-PoC).
+- Exact form of the update rules (decay, time window, bounding).
+- When to anchor the credit to a real chain and which one (post-PoC).

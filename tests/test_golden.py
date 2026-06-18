@@ -1,7 +1,7 @@
 import pytest
 import torch
-from synapse.model.generate import reference_generate, pipeline_generate
-from synapse.model.blocks import split_into_blocks
+from axyn.model.generate import reference_generate, pipeline_generate
+from axyn.model.blocks import split_into_blocks
 
 
 @pytest.mark.slow

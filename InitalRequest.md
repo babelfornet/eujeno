@@ -1,5 +1,5 @@
 
-# Synapse
+# Axyn
 
 Progetta un'architettura per un sistema di inferenza distribuito peer-to-peer per modelli di linguaggio di grandi dimensioni. Il sistema deve essere completamente decentralizzato senza server centrale.
 

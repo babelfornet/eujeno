@@ -1,12 +1,12 @@
 import pytest
 import torch
 
-from synapse.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
-from synapse.model.loader import load_partial_model
-from synapse.net.topology import StageSpec
-from synapse.net.node_exec import NodeState, handle_request
-from synapse.net.wire import encode_tensors, decode_tensors
-from synapse.model.generate import reference_generate
+from axyn.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
+from axyn.model.loader import load_partial_model
+from axyn.net.topology import StageSpec
+from axyn.net.node_exec import NodeState, handle_request
+from axyn.net.wire import encode_tensors, decode_tensors
+from axyn.model.generate import reference_generate
 
 
 def _greedy_two_nodes(s1, s2, ids, max_new):

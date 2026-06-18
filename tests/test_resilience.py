@@ -1,8 +1,8 @@
 import pytest
 import torch
-from synapse.model.generate import reference_generate
-from synapse.model.blocks import split_into_blocks
-from synapse.model.cache import cache_to_bytes, cache_from_bytes
+from axyn.model.generate import reference_generate
+from axyn.model.blocks import split_into_blocks
+from axyn.model.cache import cache_to_bytes, cache_from_bytes
 
 
 @pytest.mark.slow

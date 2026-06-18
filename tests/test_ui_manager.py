@@ -1,5 +1,5 @@
 import sys, time
-from synapse.ui.manager import NodeManager
+from axyn.ui.manager import NodeManager
 
 
 def test_start_status_stop():

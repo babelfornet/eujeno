@@ -1,101 +1,101 @@
-# PRD Parte 2 — Discovery & Routing
+# PRD Part 2 — Discovery & Routing
 
-> Decisioni di riferimento: [ADR-0001](../decisions/ADR-0001-implementation-forks.md) (Fork A, E). Visione: [00-vision-architecture.md](../00-vision-architecture.md).
+> Reference decisions: [ADR-0001](../decisions/ADR-0001-implementation-forks.md) (Fork A, E). Vision: [00-vision-architecture.md](../00-vision-architecture.md).
 
-## 1. Scopo
+## 1. Purpose
 
-Permettere a ogni nodo di **scoprire** quale peer serve quale blocco, di **auto-assegnarsi** blocchi scoperti, di calcolare la **coverage** ("il modello è operativo?"), e di **instradare** un hop verso un holder vivo (con failover). Tutto senza coordinatore centrale.
+Allow each node to **discover** which peer serves which block, to **self-assign** discovered blocks, to compute **coverage** ("is the model operational?"), and to **route** a hop to a live holder (with failover). All without a central coordinator.
 
-## 2. In scope (PoC) / Fuori scope
+## 2. In scope (PoC) / Out of scope
 
-**In scope:** `DiscoveryProvider` su `hivemind.DHT`; schema record; TTL/refresh come liveness; coverage via conteggio chiavi; self-assignment greedy con backoff; routing con scelta holder + failover.
+**In scope:** `DiscoveryProvider` over `hivemind.DHT`; record schema; TTL/refresh as liveness; coverage via key counting; greedy self-assignment with backoff; routing with holder selection + failover.
 
-**Fuori scope (deferred):** mappa coverage gossip-CRDT (v1.1); record firmati (decisione aperta ADR-0001 Q6); rebalancing ottimizzato.
+**Out of scope (deferred):** gossip-CRDT coverage map (v1.1); signed records (open decision ADR-0001 Q6); optimized rebalancing.
 
-## 3. Interfaccia `DiscoveryProvider`
+## 3. `DiscoveryProvider` interface
 
-Astrazione che disaccoppia il sistema da hivemind (escape hatch verso kademlia):
+An abstraction that decouples the system from hivemind (escape hatch toward kademlia):
 
 ```python
 class DiscoveryProvider(Protocol):
     def announce(self, block: tuple[int,int], rec: BlockRecord) -> None: ...
-    def discover(self, block: tuple[int,int]) -> list[BlockRecord]: ...   # holder vivi
+    def discover(self, block: tuple[int,int]) -> list[BlockRecord]: ...   # live holders
     def coverage(self, n_layers: int) -> CoverageState: ...
 ```
 
-Implementazione primaria: `HivemindDiscovery`. Fallback: `KademliaDiscovery` (vendored `bmuller/kademlia`, solo LAN/VPN).
+Primary implementation: `HivemindDiscovery`. Fallback: `KademliaDiscovery` (vendored `bmuller/kademlia`, LAN/VPN only).
 
-> **Vincolo duro (Fork A):** il DHT è **solo** piano metadati. Le attivazioni **non** passano mai per hivemind RPC/streaming — viaggiano sul transport durevole della Parte 3.
+> **Hard constraint (Fork A):** the DHT is **only** the metadata plane. Activations **never** pass through hivemind RPC/streaming — they travel over the durable transport of Part 3.
 
-## 4. Schema record DHT (primitivo condiviso #1)
+## 4. DHT record schema (shared primitive #1)
 
 ```
 key:   f"{model_id}/block:{lo}-{hi}"
 value: {
   peer_id:    str,
-  queue_url:  str,      # endpoint inbox dell'holder (es. http://host:port)
+  queue_url:  str,      # holder inbox endpoint (e.g. http://host:port)
   block:      [lo, hi],
-  expiry:     ts,       # TTL ~60s; refresh ~20s = segnale di liveness
-  load:       float,    # profondità coda / utilizzo (per load balancing, Parte 3)
-  reputation: float,    # score (Parte 4/5)
+  expiry:     ts,       # TTL ~60s; refresh ~20s = liveness signal
+  load:       float,    # queue depth / utilization (for load balancing, Part 3)
+  reputation: float,    # score (Part 4/5)
 }
 ```
-Letto/scritto anche da Parte 4 (reputation) e Parte 5 (BFT). TTL ~60s, refresh ~20s; la coverage è trattata come stato **cached** ed eventualmente consistente.
+Also read/written by Part 4 (reputation) and Part 5 (BFT). TTL ~60s, refresh ~20s; coverage is treated as **cached**, eventually consistent state.
 
-## 5. Coverage & operatività (Fork E)
+## 5. Coverage & operational status (Fork E)
 
 ```python
 def is_operational(n_layers, provider) -> bool:
     return all(len(provider.discover(block_i)) >= 1 for block_i in blocks(n_layers))
 ```
-- Coverage = funzione pura dello stato DHT vivo → il dispatcher (Parte 3) la chiama *prima* di ammettere un job.
-- Cache locale TTL 2-5s sul hot path per smorzare lookup storm.
-- **Upgrade v1.1:** avvolgere lo scan in una mappa gossip-CRDT (la cache TTL *è già* il seam).
+- Coverage = a pure function of the live DHT state → the dispatcher (Part 3) calls it *before* admitting a job.
+- Local cache with 2-5s TTL on the hot path to dampen lookup storms.
+- **v1.1 upgrade:** wrap the scan in a gossip-CRDT map (the TTL cache *is already* the seam).
 
 ### Self-assignment
-Un nodo che entra:
-1. `provider.coverage()` → trova blocchi scoperti (o least-replicated).
-2. Sceglie un blocco **random tra gli scoperti** (o il meno replicato) con **backoff jitterato** (smorza il thundering herd).
-3. Carica i layer (Parte 1) e `announce`.
+A node that joins:
+1. `provider.coverage()` → find uncovered blocks (or least-replicated ones).
+2. Picks a block **at random among the uncovered ones** (or the least replicated) with **jittered backoff** (dampens the thundering herd).
+3. Loads the layers (Part 1) and `announce`s.
 
 ```mermaid
 flowchart TD
-    J[Nodo entra] --> S[coverage scan]
-    S --> U{blocchi scoperti?}
-    U -- sì --> P[scegli random scoperto + jitter backoff]
-    U -- no --> L[scegli least-replicated se sotto target]
-    P --> LD[carica layer + announce]
+    J[Node joins] --> S[coverage scan]
+    S --> U{uncovered blocks?}
+    U -- yes --> P[pick random uncovered + jitter backoff]
+    U -- no --> L[pick least-replicated if below target]
+    P --> LD[load layers + announce]
     L --> LD
     LD --> S
 ```
 
 ## 6. Routing & failover
 
-Per ogni hop verso il blocco successivo:
-1. `discover(next_block)` → lista holder vivi.
-2. Scelta per **load** crescente e **reputation** decrescente (preferenza).
-3. POST del payload safetensors all'`queue_url` scelto.
-4. Su timeout/errore/no-ACK → **ri-dispaccio** a un altro holder (l'attivazione è già persistita, Parte 3) → nessuna perdita di lavoro.
+For each hop to the next block:
+1. `discover(next_block)` → list of live holders.
+2. Selection by increasing **load** and decreasing **reputation** (preference).
+3. POST the safetensors payload to the chosen `queue_url`.
+4. On timeout/error/no-ACK → **re-dispatch** to another holder (the activation is already persisted, Part 3) → no work lost.
 
-## 7. Rischi & mitigazioni (dal team)
+## 7. Risks & mitigations (from the team)
 
-- **`p2pd` arch-mismatch / split-brain** → smoke test gate; pin `initial_peers`; fallback kademlia.
-- **TTL flapping** (nodo in sleep) → refresh ~20s; coverage cached; richieste si accodano (accettabile sotto framing async).
-- **Race di assegnazione** (due nodi claim lo stesso blocco) → spreco innocuo; random + jitter convergono.
+- **`p2pd` arch-mismatch / split-brain** → smoke-test gate; pin `initial_peers`; kademlia fallback.
+- **TTL flapping** (node going to sleep) → refresh ~20s; cached coverage; requests queue up (acceptable under async framing).
+- **Assignment race** (two nodes claim the same block) → harmless waste; random + jitter converge.
 
-## 8. Criteri di accettazione
+## 8. Acceptance criteria
 
-1. Smoke test: store/get di un record across 2-3 nodi reali con NAT traversal + TTL liveness.
-2. Un nodo nuovo si auto-assegna un blocco scoperto e `is_operational()` diventa `True` quando tutti i blocchi sono coperti.
-3. Killando un holder, entro la scadenza TTL il routing smette di sceglierlo e i job vengono ri-dispacciati.
+1. Smoke test: store/get of a record across 2-3 real nodes with NAT traversal + TTL liveness.
+2. A new node self-assigns an uncovered block and `is_operational()` becomes `True` when all blocks are covered.
+3. Killing a holder, within the TTL expiry routing stops selecting it and jobs are re-dispatched.
 
-## 9. Dipendenze
+## 9. Dependencies
 
-- **Parte 1:** granularità blocchi.
-- **Parte 3:** il routing consegna a inbox durevoli; il failover dipende dall'attivazione persistita.
-- **Parti 4/5:** campi `load`/`reputation` del record.
+- **Part 1:** block granularity.
+- **Part 3:** routing delivers to durable inboxes; failover depends on the persisted activation.
+- **Parts 4/5:** the record's `load`/`reputation` fields.
 
-## 10. Domande aperte
+## 10. Open questions
 
-- LAN/VPN vs NAT reale (ADR-0001 Q1) → quanto è critico il fallback.
-- Record firmati ora o dopo (ADR-0001 Q6).
+- LAN/VPN vs. real NAT (ADR-0001 Q1) → how critical the fallback is.
+- Signed records now or later (ADR-0001 Q6).

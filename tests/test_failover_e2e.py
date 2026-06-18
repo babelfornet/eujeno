@@ -8,12 +8,12 @@ import httpx
 import uvicorn
 import websockets
 
-from synapse.net.coordinator import create_coordinator_app
-from synapse.net.node import run_node
-from synapse.net.node_exec import NodeState, handle_request
-from synapse.net.framing import pack, unpack
-from synapse.net.topology import StageSpec
-from synapse.model.generate import reference_generate
+from axyn.net.coordinator import create_coordinator_app
+from axyn.net.node import run_node
+from axyn.net.node_exec import NodeState, handle_request
+from axyn.net.framing import pack, unpack
+from axyn.net.topology import StageSpec
+from axyn.model.generate import reference_generate
 
 
 def _free_port():

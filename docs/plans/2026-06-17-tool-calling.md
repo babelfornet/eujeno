@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`).
 
-**Goal:** Rendere l'API OpenAI di Synapse usabile da agenti/MCP host: (1) la generazione si **ferma all'EOS/fine-turno** e l'output è pulito (niente token speciali né testo post-EOS); (2) `/v1/chat/completions` accetta `tools` e ritorna `tool_calls` (function calling), così un agente può far chiamare i tool MCP al modello.
+**Goal:** Rendere l'API OpenAI di Axyn usabile da agenti/MCP host: (1) la generazione si **ferma all'EOS/fine-turno** e l'output è pulito (niente token speciali né testo post-EOS); (2) `/v1/chat/completions` accetta `tools` e ritorna `tool_calls` (function calling), così un agente può far chiamare i tool MCP al modello.
 
-**Architecture:** I tool MCP li esegue l'agente/host; Synapse deve solo essere un backend con tool-calling. Il coordinator calcola gli `stop_ids` dal tokenizer e interrompe la generazione; applica il chat template con `tools` (Qwen2.5 ha il template tool-use nativo); fa il parsing dell'output `<tool_call>{...}</tool_call>` in `tool_calls` formato OpenAI. Decodifica con `skip_special_tokens=True`.
+**Architecture:** I tool MCP li esegue l'agente/host; Axyn deve solo essere un backend con tool-calling. Il coordinator calcola gli `stop_ids` dal tokenizer e interrompe la generazione; applica il chat template con `tools` (Qwen2.5 ha il template tool-use nativo); fa il parsing dell'output `<tool_call>{...}</tool_call>` in `tool_calls` formato OpenAI. Decodifica con `skip_special_tokens=True`.
 
-**Tech Stack:** Python · l'esistente `synapse/net/coordinator.py` · transformers (chat template con tools) · regex/json.
+**Tech Stack:** Python · l'esistente `axyn/net/coordinator.py` · transformers (chat template con tools) · regex/json.
 
 **Nota di realtà:** il modello da 0.5B non emette tool-call affidabili — i test del *parser* sono deterministici (logica), mentre l'e2e con `tools` verifica solo che l'endpoint accetti i tool e risponda well-formed. Per tool-calling reale serve un modello 7B+ (infra identica).
 
@@ -16,8 +16,8 @@
 
 ## File Structure
 ```
-synapse/net/tools.py            # NUOVO: extract_tool_calls() (puro)
-synapse/net/coordinator.py      # MOD: stop_ids + finish_reason + skip_special_tokens + tools nel chat_completions
+axyn/net/tools.py            # NUOVO: extract_tool_calls() (puro)
+axyn/net/coordinator.py      # MOD: stop_ids + finish_reason + skip_special_tokens + tools nel chat_completions
 tests/test_tools.py             # NUOVO: parser (veloce)
 tests/test_openai_e2e.py        # MOD: stop pulito + smoke tools (slow)
 docs/examples/agents.md         # MOD: sezione tool/MCP
@@ -28,7 +28,7 @@ docs/ROADMAP.md
 
 ## Task 1: stop all'EOS + decode pulito
 
-**Files:** modify `synapse/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
+**Files:** modify `axyn/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
 
 - [ ] **Step 1: test (append a `tests/test_openai_e2e.py`)**
 ```python
@@ -38,7 +38,7 @@ def test_chat_output_has_no_special_tokens(full_model):
     try:
         with httpx.Client(timeout=60.0) as c:
             r = c.post(f"{base}/v1/chat/completions", json={
-                "model": "synapse",
+                "model": "axyn",
                 "messages": [{"role": "user", "content": "Di' ciao."}],
                 "max_tokens": 64,
             }).json()
@@ -49,9 +49,9 @@ def test_chat_output_has_no_special_tokens(full_model):
         srv.should_exit = True
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_openai_e2e.py::test_chat_output_has_no_special_tokens -m slow -v`. (Può fallire perché l'output contiene token speciali / non c'è finish_reason corretto.)
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_openai_e2e.py::test_chat_output_has_no_special_tokens -m slow -v`. (Può fallire perché l'output contiene token speciali / non c'è finish_reason corretto.)
 
-- [ ] **Step 3: modifica `synapse/net/coordinator.py`**
+- [ ] **Step 3: modifica `axyn/net/coordinator.py`**
 
 (a) Subito dopo aver ricevuto `tokenizer` in `create_coordinator_app`, calcola gli stop ids:
 ```python
@@ -105,19 +105,19 @@ def test_chat_output_has_no_special_tokens(full_model):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/coordinator.py tests/test_openai_e2e.py && git commit -m "fix(net): stop alla fine-turno (EOS) + decode skip_special_tokens + finish_reason"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test_openai_e2e.py && git commit -m "fix(net): stop alla fine-turno (EOS) + decode skip_special_tokens + finish_reason"
 ```
 
 ---
 
 ## Task 2: parser `extract_tool_calls`
 
-**Files:** create `synapse/net/tools.py`, `tests/test_tools.py`.
+**Files:** create `axyn/net/tools.py`, `tests/test_tools.py`.
 
 - [ ] **Step 1: test `tests/test_tools.py`**
 ```python
 import json
-from synapse.net.tools import extract_tool_calls
+from axyn.net.tools import extract_tool_calls
 
 
 def test_single_tool_call():
@@ -150,7 +150,7 @@ def test_malformed_tool_call_ignored():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_tools.py -v` → ImportError.
 
-- [ ] **Step 3: implementa `synapse/net/tools.py`**
+- [ ] **Step 3: implementa `axyn/net/tools.py`**
 ```python
 import json
 import re
@@ -183,14 +183,14 @@ def extract_tool_calls(text: str):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/tools.py tests/test_tools.py && git commit -m "feat(net): extract_tool_calls (parsing tool-call Qwen2.5 -> formato OpenAI)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/tools.py tests/test_tools.py && git commit -m "feat(net): extract_tool_calls (parsing tool-call Qwen2.5 -> formato OpenAI)"
 ```
 
 ---
 
 ## Task 3: `tools` in `/v1/chat/completions`
 
-**Files:** modify `synapse/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
+**Files:** modify `axyn/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
 
 - [ ] **Step 1: test (append a `tests/test_openai_e2e.py`)**
 ```python
@@ -206,7 +206,7 @@ def test_chat_completions_accepts_tools(full_model):
     try:
         with httpx.Client(timeout=60.0) as c:
             r = c.post(f"{base}/v1/chat/completions", json={
-                "model": "synapse",
+                "model": "axyn",
                 "messages": [{"role": "user", "content": "Che tempo fa a Roma?"}],
                 "tools": tools, "max_tokens": 64,
             }).json()
@@ -224,9 +224,9 @@ def test_chat_completions_accepts_tools(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_openai_e2e.py::test_chat_completions_accepts_tools -m slow -v` (il parametro `tools` non è gestito; potrebbe rompersi nel template o ignorarlo).
 
-- [ ] **Step 3: modifica `chat_completions` in `synapse/net/coordinator.py`**
+- [ ] **Step 3: modifica `chat_completions` in `axyn/net/coordinator.py`**
 
-Aggiungi `from synapse.net.tools import extract_tool_calls` in cima. Sostituisci il corpo di `chat_completions` con:
+Aggiungi `from axyn.net.tools import extract_tool_calls` in cima. Sostituisci il corpo di `chat_completions` con:
 ```python
     @app.post("/v1/chat/completions")
     async def chat_completions(request: Request):
@@ -266,7 +266,7 @@ Aggiungi `from synapse.net.tools import extract_tool_calls` in cima. Sostituisci
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): /v1/chat/completions accetta tools e ritorna tool_calls (function calling)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): /v1/chat/completions accetta tools e ritorna tool_calls (function calling)"
 ```
 
 ---
@@ -285,7 +285,7 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/net/coordinator.py test
 tools = [{"type":"function","function":{
   "name":"get_weather","description":"Meteo di una città",
   "parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}]
-r = client.chat.completions.create(model="synapse",
+r = client.chat.completions.create(model="axyn",
       messages=[{"role":"user","content":"Che tempo fa a Roma?"}], tools=tools)
 # r.choices[0].message.tool_calls -> [{function:{name:"get_weather", arguments:'{"city":"Roma"}'}}]
 ```
@@ -299,7 +299,7 @@ Nota: il tool-calling affidabile richiede un modello capace (7B+). Con Qwen 0.5B
 
 - [ ] **Step 4: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add docs/examples/agents.md docs/ROADMAP.md && git commit -m "docs: tool calling / MCP nell'API OpenAI; ROADMAP"
+cd /Users/alberto/Projects/AI/axyn && git add docs/examples/agents.md docs/ROADMAP.md && git commit -m "docs: tool calling / MCP nell'API OpenAI; ROADMAP"
 ```
 
 ---
