@@ -1,10 +1,10 @@
-# 2 nodi worker Synapse in container, ciascuno carica SOLO i suoi layer.
+# 2 nodi worker Axyn in container, ciascuno carica SOLO i suoi layer.
 # Si connettono in uscita al coordinator che gira sull'host (host.docker.internal:9000).
 # Il 3° nodo (embed + decoder:0-8) gira sull'host, insieme al coordinator.
-name: synapse-demo
+name: axyn-demo
 
 x-node: &node
-  image: synapse-node
+  image: axyn-node
   build:
     context: ..
     dockerfile: docker/Dockerfile

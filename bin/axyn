@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Auto-bootstrap launcher per Axyn.
+# Primo avvio: crea .venv e installa il pacchetto (pip install -e .).
+# Avvii successivi: inoltra direttamente alla CLI.
+#   ./bin/axyn --help
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+VENV="$REPO_ROOT/.venv"
+PY="$VENV/bin/python"
+
+if [ ! -x "$PY" ]; then
+  echo "axyn: primo avvio — creo l'ambiente virtuale in .venv…" >&2
+  python3 -m venv "$VENV"
+  "$PY" -m pip install --upgrade pip >/dev/null
+fi
+
+# Installa/aggiorna il pacchetto se manca il modulo (idempotente, veloce a regime).
+if ! "$PY" -c "import axyn" >/dev/null 2>&1; then
+  echo "axyn: installo le dipendenze (pip install -e .)…" >&2
+  "$PY" -m pip install -e "$REPO_ROOT" >&2
+fi
+
+exec "$PY" -m axyn "$@"

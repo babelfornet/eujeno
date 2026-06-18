@@ -1,8 +1,11 @@
 [project]
-name = "synapse"
+name = "axyn"
 version = "0.0.1"
 description = "Decentralized peer-to-peer LLM inference network"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Alberto Ferrazzoli", email = "alberto.ferrazzoli@gmail.com" }]
 dependencies = [
     "torch>=2.2",
     "transformers==4.46.3",
@@ -21,14 +24,14 @@ dependencies = [
 dev = ["pytest>=8.0"]
 
 [project.scripts]
-synapse = "synapse.cli:app"
+axyn = "axyn.cli:app"
 
 [tool.pytest.ini_options]
 markers = ["slow: scarica/esegue il modello (lento)"]
 addopts = "-q"
 
 [tool.setuptools.packages.find]
-include = ["synapse*"]
+include = ["axyn*"]
 
 [tool.setuptools.package-data]
-"synapse.ui" = ["static/*.html"]
+"axyn.ui" = ["static/*.html"]

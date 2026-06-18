@@ -1,4 +1,4 @@
-# Nodo worker Synapse — carica in RAM SOLO i layer assegnati (partial loading),
+# Nodo worker Axyn — carica in RAM SOLO i layer assegnati (partial loading),
 # così gira su container con poca memoria. Si connette in uscita al coordinator.
 FROM python:3.12-slim
 
@@ -10,10 +10,10 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 
 # il codice cambia spesso: questo layer si ricostruisce, ma torch resta in cache
 COPY pyproject.toml ./
-COPY synapse ./synapse
+COPY axyn ./axyn
 RUN pip install --no-cache-dir . && rm -rf /root/.cache/pip
 
 # cache modelli condivisa via volume (vedi compose): evita ri-download
 ENV HF_HOME=/hf
 
-ENTRYPOINT ["synapse"]
+ENTRYPOINT ["axyn"]
