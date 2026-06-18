@@ -34,6 +34,7 @@ synapse --json model --info --model Qwen/Qwen2.5-0.5B-Instruct
 | `synapse fit --model <id> --ram <GB> [--dtype bfloat16]` | Quanti layer regge un nodo con N GB di RAM + **stage spec suggerito** per `--stages`. |
 | `synapse up --model <id> [--dtype bfloat16]` | Bring-up in un comando: avvia coordinator + un nodo che copre tutti i layer. `--dry-run` stampa i comandi senza avviare. |
 | `synapse serve --stages "<spec>" ...` | Avvia un nodo che ospita certi blocchi. `--dtype` per modelli grandi. |
+| `synapse serve --auto --peers <seed>` | **Auto-assegnazione**: il nodo legge i buchi di coverage dal seed + la sua RAM e rivendica da solo un range (`--target 2` per ridondanza, `--ram` per forzare il budget). |
 | `synapse coordinator --port 9000` | Avvia un coordinator (relay per nodi dietro NAT). |
 | `synapse infer --coordinator <url> --prompt "..."` | Inferenza one-shot sulla rete. `--peer <url>` in P2P puro. |
 | `synapse ui --coordinator <url>` | Dashboard locale (stato rete, chat, MCP). |

@@ -20,6 +20,21 @@ synapse --json infer --peer http://192.168.1.10:8001 --prompt "La capitale dell'
 - `--peers` sono i seed da cui imparare la rete (separati da virgola). Il primo nodo non ne ha bisogno; gli altri ne indicano almeno uno. La conoscenza si propaga transitivamente.
 - Finché la **coverage** non è completa (embed + tutti i range decoder + head), `infer` risponde `NOT_OPERATIONAL`. Aggiungi nodi con range diversi e il modello **si compone progressivamente** nella rete.
 
+## Auto-assemblaggio (`--auto`): i nodi si dividono i layer da soli
+
+Invece di assegnare gli stage a mano, ogni nodo può **rivendicare** un range leggendo i buchi di coverage dal seed + la propria RAM (vedi [ADR-0003](../decisions/ADR-0003-allocazione-capacity-aware.md)):
+
+```bash
+# Nodo A (piccolo): avvialo per primo, prende un blocco che gli sta in RAM
+synapse serve --auto --port 8001 --advertise http://192.168.1.10:8001
+# Nodo B (capiente): conosce A come seed e copre il COMPLEMENTO (embed + resto + head)
+synapse serve --auto --port 8001 --advertise http://192.168.1.11:8001 --peers http://192.168.1.10:8001
+```
+
+Opzioni: `--ram <GB>` forza il budget di memoria (default: RAM libera rilevata); `--reserve` la frazione tenuta per attivazioni/KV-cache (default 0.2); `--target 2` punta a **≥2 nodi per range** (ridondanza). Il nodo annuncia la propria `capacity` nel record di gossip.
+
+> **Ordine di avvio:** la rivendicazione è una decisione *una-tantum all'avvio*. Avvia prima il/i **seed** e attendi che siano operativi (`curl SEED/registry` non vuoto) **prima** di lanciare gli altri `--auto`: se un nodo pianifica mentre il seed non è ancora pronto, vede un registry vuoto e rivendica troppo. Il **ri-bilanciamento a runtime** (un nodo che ridimensiona il proprio range quando la topologia cambia) è la fetta successiva (slice 4 di ADR-0003); per ora, per uno split garantito, usa `--stages` espliciti oppure scaglione l'avvio.
+
 ## In LAN (rapido, una macchina o stesso WiFi)
 
 ```bash
