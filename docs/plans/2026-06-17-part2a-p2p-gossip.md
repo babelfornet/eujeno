@@ -1,33 +1,33 @@
-# Part 2a — P2P puro: discovery via gossip (decentralizzato) — Implementation Plan
+# Part 2a — Pure P2P: discovery via gossip (decentralized) — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Discovery **automatica e decentralizzata** (nessun server centrale): i nodi `axyn serve` si scoprono via **gossip** tra peer e si auto-annunciano; `axyn infer --peer <qualsiasi-nodo>` costruisce la topologia da solo ed esegue sul **transport diretto** di Parte 1.
+**Goal:** **Automatic and decentralized** discovery (no central server): `axyn serve` nodes discover each other via **gossip** between peers and self-announce; `axyn infer --peer <any-node>` builds the topology on its own and runs over the **direct transport** from Part 1.
 
-**Architecture:** [ADR-0002](../decisions/ADR-0002-connettivita-nat.md) Modalità A. Ogni BlockServer tiene un **Registry** (url→stage, con TTL) e un loop di **gossip pull**: refresh della propria entry + fetch del `/registry` dei seed peer + merge + prune. La coverage e la topologia si calcolano dal registry con `build_chain`. Transport attivazioni = HTTP diretto (`distributed_generate` di Parte 1). Funziona dove i nodi sono mutuamente raggiungibili (LAN/VPN/IP pubblici).
+**Architecture:** [ADR-0002](../decisions/ADR-0002-nat-connectivity.md) Mode A. Each BlockServer keeps a **Registry** (url→stage, with TTL) and a **gossip pull** loop: refresh of its own entry + fetch of the `/registry` from seed peers + merge + prune. Coverage and topology are computed from the registry with `build_chain`. Activation transport = direct HTTP (`distributed_generate` from Part 1). Works wherever the nodes are mutually reachable (LAN/VPN/public IPs).
 
-**Tech Stack:** Python · FastAPI (lifespan background task) · httpx (async per gossip, sync per infer) · l'esistente `axyn/net/{server,orchestrator,topology}.py`.
+**Tech Stack:** Python · FastAPI (lifespan background task) · httpx (async for gossip, sync for infer) · the existing `axyn/net/{server,orchestrator,topology}.py`.
 
-**Fuori scope:** NAT traversal senza VPN (→ Modalità B coordinator, o libp2p futuro); failover/durabilità (Parte 3).
+**Out of scope:** NAT traversal without VPN (→ Mode B coordinator, or future libp2p); failover/durability (Part 3).
 
 ---
 
 ## File Structure
 
 ```
-axyn/net/discovery.py        # NUOVO: Registry (gossip state) + build_chain (coverage)
-axyn/net/server.py           # MODIFICA: create_app + Registry, GET /registry, gossip loop (lifespan)
-axyn/cli.py                  # MODIFICA: serve --peers/--advertise ; infer --peer
+axyn/net/discovery.py        # NEW: Registry (gossip state) + build_chain (coverage)
+axyn/net/server.py           # MODIFY: create_app + Registry, GET /registry, gossip loop (lifespan)
+axyn/cli.py                  # MODIFY: serve --peers/--advertise ; infer --peer
 tests/
-  test_discovery.py             # Registry + build_chain (veloce)
-  test_gossip_e2e.py            # 2 server reali: il registry converge (slow)
+  test_discovery.py             # Registry + build_chain (fast)
+  test_gossip_e2e.py            # 2 real servers: the registry converges (slow)
   test_infer_peer.py            # infer --peer == reference (slow)
-docs/examples/p2p.md            # NUOVO: quickstart P2P puro
+docs/examples/p2p.md            # NEW: pure P2P quickstart
 ```
 
 ---
 
-## Task 1: `Registry` + `build_chain` (logica pura)
+## Task 1: `Registry` + `build_chain` (pure logic)
 
 **Files:** create `axyn/net/discovery.py`, `tests/test_discovery.py`.
 
@@ -53,10 +53,10 @@ def test_build_chain_incomplete_returns_none():
 def test_registry_merge_and_prune_with_ttl():
     r = Registry()
     r.upsert("http://a", {"embed": True, "head": False, "decoders": ["0-24"]}, now=100.0, ttl=60.0)
-    # merge di un peer appreso
+    # merge of a learned peer
     r.merge({"http://b": {"head": True, "embed": False, "decoders": []}}, now=100.0, ttl=60.0)
     assert set(r.stages_by_url(now=120.0).keys()) == {"http://a", "http://b"}
-    # dopo la scadenza (oltre now+ttl) spariscono se non rinfrescati
+    # after expiry (beyond now+ttl) they disappear if not refreshed
     r.prune(now=200.0)
     assert r.stages_by_url(now=200.0) == {}
 
@@ -65,16 +65,16 @@ def test_registry_refresh_extends_expiry():
     r = Registry()
     r.upsert("http://a", {"embed": True, "head": True, "decoders": ["0-24"]}, now=100.0, ttl=60.0)
     r.upsert("http://a", {"embed": True, "head": True, "decoders": ["0-24"]}, now=150.0, ttl=60.0)
-    assert "http://a" in r.stages_by_url(now=200.0)   # rinfrescata a 150 -> scade a 210
+    assert "http://a" in r.stages_by_url(now=200.0)   # refreshed at 150 -> expires at 210
 ```
 
 - [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_discovery.py -v` → ImportError.
 
-- [ ] **Step 3: implementa `axyn/net/discovery.py`**
+- [ ] **Step 3: implement `axyn/net/discovery.py`**
 ```python
 class Registry:
-    """Stato di discovery decentralizzato: url -> {stages, expiry}. TTL relativo:
-    le entry apprese scadono a now+ttl se non rinfrescate dal gossip."""
+    """Decentralized discovery state: url -> {stages, expiry}. Relative TTL:
+    learned entries expire at now+ttl if not refreshed by gossip."""
     def __init__(self):
         self.entries = {}   # url -> {"stages": dict, "expiry": float}
 
@@ -93,9 +93,9 @@ class Registry:
 
 
 def build_chain(stages_by_url: dict, num_layers: int):
-    """Da {url: {'embed','head','decoders':[block_key]}} costruisce
-    (embed_url, [(block_key, url)...], head_url) che tassella [0, num_layers).
-    Ritorna None se la coverage è incompleta o manca embed/head."""
+    """From {url: {'embed','head','decoders':[block_key]}} builds
+    (embed_url, [(block_key, url)...], head_url) that tiles [0, num_layers).
+    Returns None if coverage is incomplete or embed/head is missing."""
     embed = next((u for u, s in stages_by_url.items() if s.get("embed")), None)
     head = next((u for u, s in stages_by_url.items() if s.get("head")), None)
     if embed is None or head is None:
@@ -121,12 +121,12 @@ def build_chain(stages_by_url: dict, num_layers: int):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): Registry gossip + build_chain (discovery decentralizzata)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): Registry gossip + build_chain (decentralized discovery)"
 ```
 
 ---
 
-## Task 2: gossip nel BlockServer (`/registry` + loop)
+## Task 2: gossip in the BlockServer (`/registry` + loop)
 
 **Files:** modify `axyn/net/server.py`; create `tests/test_gossip_e2e.py`.
 
@@ -165,7 +165,7 @@ def test_registry_converges_via_gossip(full_model):
     model, tokenizer = full_model
     p1, p2 = _free_port(), _free_port()
     u1, u2 = f"http://127.0.0.1:{p1}", f"http://127.0.0.1:{p2}"
-    # nodo 1 conosce nodo 2 come seed e viceversa
+    # node 1 knows node 2 as a seed and vice versa
     app1 = create_app(model, tokenizer, StageSpec(embed=True, decoders=[(0, 12)]),
                       node_url=u1, peers=[u2], num_layers=24, gossip_interval=0.3, ttl=30.0)
     app2 = create_app(model, tokenizer, StageSpec(head=True, decoders=[(12, 24)]),
@@ -174,7 +174,7 @@ def test_registry_converges_via_gossip(full_model):
     try:
         with httpx.Client(timeout=10.0) as client:
             converged = False
-            for _ in range(100):   # ~ alcuni round di gossip
+            for _ in range(100):   # ~ a few gossip rounds
                 reg = client.get(f"{u1}/registry").json()
                 if set(reg["nodes"].keys()) == {u1, u2}:
                     converged = True
@@ -188,11 +188,11 @@ def test_registry_converges_via_gossip(full_model):
         s2.should_exit = True
 ```
 
-- [ ] **Step 2: run FAIL** — `... pytest tests/test_gossip_e2e.py -m slow -v` → TypeError (create_app non accetta i nuovi kwargs).
+- [ ] **Step 2: run FAIL** — `... pytest tests/test_gossip_e2e.py -m slow -v` → TypeError (create_app does not accept the new kwargs).
 
-- [ ] **Step 3: modifica `axyn/net/server.py`**
+- [ ] **Step 3: modify `axyn/net/server.py`**
 
-Aggiorna gli import in cima:
+Update the imports at the top:
 ```python
 import asyncio
 import time
@@ -206,7 +206,7 @@ from axyn.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decod
 from axyn.net.wire import encode_tensors, decode_tensors
 from axyn.net.discovery import Registry
 ```
-Sostituisci la firma e l'inizio di `create_app` per accettare i parametri di gossip (opzionali: senza di essi il comportamento di Parte 1 è invariato) e registrare se stesso + avviare il loop:
+Replace the signature and the beginning of `create_app` to accept the gossip parameters (optional: without them the Part 1 behavior is unchanged) and register itself + start the loop:
 ```python
 def create_app(model, tokenizer, stages, node_url=None, peers=None,
                num_layers=None, gossip_interval=2.0, ttl=30.0):
@@ -250,14 +250,14 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
         return {"num_layers": num_layers, "model": getattr(model.config, "_name_or_path", "?"),
                 "nodes": registry.stages_by_url(time.time())}
 ```
-Il RESTO di `create_app` (gli endpoint `/health`, `/embed`, `/decode/{block_key}`, `/head`, `DELETE /job/{job_id}` e `return app`) resta **identico** a prima — lasciali invariati sotto la definizione di `get_registry`.
+The REST of `create_app` (the `/health`, `/embed`, `/decode/{block_key}`, `/head`, `DELETE /job/{job_id}` endpoints and `return app`) stays **identical** to before — leave them unchanged below the definition of `get_registry`.
 
-- [ ] **Step 4: run PASS** — `... pytest tests/test_gossip_e2e.py -m slow -v` → PASS (il registry converge a entrambi i nodi via gossip).
-Verifica che i test di Parte 1 (`tests/test_server.py`, `tests/test_orchestrator.py`, `tests/test_cli_infer.py`) passino ancora (create_app retro-compatibile): `... pytest tests/test_server.py tests/test_orchestrator.py -m slow -v`.
+- [ ] **Step 4: run PASS** — `... pytest tests/test_gossip_e2e.py -m slow -v` → PASS (the registry converges to both nodes via gossip).
+Verify that the Part 1 tests (`tests/test_server.py`, `tests/test_orchestrator.py`, `tests/test_cli_infer.py`) still pass (create_app backward-compatible): `... pytest tests/test_server.py tests/test_orchestrator.py -m slow -v`.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/server.py tests/test_gossip_e2e.py && git commit -m "feat(net): gossip discovery nel BlockServer (/registry + loop, retro-compatibile)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/server.py tests/test_gossip_e2e.py && git commit -m "feat(net): gossip discovery in the BlockServer (/registry + loop, backward-compatible)"
 ```
 
 ---
@@ -304,7 +304,7 @@ def _serve(app, port):
 @pytest.mark.slow
 def test_infer_peer_autodiscovers_and_matches_reference(full_model):
     model, tokenizer = full_model
-    ids = tokenizer("La capitale dell'Italia è", return_tensors="pt").input_ids
+    ids = tokenizer("The capital of Italy is", return_tensors="pt").input_ids
     reference = reference_generate(model, ids, max_new_tokens=6)
 
     p1, p2 = _free_port(), _free_port()
@@ -321,7 +321,7 @@ def test_infer_peer_autodiscovers_and_matches_reference(full_model):
                     break
                 time.sleep(0.1)
         result = runner.invoke(cli_app, ["--json", "infer", "--peer", u1,
-                                         "--prompt", "La capitale dell'Italia è", "--max-new-tokens", "6"])
+                                         "--prompt", "The capital of Italy is", "--max-new-tokens", "6"])
         assert result.exit_code == 0, result.stdout
         payload = json.loads(result.stdout)
         assert payload["ok"] is True
@@ -331,22 +331,22 @@ def test_infer_peer_autodiscovers_and_matches_reference(full_model):
         s2.should_exit = True
 ```
 
-- [ ] **Step 2: run FAIL** — `... pytest tests/test_infer_peer.py -m slow -v` → FAIL (manca `--peer`).
+- [ ] **Step 2: run FAIL** — `... pytest tests/test_infer_peer.py -m slow -v` → FAIL (`--peer` is missing).
 
-- [ ] **Step 3: modifica `axyn/cli.py`**
+- [ ] **Step 3: modify `axyn/cli.py`**
 
-Aggiungi import vicino agli altri `from axyn.net...`:
+Add imports near the other `from axyn.net...`:
 ```python
 from axyn.net.discovery import build_chain
 from axyn.net.topology import Topology
 ```
-Estendi il comando `serve` con le opzioni di gossip (modalità diretta): aggiungi i parametri e passali a `create_app`. Aggiungi alla firma di `serve` (nel ramo diretto, non-coordinator):
+Extend the `serve` command with the gossip options (direct mode): add the parameters and pass them to `create_app`. Add to the `serve` signature (in the direct, non-coordinator branch):
 ```python
-    peers: str = typer.Option(None, "--peers", help="Seed peer per la discovery gossip, separati da virgola (es. http://altro:8001)"),
-    advertise: str = typer.Option(None, "--advertise", help="URL con cui questo nodo si annuncia (es. http://IP:8001). Default: http://<host>:<port>"),
-    num_layers: int = typer.Option(None, "--num-layers", help="Numero totale di layer del modello (per la coverage). Default: dal config."),
+    peers: str = typer.Option(None, "--peers", help="Seed peers for gossip discovery, comma-separated (e.g. http://other:8001)"),
+    advertise: str = typer.Option(None, "--advertise", help="URL this node announces itself with (e.g. http://IP:8001). Default: http://<host>:<port>"),
+    num_layers: int = typer.Option(None, "--num-layers", help="Total number of model layers (for coverage). Default: from config."),
 ```
-e nel ramo diretto (`else:` di `serve`, quello che fa `create_app` + `uvicorn.run`) sostituisci con:
+and in the direct branch (the `else:` of `serve`, the one that does `create_app` + `uvicorn.run`) replace with:
 ```python
     else:
         import uvicorn
@@ -354,16 +354,16 @@ e nel ramo diretto (`else:` di `serve`, quello che fa `create_app` + `uvicorn.ru
         seeds = [p.strip() for p in peers.split(",")] if peers else []
         nl = num_layers if num_layers is not None else model_config_dims(model_id)["num_layers"]
         fastapi_app = create_app(model, tokenizer, spec, node_url=own_url, peers=seeds, num_layers=nl)
-        typer.echo(f"axyn serve (P2P): stages={stages} su http://{host}:{port} advertise={own_url} peers={seeds}", err=True)
+        typer.echo(f"axyn serve (P2P): stages={stages} on http://{host}:{port} advertise={own_url} peers={seeds}", err=True)
         uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
 ```
-(`model_config_dims` è già importato in cli.py.)
+(`model_config_dims` is already imported in cli.py.)
 
-Estendi il comando `infer` con la modalità `--peer` (auto-discovery via gossip + transport diretto). Aggiungi l'opzione `peer` alla firma di `infer`:
+Extend the `infer` command with the `--peer` mode (auto-discovery via gossip + direct transport). Add the `peer` option to the `infer` signature:
 ```python
-    peer: str = typer.Option(None, "--peer", help="[P2P] URL di un nodo qualsiasi: scopre la topologia via gossip ed esegue diretto"),
+    peer: str = typer.Option(None, "--peer", help="[P2P] URL of any node: discovers the topology via gossip and runs direct"),
 ```
-e in cima al corpo di `infer`, dopo `prompt = _read_prompt(prompt)`, prima del ramo `--topology`, aggiungi il ramo `--peer`:
+and at the top of the `infer` body, after `prompt = _read_prompt(prompt)`, before the `--topology` branch, add the `--peer` branch:
 ```python
     if peer:
         import httpx
@@ -372,10 +372,10 @@ e in cima al corpo di `infer`, dopo `prompt = _read_prompt(prompt)`, prima del r
         try:
             reg = httpx.get(f"{peer}/registry", timeout=30.0).json()
         except Exception as e:
-            _fail("infer", "USAGE_ERROR", f"peer non raggiungibile: {e}", exit_code=2)
+            _fail("infer", "USAGE_ERROR", f"peer unreachable: {e}", exit_code=2)
         chain = build_chain(reg["nodes"], reg["num_layers"])
         if chain is None:
-            _fail("infer", "NOT_OPERATIONAL", "coverage incompleta: il modello non è ancora operativo sulla rete")
+            _fail("infer", "NOT_OPERATIONAL", "incomplete coverage: the model is not yet operational on the network")
         embed_url, decoders, head_url = chain
         topo = Topology(model=reg["model"], embed=embed_url, head=head_url, decoders=decoders)
         try:
@@ -388,58 +388,58 @@ e in cima al corpo di `infer`, dopo `prompt = _read_prompt(prompt)`, prima del r
         return
 ```
 
-- [ ] **Step 4: run PASS** — `... pytest tests/test_infer_peer.py -m slow -v` → PASS. Verifica che i test infer di Parte 1 (`tests/test_cli_infer.py`) passino ancora.
+- [ ] **Step 4: run PASS** — `... pytest tests/test_infer_peer.py -m slow -v` → PASS. Verify that the Part 1 infer tests (`tests/test_cli_infer.py`) still pass.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_infer_peer.py && git commit -m "feat(cli): serve --peers/--advertise + infer --peer (P2P puro, auto-discovery)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_infer_peer.py && git commit -m "feat(cli): serve --peers/--advertise + infer --peer (pure P2P, auto-discovery)"
 ```
 
 ---
 
-## Task 4: quickstart P2P + suite + ROADMAP
+## Task 4: P2P quickstart + suite + ROADMAP
 
 **Files:** create `docs/examples/p2p.md`; modify `README.md`, `docs/ROADMAP.md`.
 
-- [ ] **Step 1: crea `docs/examples/p2p.md`**
+- [ ] **Step 1: create `docs/examples/p2p.md`**
 ```markdown
-# Quickstart — P2P puro (decentralizzato, nessun server centrale)
+# Quickstart — pure P2P (decentralized, no central server)
 
-Ogni nodo è uguale: si scoprono via gossip (un seed basta) e l'inferenza va diretta nodo-a-nodo. Richiede che i nodi si raggiungano (LAN, VPN, o IP pubblici). Per NAT-senza-VPN usa invece la modalità coordinator (vedi coordinator.md).
+Every node is equal: they discover each other via gossip (one seed is enough) and inference goes directly node-to-node. Requires the nodes to be reachable (LAN, VPN, or public IPs). For NAT-without-VPN use the coordinator mode instead (see coordinator.md).
 
 ```bash
-# Nodo A — embedding + primi 12 layer (primo nodo, nessun seed)
+# Node A — embedding + first 12 layers (first node, no seed)
 axyn serve --stages "embed,decoder:0-12" --port 8001 --advertise http://192.168.1.10:8001
 
-# Nodo B — ultimi 12 layer + head, conosce A come seed
+# Node B — last 12 layers + head, knows A as a seed
 axyn serve --stages "decoder:12-24,head" --port 8001 \
   --advertise http://192.168.1.11:8001 --peers http://192.168.1.10:8001
 
-# Inferenza: punta a UN nodo qualsiasi; scopre il resto da solo
-axyn --json infer --peer http://192.168.1.10:8001 --prompt "La capitale dell'Italia è"
+# Inference: point at ANY node; it discovers the rest on its own
+axyn --json infer --peer http://192.168.1.10:8001 --prompt "The capital of Italy is"
 ```
 
-Finché la coverage non è completa (embed + tutti i decoder + head), `infer` risponde `NOT_OPERATIONAL`. Aggiungi nodi con range diversi e la rete si compone progressivamente.
+Until coverage is complete (embed + all decoders + head), `infer` responds `NOT_OPERATIONAL`. Add nodes with different ranges and the network assembles itself progressively.
 ```
 
-- [ ] **Step 2: aggiorna `README.md`** — nella sezione Quickstart, distingui **P2P puro** (link `docs/examples/p2p.md`) e **coordinator** (link `docs/examples/coordinator.md`), spiegando in una riga quando usare l'uno o l'altro.
+- [ ] **Step 2: update `README.md`** — in the Quickstart section, distinguish **pure P2P** (link `docs/examples/p2p.md`) and **coordinator** (link `docs/examples/coordinator.md`), explaining in one line when to use each.
 
-- [ ] **Step 3: aggiorna `docs/ROADMAP.md`** — sotto "Discovery & Routing" segna la discovery P2P via gossip come fatta (link a questo piano e ad [ADR-0002](./decisions/ADR-0002-connettivita-nat.md)); aggiorna la riga "Ultimo aggiornamento". Failover e libp2p restano da fare.
+- [ ] **Step 3: update `docs/ROADMAP.md`** — under "Discovery & Routing" mark the P2P discovery via gossip as done (link to this plan and to [ADR-0002](../decisions/ADR-0002-nat-connectivity.md)); update the "Last updated" line. Failover and libp2p remain to be done.
 
-- [ ] **Step 4: suite completa** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q -p no:warnings` → tutti PASS.
+- [ ] **Step 4: full suite** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q -p no:warnings` → all PASS.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add docs/examples/p2p.md README.md docs/ROADMAP.md && git commit -m "docs: quickstart P2P puro; ROADMAP discovery gossip"
+cd /Users/alberto/Projects/AI/axyn && git add docs/examples/p2p.md README.md docs/ROADMAP.md && git commit -m "docs: pure P2P quickstart; ROADMAP gossip discovery"
 ```
 
 ---
 
 ## Self-Review
 
-**Coverage (ADR-0002 Modalità A):** discovery decentralizzata via gossip (Task 1 Registry + Task 2 loop) ✓; auto-annuncio + coverage gate (build_chain) ✓; transport diretto riusato da Parte 1 ✓; CLI `serve --peers/--advertise` + `infer --peer` ✓; retro-compatibilità modalità statica Parte 1 ✓.
+**Coverage (ADR-0002 Mode A):** decentralized discovery via gossip (Task 1 Registry + Task 2 loop) ✓; self-announce + coverage gate (build_chain) ✓; direct transport reused from Part 1 ✓; CLI `serve --peers/--advertise` + `infer --peer` ✓; backward-compatibility with Part 1 static mode ✓.
 
-**Placeholder scan:** nessun TODO/TBD; codice completo. `create_app` resta retro-compatibile (nuovi kwargs opzionali).
+**Placeholder scan:** no TODO/TBD; complete code. `create_app` stays backward-compatible (new optional kwargs).
 
-**Type consistency:** `Registry.upsert/merge/prune/stages_by_url(now, ttl)`, `build_chain(stages_by_url, num_layers)->(embed,decoders,head)|None`, `create_app(..., node_url, peers, num_layers, gossip_interval, ttl)`, `Topology(model, embed, head, decoders)` coerenti. `build_chain` ritorna `(embed_url, [(block_key,url)], head_url)`, consumato per costruire `Topology` e poi `distributed_generate` (Parte 1).
+**Type consistency:** `Registry.upsert/merge/prune/stages_by_url(now, ttl)`, `build_chain(stages_by_url, num_layers)->(embed,decoders,head)|None`, `create_app(..., node_url, peers, num_layers, gossip_interval, ttl)`, `Topology(model, embed, head, decoders)` consistent. `build_chain` returns `(embed_url, [(block_key,url)], head_url)`, consumed to build `Topology` and then `distributed_generate` (Part 1).
 ```

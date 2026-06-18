@@ -1,6 +1,6 @@
 # Quickstart — coordinator-relay (LAN and internet, without VPN)
 
-Mode B of [ADR-0002](../decisions/ADR-0002-connettivita-nat.md). Worker nodes connect **outbound** to the coordinator: they work behind NAT on different networks **without port-forwarding or VPN**. Only the **coordinator** needs to be reachable (public IP / VPS / a single port-forward; on a LAN, any node).
+Mode B of [ADR-0002](../decisions/ADR-0002-nat-connectivity.md). Worker nodes connect **outbound** to the coordinator: they work behind NAT on different networks **without port-forwarding or VPN**. Only the **coordinator** needs to be reachable (public IP / VPS / a single port-forward; on a LAN, any node).
 
 ```bash
 pip install -e .
@@ -38,4 +38,4 @@ The `infer` response includes `"failovers": N` (how many reroutes were served). 
 
 ## Trade-off
 
-The coordinator routes all traffic → it's a **central point** (Milestone 0), unlike the [pure P2P](./p2p.md) mode, which has no central server but requires nodes to be mutually reachable. Pure P2P even behind NAT (native libp2p) is on the future path. See [ADR-0002](../decisions/ADR-0002-connettivita-nat.md).
+The coordinator routes all traffic → it's a **central point** (Milestone 0), unlike the [pure P2P](./p2p.md) mode, which has no central server but requires nodes to be mutually reachable. Pure P2P even behind NAT (native libp2p) is on the future path. See [ADR-0002](../decisions/ADR-0002-nat-connectivity.md).

@@ -48,7 +48,7 @@
   - [x] **3-node test (1 host + 2 Docker containers)** — [docker/](../docker/) · [quickstart](./examples/docker.md)
   - [x] **Network transport** (FastAPI + safetensors) + **distributed orchestrator** (Milestone 0) — [plan](./plans/2026-06-17-part1-networking.md). `serve`/`infer` commands; distributed golden on 2 real nodes green. Static topology (DHT discovery arrives in Part 2).
 - [x] **`axyn` CLI** (AI-native) — entry point for all operations — [PRD](./prd/cli.md) · [plan](./plans/2026-06-17-cli-axyn.md). Single-word commands implemented: `version`, `model --info`, `generate`, `selfcheck`, `schema`; JSON output with a stable envelope, deterministic exit codes, prompt from stdin, clean streams. Green suite.
-- [~] **Discovery & Routing** — two modes ([ADR-0002](./decisions/ADR-0002-connettivita-nat.md))
+- [~] **Discovery & Routing** — two modes ([ADR-0002](./decisions/ADR-0002-nat-connectivity.md))
   - [x] **Pure P2P**: discovery via **gossip** (decentralized registry + coverage), `serve --peers/--advertise` + `infer --peer` — [plan](./plans/2026-06-17-part2a-p2p-gossip.md). No central server; for LAN/VPN/public IPs.
   - [x] **Coordinator-relay** (opt-in, NAT-without-VPN) — [plan](./plans/2026-06-17-part2-coordinator.md) · [quickstart](./examples/coordinator.md). Nodes via outbound WebSocket; golden via relay green. `coordinator`, `serve --coordinator`, `infer --coordinator` commands.
   - [x] **Automatic failover** on a node going down (coordinator): redundancy + re-routing to a redundant holder — [plan](./plans/2026-06-17-part3-failover.md). e2e: a node crashing mid-hop → the job completes via the redundant holder.

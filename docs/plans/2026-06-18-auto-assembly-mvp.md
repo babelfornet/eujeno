@@ -2,32 +2,32 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** I nodi si auto-assegnano i layer da coprire leggendo i buchi di coverage dal registry + la propria capacità RAM, senza assegnazione manuale (`serve --auto`).
+**Goal:** Nodes self-assign the layers to cover by reading the coverage gaps from the registry + their own RAM capacity, without manual assignment (`serve --auto`).
 
-**Architecture:** Tre funzioni pure (capacità, gaps, decisione) + il wiring in `serve --auto`: all'avvio il nodo sonda la RAM, interroga un seed `/registry`, sceglie il range più bisognoso che ci sta, poi carica SOLO quei layer e serve. La capacità viene annunciata (additiva) nel record di gossip. `target` di replica è parametrico (≥2 ⇒ ridondanza a startup). Realizza le slice 1-3 di [ADR-0003](../decisions/ADR-0003-allocazione-capacity-aware.md). Failover-reload a runtime + reward ledger = piano successivo.
+**Architecture:** Three pure functions (capacity, gaps, decision) + the wiring in `serve --auto`: at startup the node probes its RAM, queries a seed `/registry`, picks the neediest range that fits, then loads ONLY those layers and serves. Capacity is advertised (additively) in the gossip record. The replica `target` is parametric (≥2 ⇒ redundancy at startup). Implements slices 1-3 of [ADR-0003](../decisions/ADR-0003-capacity-aware-allocation.md). Runtime failover-reload + reward ledger = next plan.
 
-**Tech Stack:** Python · Typer · l'esistente `axyn/net/{discovery,server}.py`, `axyn/cli.py`, `model_config_dims`, `parse_stages`, `parse_dtype`. Dipendenza opzionale `psutil` (fallback stdlib).
+**Tech Stack:** Python · Typer · the existing `axyn/net/{discovery,server}.py`, `axyn/cli.py`, `model_config_dims`, `parse_stages`, `parse_dtype`. Optional dependency `psutil` (stdlib fallback).
 
 ---
 
 ## File Structure
 ```
-axyn/net/capacity.py     # NUOVO: fit_layers (estratto da cli.fit) + probe_capacity
+axyn/net/capacity.py     # NEW: fit_layers (extracted from cli.fit) + probe_capacity
 axyn/net/discovery.py    # MOD: coverage_gaps()
-axyn/net/allocator.py    # NUOVO: choose_stages() (decisione pura)
-axyn/net/server.py       # MOD: capacity nel record own_stages
-axyn/cli.py              # MOD: fit usa fit_layers; serve --auto/--ram/--reserve
-tests/test_capacity.py      # NUOVO
-tests/test_coverage_gaps.py # NUOVO
-tests/test_allocator.py     # NUOVO
-tests/test_serve_auto.py    # NUOVO (unit del path di scelta, senza avviare il server)
+axyn/net/allocator.py    # NEW: choose_stages() (pure decision)
+axyn/net/server.py       # MOD: capacity in the own_stages record
+axyn/cli.py              # MOD: fit uses fit_layers; serve --auto/--ram/--reserve
+tests/test_capacity.py      # NEW
+tests/test_coverage_gaps.py # NEW
+tests/test_allocator.py     # NEW
+tests/test_serve_auto.py    # NEW (unit test of the selection path, without starting the server)
 ```
 
 ---
 
 ## Task 1: `net/capacity.py` — fit_layers (estratto) + probe_capacity
 
-**Files:** Create `axyn/net/capacity.py`, `tests/test_capacity.py`; Modify `axyn/cli.py` (fit usa fit_layers).
+**Files:** Create `axyn/net/capacity.py`, `tests/test_capacity.py`; Modify `axyn/cli.py` (fit uses fit_layers).
 
 - [ ] **Step 1: test `tests/test_capacity.py`**
 ```python
@@ -60,15 +60,15 @@ def test_probe_capacity_shape():
 
 - [ ] **Step 3: create `axyn/net/capacity.py`**
 ```python
-"""Stima capacità di un nodo: quanti layer regge data la RAM, e probe risorse."""
+"""Estimate a node's capacity: how many layers it can hold given the RAM, plus a resource probe."""
 import os
 
 _GB = 1024 ** 3
 
 
 def fit_layers(dims: dict, bytes_per_param: int, ram_gb: float, reserve: float = 0.2) -> dict:
-    """Dato il modello (dims), la dimensione in byte di un parametro e la RAM
-    disponibile in GB, stima quanti layer decoder regge il nodo."""
+    """Given the model (dims), the size in bytes of a parameter and the available
+    RAM in GB, estimate how many decoder layers the node can hold."""
     hidden = dims["hidden_size"]
     nl = dims["num_layers"]
     heads = dims["num_attention_heads"]
@@ -90,7 +90,7 @@ def fit_layers(dims: dict, bytes_per_param: int, ram_gb: float, reserve: float =
 
 
 def probe_capacity() -> dict:
-    """RAM totale/libera (GB) e numero di CPU. Usa psutil se presente, altrimenti stdlib."""
+    """Total/free RAM (GB) and CPU count. Uses psutil if present, otherwise stdlib."""
     cpu = os.cpu_count() or 1
     try:
         import psutil
@@ -107,7 +107,7 @@ def probe_capacity() -> dict:
             return {"ram_total_gb": None, "ram_free_gb": None, "cpu_count": cpu}
 ```
 
-- [ ] **Step 4: refactor `cli.py::fit`** per usare `fit_layers` (NON cambiare i campi `data` emessi). Sostituisci il blocco di calcolo dentro `fit` (da `bytes_per = torch.finfo(...)` fino al dict `data`) con:
+- [ ] **Step 4: refactor `cli.py::fit`** to use `fit_layers` (do NOT change the emitted `data` fields). Replace the computation block inside `fit` (from `bytes_per = torch.finfo(...)` up to the `data` dict) with:
 ```python
     import torch
     from axyn.net.capacity import fit_layers
@@ -132,13 +132,13 @@ def probe_capacity() -> dict:
         "suggested_stages": suggested,
     }
 ```
-(Lascia invariati il resto della firma `fit`, la validazione dtype e la costruzione di `human`/`_emit_ok`.)
+(Leave the rest of the `fit` signature, the dtype validation and the construction of `human`/`_emit_ok` unchanged.)
 
-- [ ] **Step 5: run PASS** — `.venv/bin/python -m pytest tests/test_capacity.py tests/test_cli_fit.py -v` → tutti verdi (il refactor non rompe i test esistenti di `fit`).
+- [ ] **Step 5: run PASS** — `.venv/bin/python -m pytest tests/test_capacity.py tests/test_cli_fit.py -v` → all green (the refactor does not break the existing `fit` tests).
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/capacity.py axyn/cli.py tests/test_capacity.py && git commit -m "feat(net): capacity.fit_layers + probe_capacity (fit CLI rifattorizzato)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/capacity.py axyn/cli.py tests/test_capacity.py && git commit -m "feat(net): capacity.fit_layers + probe_capacity (fit CLI refactored)"
 ```
 
 ---
@@ -168,7 +168,7 @@ def test_missing_middle_range():
 
 def test_under_replicated_with_target_2():
     g = coverage_gaps({"a": A, "b": B}, 24, target=2)
-    # tutto coperto solo 1 volta -> l'intero range è sotto-replicato
+    # everything covered only once -> the whole range is under-replicated
     assert g["decoder_gaps"] == [{"lo": 0, "hi": 24, "replicas": 1}]
     assert g["embed_replicas"] == 1 and g["head_replicas"] == 1
 ```
@@ -178,8 +178,8 @@ def test_under_replicated_with_target_2():
 - [ ] **Step 3: append a `axyn/net/discovery.py`**
 ```python
 def coverage_gaps(stages_by_url: dict, num_layers: int, target: int = 1) -> dict:
-    """Range decoder con replica < target (scoperti o sotto-replicati), più il
-    numero di replica di embed/head. `stages_by_url`: {url: {'embed','head','decoders'}}."""
+    """Decoder ranges with replicas < target (uncovered or under-replicated), plus the
+    replica count of embed/head. `stages_by_url`: {url: {'embed','head','decoders'}}."""
     cover = [0] * num_layers
     for s in stages_by_url.values():
         for bk in s.get("decoders", []):
@@ -209,12 +209,12 @@ def coverage_gaps(stages_by_url: dict, num_layers: int, target: int = 1) -> dict
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_coverage_gaps.py && git commit -m "feat(net): coverage_gaps (range scoperti/sotto-replicati)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_coverage_gaps.py && git commit -m "feat(net): coverage_gaps (uncovered/under-replicated ranges)"
 ```
 
 ---
 
-## Task 3: `net/allocator.py` — choose_stages() (decisione pura)
+## Task 3: `net/allocator.py` — choose_stages() (pure decision)
 
 **Files:** Create `axyn/net/allocator.py`, `tests/test_allocator.py`.
 
@@ -229,7 +229,7 @@ def gaps(decoder_gaps, e=0, h=0, target=1):
 
 def test_takes_neediest_decoder_gap_capped_by_capacity():
     g = gaps([{"lo": 12, "hi": 24, "replicas": 0}], e=1, h=1)
-    # regge solo 5 layer
+    # can hold only 5 layers
     assert choose_stages(g, max_decoder_layers=5, num_layers=24, take_embed_head=False) == "decoder:12-17"
 
 
@@ -252,14 +252,14 @@ def test_no_gaps_returns_empty():
 
 - [ ] **Step 3: create `axyn/net/allocator.py`**
 ```python
-"""Decisione di auto-assegnazione: dato il quadro dei buchi (coverage_gaps) e la
-capacità del nodo, sceglie lo stage spec da rivendicare. Funzione pura."""
+"""Self-assignment decision: given the gap picture (coverage_gaps) and the
+node's capacity, choose the stage spec to claim. Pure function."""
 
 
 def choose_stages(gaps: dict, max_decoder_layers: int, num_layers: int,
                   take_embed_head: bool) -> str:
-    """Ritorna uno stage spec per parse_stages (es. 'embed,decoder:12-17,head'),
-    o '' se non c'è nulla di utile/possibile da rivendicare."""
+    """Returns a stage spec for parse_stages (e.g. 'embed,decoder:12-17,head'),
+    or '' if there is nothing useful/possible to claim."""
     target = gaps.get("target", 1)
     parts = []
     if take_embed_head and gaps.get("embed_replicas", 0) < target:
@@ -279,16 +279,16 @@ def choose_stages(gaps: dict, max_decoder_layers: int, num_layers: int,
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/allocator.py tests/test_allocator.py && git commit -m "feat(net): allocator.choose_stages (decisione di auto-assegnazione)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/allocator.py tests/test_allocator.py && git commit -m "feat(net): allocator.choose_stages (self-assignment decision)"
 ```
 
 ---
 
-## Task 4: `serve --auto` + capacity nel record
+## Task 4: `serve --auto` + capacity in the record
 
-**Files:** Modify `axyn/net/server.py` (capacity nel record), `axyn/cli.py` (serve --auto). Create `tests/test_serve_auto.py`.
+**Files:** Modify `axyn/net/server.py` (capacity in the record), `axyn/cli.py` (serve --auto). Create `tests/test_serve_auto.py`.
 
-- [ ] **Step 1: test `tests/test_serve_auto.py`** — testa la funzione pura di pianificazione `plan_auto_stages` (niente server avviato).
+- [ ] **Step 1: test `tests/test_serve_auto.py`** — tests the pure planning function `plan_auto_stages` (no server started).
 ```python
 from axyn.cli import plan_auto_stages
 
@@ -297,14 +297,14 @@ DIMS = {"num_layers": 24, "hidden_size": 896, "num_attention_heads": 14,
 
 
 def test_plan_first_node_claims_whole_when_capable():
-    # registry vuoto, nodo capiente -> prende tutto
+    # empty registry, roomy node -> takes everything
     s = plan_auto_stages(DIMS, bytes_per=4, ram_gb=64.0, reserve=0.2,
                          stages_by_url={}, target=1)
     assert s == "embed,decoder:0-24,head"
 
 
 def test_plan_second_node_fills_remaining_gap():
-    # un nodo copre embed+0-12; il secondo, piccolo, prende il buco centrale
+    # one node covers embed+0-12; the second, small one takes the middle gap
     existing = {"a": {"embed": True, "head": False, "decoders": ["0-12"]}}
     s = plan_auto_stages(DIMS, bytes_per=4, ram_gb=0.6, reserve=0.2,
                          stages_by_url=existing, target=1)
@@ -313,32 +313,32 @@ def test_plan_second_node_fills_remaining_gap():
 
 - [ ] **Step 2: run FAIL** — `.venv/bin/python -m pytest tests/test_serve_auto.py -v` → ImportError (`plan_auto_stages`).
 
-- [ ] **Step 3a: in `axyn/cli.py` aggiungi la funzione pura `plan_auto_stages`** (vicino agli altri helper, NON dentro un comando):
+- [ ] **Step 3a: in `axyn/cli.py` add the pure function `plan_auto_stages`** (next to the other helpers, NOT inside a command):
 ```python
 def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
                      stages_by_url: dict, target: int) -> str:
-    """Decide lo stage spec da rivendicare combinando capacità (fit) e buchi (gaps)."""
+    """Decide the stage spec to claim by combining capacity (fit) and gaps."""
     from axyn.net.capacity import fit_layers
     from axyn.net.discovery import coverage_gaps
     from axyn.net.allocator import choose_stages
     nl = dims["num_layers"]
     fit = fit_layers(dims, bytes_per, ram_gb, reserve)
     gaps = coverage_gaps(stages_by_url, nl, target=target)
-    # un nodo "capiente" (regge l'intero modello) si offre anche per embed/head
+    # a "roomy" node (one that holds the whole model) also offers itself for embed/head
     take_eh = fit["fits_whole_model"] or fit["max_decoder_layers"] >= nl
     return choose_stages(gaps, fit["max_decoder_layers"], nl, take_embed_head=take_eh)
 ```
 
-- [ ] **Step 3b: in `axyn/cli.py` rendi `--stages` opzionale e aggiungi `--auto/--ram/--reserve` a `serve`.** Cambia la firma di `serve`:
-  - `stages: str = typer.Option(None, "--stages", ...)` (era `...` obbligatorio).
-  - aggiungi:
+- [ ] **Step 3b: in `axyn/cli.py` make `--stages` optional and add `--auto/--ram/--reserve` to `serve`.** Change the `serve` signature:
+  - `stages: str = typer.Option(None, "--stages", ...)` (was `...`, required).
+  - add:
     ```python
-    auto: bool = typer.Option(False, "--auto", help="Auto-assegna i layer dai buchi del registry + capacità RAM"),
-    ram: float = typer.Option(None, "--ram", help="RAM da usare per l'auto-assegnazione, GB (default: rilevata)"),
-    reserve: float = typer.Option(0.2, "--reserve", help="Frazione RAM riservata (auto)"),
-    target: int = typer.Option(1, "--target", help="Replica desiderata per range (auto; 2 = ridondanza)"),
+    auto: bool = typer.Option(False, "--auto", help="Auto-assign layers from registry gaps + RAM capacity"),
+    ram: float = typer.Option(None, "--ram", help="RAM to use for auto-assignment, GB (default: detected)"),
+    reserve: float = typer.Option(0.2, "--reserve", help="Reserved RAM fraction (auto)"),
+    target: int = typer.Option(1, "--target", help="Desired replicas per range (auto; 2 = redundancy)"),
     ```
-  Subito dopo `import uvicorn` (prima di `parse_stages`), inserisci il ramo auto:
+  Right after `import uvicorn` (before `parse_stages`), insert the auto branch:
 ```python
     if auto:
         import torch, httpx
@@ -355,45 +355,45 @@ def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
                 pass
         stages = plan_auto_stages(dims, _bp, ram_gb, reserve, learned, target)
         if not stages:
-            _fail("serve", "NO_GAP", "nessun range da coprire (coverage completa o RAM insufficiente)", exit_code=2)
-        typer.echo(f"axyn serve --auto: rivendico stages={stages} (ram={ram_gb}GB, target={target})", err=True)
+            _fail("serve", "NO_GAP", "no range to cover (full coverage or insufficient RAM)", exit_code=2)
+        typer.echo(f"axyn serve --auto: claiming stages={stages} (ram={ram_gb}GB, target={target})", err=True)
     elif stages is None:
-        _fail("serve", "USAGE_ERROR", "specifica --stages oppure --auto", exit_code=2)
+        _fail("serve", "USAGE_ERROR", "specify --stages or --auto", exit_code=2)
 ```
-  (Il resto di `serve` prosegue invariato: `parse_stages(stages)`, `load_partial_model`, `create_app`. Il path `--coordinator` resta valido anche con `--auto`.)
+  (The rest of `serve` continues unchanged: `parse_stages(stages)`, `load_partial_model`, `create_app`. The `--coordinator` path remains valid with `--auto` too.)
 
-- [ ] **Step 3c: in `axyn/net/server.py` annuncia la capacità nel record.** Dopo la riga `own_stages = {...}` (riga ~27) aggiungi:
+- [ ] **Step 3c: in `axyn/net/server.py` advertise the capacity in the record.** After the `own_stages = {...}` line (line ~27) add:
 ```python
     from axyn.net.capacity import probe_capacity
     own_stages["capacity"] = probe_capacity()
 ```
-  (È additivo: `build_chain` e `coverage_gaps` leggono solo `embed`/`head`/`decoders`; `capacity` viaggia nel gossip e sarà usato dall'allocatore.)
+  (It's additive: `build_chain` and `coverage_gaps` only read `embed`/`head`/`decoders`; `capacity` travels in the gossip and will be used by the allocator.)
 
-- [ ] **Step 4: run PASS** — `.venv/bin/python -m pytest tests/test_serve_auto.py -v` → 2 passed. Verifica CLI: `.venv/bin/axyn serve --help | grep -q auto && echo ok`.
+- [ ] **Step 4: run PASS** — `.venv/bin/python -m pytest tests/test_serve_auto.py -v` → 2 passed. Verify CLI: `.venv/bin/axyn serve --help | grep -q auto && echo ok`.
 
-- [ ] **Step 5: suite completa** — `.venv/bin/python -m pytest -q -p no:warnings` → verde (nessuna regressione; in particolare `serve` con `--stages` esplicito continua a funzionare).
+- [ ] **Step 5: full suite** — `.venv/bin/python -m pytest -q -p no:warnings` → green (no regressions; in particular `serve` with explicit `--stages` keeps working).
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py axyn/net/server.py tests/test_serve_auto.py && git commit -m "feat(cli): serve --auto (auto-assegnazione layer da capacità + gaps) + capacity nel record"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py axyn/net/server.py tests/test_serve_auto.py && git commit -m "feat(cli): serve --auto (layer self-assignment from capacity + gaps) + capacity in record"
 ```
 
 ---
 
-## Task 5: docs (CLAUDE.md + esempio P2P)
+## Task 5: docs (CLAUDE.md + P2P example)
 
-**Files:** Modify `CLAUDE.md`, `docs/examples/p2p.md`. (Lo fa il controller.)
+**Files:** Modify `CLAUDE.md`, `docs/examples/p2p.md`. (Done by the controller.)
 
-- [ ] **Step 1:** in `CLAUDE.md` aggiungi una riga alla tabella comandi per `serve --auto` e una nota: "in P2P, avvia i nodi con `--auto --peers <seed>` e si dividono i layer da soli (usa `--target 2` per ridondanza)".
-- [ ] **Step 2:** in `docs/examples/p2p.md` aggiungi una sezione "Auto-assemblaggio" con l'esempio `axyn serve --auto --peers ...`.
-- [ ] **Step 3:** commit `docs: serve --auto (auto-assemblaggio P2P)`.
+- [ ] **Step 1:** in `CLAUDE.md` add a row to the commands table for `serve --auto` and a note: "in P2P, start the nodes with `--auto --peers <seed>` and they split the layers among themselves (use `--target 2` for redundancy)".
+- [ ] **Step 2:** in `docs/examples/p2p.md` add an "Auto-assembly" section with the example `axyn serve --auto --peers ...`.
+- [ ] **Step 3:** commit `docs: serve --auto (P2P auto-assembly)`.
 
 ---
 
 ## Self-Review
 
-**Coverage ADR-0003:** slice 1 (capacity primitive) → Task 1 ✓; slice 2 (advertisement + gaps) → Task 2 + Task 4.3c ✓; slice 3 (allocatore + serve --auto) → Task 3 + Task 4 ✓. `target` parametrico copre la ridondanza *a startup* (più nodi raggiungono target). **Fuori scope (piano 2):** ri-assegnazione/reload a runtime su guasto (slice 4) e reward ledger (slice 5).
+**Coverage ADR-0003:** slice 1 (capacity primitive) → Task 1 ✓; slice 2 (advertisement + gaps) → Task 2 + Task 4.3c ✓; slice 3 (allocator + serve --auto) → Task 3 + Task 4 ✓. The parametric `target` covers redundancy *at startup* (more nodes reach the target). **Out of scope (plan 2):** runtime re-assignment/reload on failure (slice 4) and reward ledger (slice 5).
 
-**Placeholder scan:** codice completo in ogni step; doc nel Task 5.
+**Placeholder scan:** complete code in every step; docs in Task 5.
 
-**Type consistency:** `fit_layers(dims, bytes_per_param:int, ram_gb, reserve) -> {ram_per_layer_gb, ram_embed_head_gb, max_decoder_layers, fits_whole_model}`; `coverage_gaps(stages_by_url, num_layers, target) -> {decoder_gaps:[{lo,hi,replicas}], embed_replicas, head_replicas, target}`; `choose_stages(gaps, max_decoder_layers, num_layers, take_embed_head) -> str`; `plan_auto_stages(dims, bytes_per, ram_gb, reserve, stages_by_url, target) -> str`. I nomi e le forme combaciano tra i task.
+**Type consistency:** `fit_layers(dims, bytes_per_param:int, ram_gb, reserve) -> {ram_per_layer_gb, ram_embed_head_gb, max_decoder_layers, fits_whole_model}`; `coverage_gaps(stages_by_url, num_layers, target) -> {decoder_gaps:[{lo,hi,replicas}], embed_replicas, head_replicas, target}`; `choose_stages(gaps, max_decoder_layers, num_layers, take_embed_head) -> str`; `plan_auto_stages(dims, bytes_per, ram_gb, reserve, stages_by_url, target) -> str`. The names and shapes match across the tasks.

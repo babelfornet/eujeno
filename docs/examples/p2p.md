@@ -22,7 +22,7 @@ axyn --json infer --peer http://192.168.1.10:8001 --prompt "The capital of Italy
 
 ## Auto-assembly (`--auto`): the nodes split the layers among themselves
 
-Instead of assigning stages by hand, each node can **claim** a range by reading the coverage gaps from the seed + its own RAM (see [ADR-0003](../decisions/ADR-0003-allocazione-capacity-aware.md)):
+Instead of assigning stages by hand, each node can **claim** a range by reading the coverage gaps from the seed + its own RAM (see [ADR-0003](../decisions/ADR-0003-capacity-aware-allocation.md)):
 
 ```bash
 # Node A (small): start it first, it takes a block that fits in its RAM
@@ -55,4 +55,4 @@ curl -s http://192.168.1.10:8001/v1/chat/completions -H 'content-type: applicati
 
 ## When it's NOT enough
 
-If the nodes are behind NAT on different networks **without a VPN**, the direct transport can't reach them: use the coordinator mode. Pure P2P even behind NAT (native libp2p: hole-punching + relay between peers) is on the future path — see [ADR-0002](../decisions/ADR-0002-connettivita-nat.md).
+If the nodes are behind NAT on different networks **without a VPN**, the direct transport can't reach them: use the coordinator mode. Pure P2P even behind NAT (native libp2p: hole-punching + relay between peers) is on the future path — see [ADR-0002](../decisions/ADR-0002-nat-connectivity.md).

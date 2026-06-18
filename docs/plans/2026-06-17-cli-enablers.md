@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`).
 
-**Goal:** Rendere fluido il caso d'uso "un AI (Claude Code) configura/usa il nodo da CLI": `--dtype` (modelli grandi in bf16), `axyn models` + check compatibilità (sapere quali modelli usare), `axyn up` (bring-up in un comando), e un `CLAUDE.md` che insegna a un agente a pilotare la CLI.
+**Goal:** Make the use case "an AI (Claude Code) configures/uses the node from the CLI" smooth: `--dtype` (large models in bf16), `axyn models` + compatibility check (knowing which models to use), `axyn up` (one-command bring-up), and a `CLAUDE.md` that teaches an agent to drive the CLI.
 
-**Architecture:** `parse_dtype` in `config.py`; `--dtype` su `serve`/`generate`/`selfcheck`. `axyn models` (lista curata) + campo `compatible` in `model --info` (riconosce l'architettura `qwen2`/`llama`). `axyn up --model X [--dtype]` avvia coordinator + un nodo serve che copre tutti i layer (sottoprocessi), attende l'operatività e stampa gli endpoint (`--dry-run` per testabilità/anteprima). `CLAUDE.md` + sezione Getting started nel README.
+**Architecture:** `parse_dtype` in `config.py`; `--dtype` on `serve`/`generate`/`selfcheck`. `axyn models` (curated list) + `compatible` field in `model --info` (recognizes the `qwen2`/`llama` architecture). `axyn up --model X [--dtype]` starts a coordinator + a serve node that covers all layers (subprocesses), waits for operationality and prints the endpoints (`--dry-run` for testability/preview). `CLAUDE.md` + Getting started section in the README.
 
-**Tech Stack:** Python · Typer · l'esistente `axyn/{config,cli}.py`, `model_config_dims`, `NodeManager`.
+**Tech Stack:** Python · Typer · the existing `axyn/{config,cli}.py`, `model_config_dims`, `NodeManager`.
 
 ---
 
@@ -14,16 +14,16 @@
 ```
 axyn/config.py               # MOD: parse_dtype + SUPPORTED_ARCHS
 axyn/cli.py                  # MOD: --dtype (serve/generate/selfcheck), models, model --info compatible, up
-tests/test_dtype.py             # NUOVO: parse_dtype (veloce)
-tests/test_cli_models.py        # NUOVO: models + up --dry-run (veloce)
-CLAUDE.md                       # NUOVO
+tests/test_dtype.py             # NEW: parse_dtype (fast)
+tests/test_cli_models.py        # NEW: models + up --dry-run (fast)
+CLAUDE.md                       # NEW
 README.md                       # MOD: Getting started
 docs/examples/agents.md         # MOD (models/up)
 ```
 
 ---
 
-## Task 1: `--dtype` (bf16/fp16 per modelli grandi)
+## Task 1: `--dtype` (bf16/fp16 for large models)
 
 **Files:** modify `axyn/config.py`, `axyn/cli.py`; create `tests/test_dtype.py`.
 
@@ -48,7 +48,7 @@ def test_parse_unknown_raises():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_dtype.py -v` → ImportError.
 
-- [ ] **Step 3: in `axyn/config.py`** aggiungi:
+- [ ] **Step 3: in `axyn/config.py`** add:
 ```python
 _DTYPES = {
     "float32": torch.float32, "fp32": torch.float32,
@@ -62,15 +62,15 @@ SUPPORTED_ARCHS = {"qwen2", "llama"}
 def parse_dtype(name: str):
     key = str(name).lower()
     if key not in _DTYPES:
-        raise ValueError(f"dtype non valido: {name!r} (usa float32/bfloat16/float16)")
+        raise ValueError(f"invalid dtype: {name!r} (use float32/bfloat16/float16)")
     return _DTYPES[key]
 ```
 
-- [ ] **Step 4: in `axyn/cli.py` aggiungi `--dtype` al comando `serve`** — opzione e uso. Aggiungi alla firma di `serve`:
+- [ ] **Step 4: in `axyn/cli.py` add `--dtype` to the `serve` command** — option and usage. Add to the `serve` signature:
 ```python
-    dtype: str = typer.Option("float32", "--dtype", help="float32 | bfloat16 | float16 (bf16 per modelli grandi)"),
+    dtype: str = typer.Option("float32", "--dtype", help="float32 | bfloat16 | float16 (bf16 for large models)"),
 ```
-e dove `serve` carica il modello (`load_partial_model(model_id, spec, DTYPE, DEVICE)`), sostituisci `DTYPE` con il dtype scelto:
+and where `serve` loads the model (`load_partial_model(model_id, spec, DTYPE, DEVICE)`), replace `DTYPE` with the chosen dtype:
 ```python
     from axyn.config import parse_dtype
     try:
@@ -80,18 +80,18 @@ e dove `serve` carica il modello (`load_partial_model(model_id, spec, DTYPE, DEV
     ...
         model, tokenizer = load_partial_model(model_id, spec, _dtype, DEVICE)
 ```
-(Assicurati che `parse_dtype` sia importato; il default `"float32"` mantiene il comportamento attuale.)
+(Make sure `parse_dtype` is imported; the `"float32"` default keeps the current behavior.)
 
-- [ ] **Step 5: run PASS** — `... pytest tests/test_dtype.py -v` → 2 passed. Verifica che la CLI importi: `.venv/bin/axyn serve --help | grep -q dtype && echo ok`.
+- [ ] **Step 5: run PASS** — `... pytest tests/test_dtype.py -v` → 2 passed. Verify the CLI imports: `.venv/bin/axyn serve --help | grep -q dtype && echo ok`.
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/config.py axyn/cli.py tests/test_dtype.py && git commit -m "feat(cli): --dtype (bf16/fp16) su serve per modelli grandi"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/config.py axyn/cli.py tests/test_dtype.py && git commit -m "feat(cli): --dtype (bf16/fp16) on serve for large models"
 ```
 
 ---
 
-## Task 2: `axyn models` + check compatibilità in `model --info`
+## Task 2: `axyn models` + compatibility check in `model --info`
 
 **Files:** modify `axyn/cli.py`; create `tests/test_cli_models.py`.
 
@@ -114,11 +114,11 @@ def test_models_lists_examples():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_cli_models.py -v` → no `models` command.
 
-- [ ] **Step 3: in `axyn/cli.py` aggiungi il comando `models`** (dopo `model`):
+- [ ] **Step 3: in `axyn/cli.py` add the `models` command** (after `model`):
 ```python
 @app.command()
 def models():
-    """Elenca i modelli/famiglie compatibili (architettura Llama/Qwen2)."""
+    """Lists the compatible models/families (Llama/Qwen2 architecture)."""
     from axyn.config import SUPPORTED_ARCHS
     examples = [
         "Qwen/Qwen2.5-0.5B-Instruct", "Qwen/Qwen2.5-1.5B-Instruct", "Qwen/Qwen2.5-3B-Instruct",
@@ -127,37 +127,37 @@ def models():
         "meta-llama/Llama-3.2-3B-Instruct", "meta-llama/Llama-3.1-8B-Instruct",
     ]
     data = {"supported_architectures": sorted(SUPPORTED_ARCHS), "examples": examples,
-            "note": "Architettura Llama/Qwen2 (decoder-only). Verifica con 'axyn model --info --model <id>'. "
-                    "Per modelli grandi usa --dtype bfloat16 e/o splitta su piu nodi."}
-    human = "Modelli compatibili (Llama/Qwen2):\n" + "\n".join(f"  - {m}" for m in examples)
+            "note": "Llama/Qwen2 architecture (decoder-only). Check with 'axyn model --info --model <id>'. "
+                    "For large models use --dtype bfloat16 and/or split across more nodes."}
+    human = "Compatible models (Llama/Qwen2):\n" + "\n".join(f"  - {m}" for m in examples)
     _emit_ok("models", data, human=human)
 ```
-Inoltre, nel comando `model` (`--info`) aggiungi i campi compatibilità. Dove costruisce `data` con i dim del modello, aggiungi `architecture` e `compatible`:
+Also, in the `model` command (`--info`) add the compatibility fields. Where it builds `data` with the model dims, add `architecture` and `compatible`:
 ```python
         from axyn.config import SUPPORTED_ARCHS
         arch = getattr(__import__("transformers").AutoConfig.from_pretrained(model_id), "model_type", "?")
         data["architecture"] = arch
         data["compatible"] = arch in SUPPORTED_ARCHS
 ```
-> Nota: `model --info` carica gia `AutoConfig` via `model_config_dims`. Se preferisci evitare un secondo `from_pretrained`, fai restituire `model_type` da `model_config_dims` (aggiungi `"model_type": cfg.model_type` al dict in `loader.py`) e usalo qui. Scegli l'opzione piu pulita; l'importante e che `model --info --json` includa `architecture` e `compatible`.
+> Note: `model --info` already loads `AutoConfig` via `model_config_dims`. If you prefer to avoid a second `from_pretrained`, make `model_config_dims` return `model_type` (add `"model_type": cfg.model_type` to the dict in `loader.py`) and use it here. Choose the cleaner option; what matters is that `model --info --json` includes `architecture` and `compatible`.
 
-- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_models.py -v` → PASS. Verifica `.venv/bin/axyn --help | grep -q models`.
+- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_models.py -v` → PASS. Verify `.venv/bin/axyn --help | grep -q models`.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py axyn/model/loader.py tests/test_cli_models.py && git commit -m "feat(cli): comando 'models' + check compatibilita in 'model --info'"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py axyn/model/loader.py tests/test_cli_models.py && git commit -m "feat(cli): 'models' command + compatibility check in 'model --info'"
 ```
 
 ---
 
-## Task 3: `axyn up` (bring-up in un comando)
+## Task 3: `axyn up` (one-command bring-up)
 
 **Files:** modify `axyn/cli.py`; modify `tests/test_cli_models.py` (append).
 
-- [ ] **Step 1: append a `tests/test_cli_models.py`**
+- [ ] **Step 1: append to `tests/test_cli_models.py`**
 ```python
 def test_up_dry_run_prints_commands(monkeypatch):
-    # evita il download config: stub model_config_dims
+    # avoid the config download: stub model_config_dims
     import axyn.cli as cli
     monkeypatch.setattr(cli, "model_config_dims", lambda mid: {"num_layers": 24})
     r = runner.invoke(app, ["--json", "up", "--model", "X", "--dtype", "bfloat16", "--dry-run"])
@@ -171,17 +171,17 @@ def test_up_dry_run_prints_commands(monkeypatch):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_cli_models.py::test_up_dry_run_prints_commands -v` → no `up`.
 
-- [ ] **Step 3: in `axyn/cli.py` aggiungi il comando `up`** (dopo `coordinator`):
+- [ ] **Step 3: in `axyn/cli.py` add the `up` command** (after `coordinator`):
 ```python
 @app.command()
 def up(
-    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="ID del modello Hugging Face"),
+    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="Hugging Face model ID"),
     dtype: str = typer.Option("float32", "--dtype", help="float32 | bfloat16 | float16"),
-    host: str = typer.Option("127.0.0.1", "--host", help="Host del coordinator"),
-    port: int = typer.Option(9000, "--port", help="Porta del coordinator"),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Stampa i comandi senza avviare nulla"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Coordinator host"),
+    port: int = typer.Option(9000, "--port", help="Coordinator port"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print the commands without starting anything"),
 ):
-    """Avvia in un colpo una rete operativa a nodo singolo (coordinator + un nodo che copre tutto il modello)."""
+    """Starts an operational single-node network in one shot (coordinator + a node that covers the whole model)."""
     nl = model_config_dims(model_id)["num_layers"]
     coord_cmd = [sys.executable, "-m", "axyn", "coordinator", "--model", model_id,
                  "--host", host, "--port", str(port)]
@@ -191,7 +191,7 @@ def up(
     if dry_run:
         _emit_ok("up", {"commands": [coord_cmd, serve_cmd],
                         "coordinator_url": f"http://{host}:{port}"},
-                 human="comandi:\n  " + "\n  ".join(" ".join(c) for c in [coord_cmd, serve_cmd]))
+                 human="commands:\n  " + "\n  ".join(" ".join(c) for c in [coord_cmd, serve_cmd]))
         return
     import subprocess
     import time as _t
@@ -200,7 +200,7 @@ def up(
     _t.sleep(4)
     procs.append(subprocess.Popen(serve_cmd))
     base = f"http://{host}:{port}"
-    typer.echo(f"axyn up: avvio rete per {model_id} (dtype={dtype})…", err=True)
+    typer.echo(f"axyn up: starting network for {model_id} (dtype={dtype})…", err=True)
     operational = False
     for _ in range(120):
         try:
@@ -212,10 +212,10 @@ def up(
             pass
         _t.sleep(2)
     if operational:
-        typer.echo(f"PRONTO. Interroga: axyn infer --coordinator {base} --prompt \"...\"", err=True)
-        typer.echo(f"Frontend:        axyn ui --coordinator {base}", err=True)
+        typer.echo(f"READY. Query: axyn infer --coordinator {base} --prompt \"...\"", err=True)
+        typer.echo(f"Frontend:     axyn ui --coordinator {base}", err=True)
     else:
-        typer.echo("rete non ancora operativa (controlla i log).", err=True)
+        typer.echo("network not operational yet (check the logs).", err=True)
     try:
         procs[0].wait()
     except KeyboardInterrupt:
@@ -226,32 +226,32 @@ def up(
                 p.terminate()
 ```
 
-- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_models.py -v` → PASS. Verifica `.venv/bin/axyn --help | grep -q up`.
+- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_models.py -v` → PASS. Verify `.venv/bin/axyn --help | grep -q up`.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli_models.py && git commit -m "feat(cli): comando 'up' (bring-up rete a nodo singolo in un comando)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli_models.py && git commit -m "feat(cli): 'up' command (one-command single-node network bring-up)"
 ```
 
 ---
 
 ## Task 4: CLAUDE.md + Getting started + docs + suite
 
-**Files:** create `CLAUDE.md`; modify `README.md`, `docs/examples/agents.md`. (Lo fa il controller, non un subagent.)
+**Files:** create `CLAUDE.md`; modify `README.md`, `docs/examples/agents.md`. (Done by the controller, not a subagent.)
 
-- [ ] **Step 1:** crea `CLAUDE.md` (guida per un agente: cos'e Axyn, install, comandi chiave con esempi — model/models/up/serve/coordinator/infer/ui/mcp — modelli supportati, workflow tipici a/b/c/d, nota dtype/memoria).
-- [ ] **Step 2:** aggiungi al `README.md` una sezione "## Installazione / Getting started" in cima (clone → venv → `pip install -e .` → `axyn --help`; quickstart `axyn up`).
-- [ ] **Step 3:** in `docs/examples/agents.md` cita `axyn models` e `axyn up`.
-- [ ] **Step 4:** suite completa `... pytest -q -p no:warnings` → verde.
+- [ ] **Step 1:** create `CLAUDE.md` (guide for an agent: what Axyn is, install, key commands with examples — model/models/up/serve/coordinator/infer/ui/mcp — supported models, typical workflows a/b/c/d, dtype/memory note).
+- [ ] **Step 2:** add an "## Installation / Getting started" section at the top of the `README.md` (clone → venv → `pip install -e .` → `axyn --help`; `axyn up` quickstart).
+- [ ] **Step 3:** in `docs/examples/agents.md` mention `axyn models` and `axyn up`.
+- [ ] **Step 4:** full suite `... pytest -q -p no:warnings` → green.
 - [ ] **Step 5:** commit `docs: CLAUDE.md + Getting started (install + up + models)`.
 
 ---
 
 ## Self-Review
 
-**Coverage:** `--dtype` (Task 1) ✓; `models` + compatibilita `model --info` (Task 2) ✓; `up` bring-up (Task 3) ✓; CLAUDE.md + Getting started (Task 4) ✓. Risponde a "come lancio la CLI" (README install) e "quali modelli" (models + compatible).
+**Coverage:** `--dtype` (Task 1) ✓; `models` + `model --info` compatibility (Task 2) ✓; `up` bring-up (Task 3) ✓; CLAUDE.md + Getting started (Task 4) ✓. Answers "how do I launch the CLI" (README install) and "which models" (models + compatible).
 
-**Placeholder scan:** codice completo; CLAUDE.md scritto nel Task 4.
+**Placeholder scan:** complete code; CLAUDE.md written in Task 4.
 
-**Type consistency:** `parse_dtype(str)->torch.dtype`; `serve --dtype` usa `load_partial_model(..., _dtype, ...)`; `models` ritorna `{supported_architectures, examples, note}`; `model --info` aggiunge `architecture`/`compatible`; `up` costruisce comandi `python -m axyn coordinator|serve` con stage `embed,decoder:0-N,head` e `--dtype`.
+**Type consistency:** `parse_dtype(str)->torch.dtype`; `serve --dtype` uses `load_partial_model(..., _dtype, ...)`; `models` returns `{supported_architectures, examples, note}`; `model --info` adds `architecture`/`compatible`; `up` builds `python -m axyn coordinator|serve` commands with stage `embed,decoder:0-N,head` and `--dtype`.
 ```

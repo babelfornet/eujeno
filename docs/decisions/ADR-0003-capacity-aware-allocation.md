@@ -2,7 +2,7 @@
 
 **Status:** Proposed · 2026-06-17
 **PRD context:** [part-2 discovery/routing](../prd/part-2-discovery-routing.md), [part-3 queue/load-balancing](../prd/part-3-queue-load-balancing.md), [part-4 incentives/reputation](../prd/part-4-incentives-reputation.md)
-**Depends on:** [ADR-0001](./ADR-0001-implementation-forks.md) (DHT record schema, SQLite substrate, `(job_id, stage)` idempotency), [ADR-0002](./ADR-0002-connettivita-nat.md) (pure P2P + coordinator)
+**Depends on:** [ADR-0001](./ADR-0001-implementation-forks.md) (DHT record schema, SQLite substrate, `(job_id, stage)` idempotency), [ADR-0002](./ADR-0002-nat-connectivity.md) (pure P2P + coordinator)
 
 ---
 
@@ -28,7 +28,7 @@ Today, splitting a model across nodes is **manual**: the operator passes `--stag
 
 ```mermaid
 flowchart TD
-    subgraph Nodo["Each node (self-assignment loop)"]
+    subgraph Node["Each node (self-assignment loop)"]
         P[probe_capacity<br/>ram_free, cpu] --> F[fit_layers<br/>max_decoder_layers]
         F --> C[claim the neediest range<br/>that fits]
         C --> L[partial load<br/>+ serve + heartbeat]

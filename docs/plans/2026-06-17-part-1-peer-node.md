@@ -2,23 +2,23 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Provare in un singolo processo che un modello LLM può essere splittato in blocchi di layer ed eseguito hop-by-hop riproducendo **esattamente** la generazione del modello intero, con KV-cache per-blocco serializzabile che sopravvive a un round-trip su byte (simulazione di handoff/restart).
+**Goal:** Prove in a single process that an LLM can be split into blocks of layers and executed hop-by-hop, reproducing **exactly** the generation of the whole model, with a serializable per-block KV-cache that survives a byte round-trip (handoff/restart simulation).
 
-**Architecture:** Si carica il modello completo una volta (riferimento), poi `split_into_blocks` lo divide in un blocco EMBED, N blocchi DECODER (slab contigui di layer con `layer_idx` rimappato a indici locali + KV-cache locale `DynamicCache`) e un blocco HEAD. `pipeline_generate` esegue una generazione greedy attraverso i blocchi e deve produrre la **stessa** sequenza di token di `reference_generate`. Due primitivi puri di serializzazione (KV-cache e payload di hop, entrambi via safetensors) preparano il transport di rete della Parte 3.
+**Architecture:** The full model is loaded once (reference), then `split_into_blocks` divides it into an EMBED block, N DECODER blocks (contiguous slabs of layers with `layer_idx` remapped to local indices + a local `DynamicCache` KV-cache) and a HEAD block. `pipeline_generate` runs a greedy generation through the blocks and must produce the **same** token sequence as `reference_generate`. Two pure serialization primitives (KV-cache and hop payload, both via safetensors) prepare the network transport of Part 3.
 
-**Tech Stack:** Python 3.11 · PyTorch (fp32, CPU) · Hugging Face `transformers==4.46.3` (API `DynamicCache` stabile) · `safetensors` · `accelerate` · `huggingface_hub` · `pytest`. Modello di test: `Qwen/Qwen2.5-0.5B-Instruct` (ungated, 24 layer, hidden 896).
+**Tech Stack:** Python 3.11 · PyTorch (fp32, CPU) · Hugging Face `transformers==4.46.3` (stable `DynamicCache` API) · `safetensors` · `accelerate` · `huggingface_hub` · `pytest`. Test model: `Qwen/Qwen2.5-0.5B-Instruct` (ungated, 24 layers, hidden 896).
 
-**Scope (questo piano):** build-order step 1, 2, 4 dell'[ADR-0001](../decisions/ADR-0001-implementation-forks.md) + primitivi di serializzazione cache/payload ([PRD Parte 1](../prd/part-1-peer-node.md) §3).
-**Fuori scope (piani successivi):** partial-loading reale via `init_empty_weights`/`load_checkpoint_in_model` (concern di memoria, va col wire format), transport FastAPI, DHT/routing, persistenza SQLite. Qui i blocchi vivono nello stesso processo.
+**Scope (this plan):** build-order steps 1, 2, 4 of [ADR-0001](../decisions/ADR-0001-implementation-forks.md) + cache/payload serialization primitives ([PRD Part 1](../prd/part-1-peer-node.md) §3).
+**Out of scope (later plans):** real partial-loading via `init_empty_weights`/`load_checkpoint_in_model` (a memory concern, goes with the wire format), FastAPI transport, DHT/routing, SQLite persistence. Here the blocks live in the same process.
 
-> **Nota di versione:** il codice mirror la `Model.forward` di `transformers==4.46.3` (firma del decoder layer con `position_embeddings`). Se l'engineer usa una versione diversa e il golden test fallisce, allineare la chiamata del layer alla `forward` del modello installato — il golden test (Task 6) è la rete di sicurezza che rende questo deterministico. Vedi [ADR-0001](../decisions/ADR-0001-implementation-forks.md) Q2.
+> **Version note:** the code mirrors the `Model.forward` of `transformers==4.46.3` (decoder layer signature with `position_embeddings`). If the engineer uses a different version and the golden test fails, align the layer call with the `forward` of the installed model — the golden test (Task 6) is the safety net that makes this deterministic. See [ADR-0001](../decisions/ADR-0001-implementation-forks.md) Q2.
 
 ---
 
 ## File Structure
 
 ```
-pyproject.toml                 # progetto + dipendenze pinnate + config pytest
+pyproject.toml                 # project + pinned dependencies + pytest config
 axyn/
   __init__.py
   config.py                    # DEFAULT_MODEL_ID, DTYPE, DEVICE
@@ -31,17 +31,17 @@ axyn/
     blocks.py                  # BlockRunner (EMBED/DECODER/HEAD), split_into_blocks()
     generate.py                # reference_generate(), pipeline_generate()
 tests/
-  conftest.py                  # fixture full_model (session-scoped)
+  conftest.py                  # full_model fixture (session-scoped)
   test_loader.py
   test_masking.py
   test_cache.py
   test_payload.py
   test_blocks.py
-  test_golden.py               # IL golden test
-  test_resilience.py           # round-trip cache mid-generazione
+  test_golden.py               # THE golden test
+  test_resilience.py           # cache round-trip mid-generation
 ```
 
-Responsabilità per file (una sola per file): `loader` carica · `masking` costruisce maschere · `cache`/`payload` serializzano · `blocks` esegue layer · `generate` orchestra la generazione greedy.
+Responsibility per file (one each): `loader` loads · `masking` builds masks · `cache`/`payload` serialize · `blocks` runs layers · `generate` orchestrates greedy generation.
 
 ---
 
@@ -52,7 +52,7 @@ Responsabilità per file (una sola per file): `loader` carica · `masking` costr
 - Create: `axyn/__init__.py`, `axyn/model/__init__.py`
 - Create: `axyn/config.py`
 
-- [ ] **Step 1: Crea `pyproject.toml`**
+- [ ] **Step 1: Create `pyproject.toml`**
 
 ```toml
 [project]
@@ -72,40 +72,40 @@ dependencies = [
 dev = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]
-markers = ["slow: scarica/esegue il modello (lento)"]
+markers = ["slow: downloads/runs the model (slow)"]
 addopts = "-q"
 
 [tool.setuptools.packages.find]
 include = ["axyn*"]
 ```
 
-- [ ] **Step 2: Crea i package init e `config.py`**
+- [ ] **Step 2: Create the package inits and `config.py`**
 
-`axyn/__init__.py`: file vuoto.
-`axyn/model/__init__.py`: file vuoto.
+`axyn/__init__.py`: empty file.
+`axyn/model/__init__.py`: empty file.
 
 `axyn/config.py`:
 ```python
 import torch
 
 DEFAULT_MODEL_ID = "Qwen/Qwen2.5-0.5B-Instruct"
-DTYPE = torch.float32   # fp32 su CPU per determinismo (vedi ADR-0001 Fork D)
+DTYPE = torch.float32   # fp32 on CPU for determinism (see ADR-0001 Fork D)
 DEVICE = "cpu"
 ```
 
-- [ ] **Step 3: Crea l'ambiente e installa**
+- [ ] **Step 3: Create the environment and install**
 
 Run:
 ```bash
 python -m venv .venv && . .venv/bin/activate && pip install -e ".[dev]"
 ```
-Expected: installazione completata senza errori; `python -c "import transformers, torch, safetensors, accelerate; print('ok')"` stampa `ok`.
+Expected: installation completes without errors; `python -c "import transformers, torch, safetensors, accelerate; print('ok')"` prints `ok`.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add pyproject.toml axyn/__init__.py axyn/model/__init__.py axyn/config.py
-git commit -m "chore: scaffolding pacchetto axyn + dipendenze pinnate"
+git commit -m "chore: axyn package scaffolding + pinned dependencies"
 ```
 
 ---
@@ -116,7 +116,7 @@ git commit -m "chore: scaffolding pacchetto axyn + dipendenze pinnate"
 - Create: `axyn/model/loader.py`
 - Test: `tests/conftest.py`, `tests/test_loader.py`
 
-- [ ] **Step 1: Scrivi il test che fallisce**
+- [ ] **Step 1: Write the failing test**
 
 `tests/conftest.py`:
 ```python
@@ -147,12 +147,12 @@ def test_loads_with_expected_dims(full_model):
     assert tokenizer is not None
 ```
 
-- [ ] **Step 2: Esegui il test per vederlo fallire**
+- [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_loader.py -m slow -v`
-Expected: FAIL con `ModuleNotFoundError`/`ImportError` su `axyn.model.loader`.
+Expected: FAIL with `ModuleNotFoundError`/`ImportError` on `axyn.model.loader`.
 
-- [ ] **Step 3: Implementa `loader.py`**
+- [ ] **Step 3: Implement `loader.py`**
 
 ```python
 import torch
@@ -160,8 +160,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 def load_full_model(model_id: str, dtype: torch.dtype, device: str):
-    """Carica modello completo + tokenizer. Usato come riferimento e come
-    sorgente da cui estrarre i blocchi (Task 5)."""
+    """Load full model + tokenizer. Used as the reference and as the
+    source from which the blocks are extracted (Task 5)."""
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=dtype)
     model.to(device)
@@ -178,16 +178,16 @@ def model_dims(model) -> dict:
     }
 ```
 
-- [ ] **Step 4: Esegui il test per vederlo passare**
+- [ ] **Step 4: Run the test to see it pass**
 
 Run: `pytest tests/test_loader.py -m slow -v`
-Expected: PASS (la prima esecuzione scarica ~1GB del modello).
+Expected: PASS (the first run downloads ~1GB of the model).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add axyn/model/loader.py tests/conftest.py tests/test_loader.py
-git commit -m "feat(model): loader del modello completo + introspezione dimensioni"
+git commit -m "feat(model): full model loader + dimension introspection"
 ```
 
 ---
@@ -198,7 +198,7 @@ git commit -m "feat(model): loader del modello completo + introspezione dimensio
 - Create: `axyn/model/masking.py`
 - Test: `tests/test_masking.py`
 
-- [ ] **Step 1: Scrivi il test che fallisce**
+- [ ] **Step 1: Write the failing test**
 
 `tests/test_masking.py`:
 ```python
@@ -207,31 +207,31 @@ from axyn.model.masking import build_causal_mask
 
 
 def test_prefill_mask_is_lower_triangular():
-    cache_position = torch.arange(3)        # prefill di 3 token, kv_len=3
+    cache_position = torch.arange(3)        # prefill of 3 tokens, kv_len=3
     mask = build_causal_mask(cache_position, kv_len=3, dtype=torch.float32, device="cpu")
     assert mask.shape == (1, 1, 3, 3)
     neg = torch.finfo(torch.float32).min
-    # query 0 vede solo key 0
+    # query 0 sees only key 0
     assert mask[0, 0, 0, 0] == 0.0
     assert mask[0, 0, 0, 1] == neg
     assert mask[0, 0, 0, 2] == neg
-    # query 2 vede tutte
+    # query 2 sees all
     assert torch.all(mask[0, 0, 2, :] == 0.0)
 
 
 def test_decode_step_attends_to_all_past():
-    cache_position = torch.tensor([5])      # 1 query token in posizione 5, kv_len=6
+    cache_position = torch.tensor([5])      # 1 query token at position 5, kv_len=6
     mask = build_causal_mask(cache_position, kv_len=6, dtype=torch.float32, device="cpu")
     assert mask.shape == (1, 1, 1, 6)
-    assert torch.all(mask[0, 0, 0, :] == 0.0)   # attende a tutte le 6 posizioni passate
+    assert torch.all(mask[0, 0, 0, :] == 0.0)   # attends to all 6 past positions
 ```
 
-- [ ] **Step 2: Esegui il test per vederlo fallire**
+- [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_masking.py -v`
-Expected: FAIL con `ImportError` su `axyn.model.masking`.
+Expected: FAIL with `ImportError` on `axyn.model.masking`.
 
-- [ ] **Step 3: Implementa `masking.py`**
+- [ ] **Step 3: Implement `masking.py`**
 
 ```python
 import torch
@@ -239,8 +239,8 @@ import torch
 
 def build_causal_mask(cache_position: torch.Tensor, kv_len: int,
                       dtype: torch.dtype, device: str) -> torch.Tensor:
-    """Maschera additiva causale 4D [1,1,q_len,kv_len] per batch=1 senza padding.
-    cache_position contiene le posizioni assolute dei token di query."""
+    """4D additive causal mask [1,1,q_len,kv_len] for batch=1 without padding.
+    cache_position holds the absolute positions of the query tokens."""
     q_len = cache_position.shape[0]
     key_pos = torch.arange(kv_len, device=device)
     allowed = key_pos[None, :] <= cache_position[:, None].to(device)   # [q_len, kv_len] bool
@@ -249,27 +249,27 @@ def build_causal_mask(cache_position: torch.Tensor, kv_len: int,
     return mask[None, None, :, :]
 ```
 
-- [ ] **Step 4: Esegui il test per vederlo passare**
+- [ ] **Step 4: Run the test to see it pass**
 
 Run: `pytest tests/test_masking.py -v`
-Expected: PASS (2 test).
+Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add axyn/model/masking.py tests/test_masking.py
-git commit -m "feat(model): builder maschera causale per esecuzione blocchi"
+git commit -m "feat(model): causal mask builder for block execution"
 ```
 
 ---
 
-## Task 3: KV-cache serialization (primitivo condiviso #2/3)
+## Task 3: KV-cache serialization (shared primitive #2/3)
 
 **Files:**
 - Create: `axyn/model/cache.py`
 - Test: `tests/test_cache.py`
 
-- [ ] **Step 1: Scrivi il test che fallisce**
+- [ ] **Step 1: Write the failing test**
 
 `tests/test_cache.py`:
 ```python
@@ -303,12 +303,12 @@ def test_cache_roundtrip_preserves_seq_length():
     assert restored.get_seq_length() == 7
 ```
 
-- [ ] **Step 2: Esegui il test per vederlo fallire**
+- [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_cache.py -v`
-Expected: FAIL con `ImportError` su `axyn.model.cache`.
+Expected: FAIL with `ImportError` on `axyn.model.cache`.
 
-- [ ] **Step 3: Implementa `cache.py`**
+- [ ] **Step 3: Implement `cache.py`**
 
 ```python
 import safetensors.torch
@@ -316,7 +316,7 @@ from transformers import DynamicCache
 
 
 def cache_to_bytes(cache: DynamicCache) -> bytes:
-    """Serializza una DynamicCache (per-blocco) in bytes safetensors."""
+    """Serialize a (per-block) DynamicCache into safetensors bytes."""
     legacy = cache.to_legacy_cache()
     tensors = {}
     for i, (key, value) in enumerate(legacy):
@@ -334,27 +334,27 @@ def cache_from_bytes(data: bytes) -> DynamicCache:
     return DynamicCache.from_legacy_cache(legacy)
 ```
 
-- [ ] **Step 4: Esegui il test per vederlo passare**
+- [ ] **Step 4: Run the test to see it pass**
 
 Run: `pytest tests/test_cache.py -v`
-Expected: PASS (2 test).
+Expected: PASS (2 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add axyn/model/cache.py tests/test_cache.py
-git commit -m "feat(model): serializzazione KV-cache via safetensors (round-trip)"
+git commit -m "feat(model): KV-cache serialization via safetensors (round-trip)"
 ```
 
 ---
 
-## Task 4: Hop payload serialization (primitivo condiviso #1 sul filo)
+## Task 4: Hop payload serialization (shared primitive #1 on the wire)
 
 **Files:**
 - Create: `axyn/model/payload.py`
 - Test: `tests/test_payload.py`
 
-- [ ] **Step 1: Scrivi il test che fallisce**
+- [ ] **Step 1: Write the failing test**
 
 `tests/test_payload.py`:
 ```python
@@ -382,12 +382,12 @@ def test_payload_roundtrip():
     assert back.attention_mask is None
 ```
 
-- [ ] **Step 2: Esegui il test per vederlo fallire**
+- [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_payload.py -v`
-Expected: FAIL con `ImportError` su `axyn.model.payload`.
+Expected: FAIL with `ImportError` on `axyn.model.payload`.
 
-- [ ] **Step 3: Implementa `payload.py`**
+- [ ] **Step 3: Implement `payload.py`**
 
 ```python
 import json
@@ -399,8 +399,8 @@ import safetensors.torch
 
 @dataclass
 class HopPayload:
-    """Payload di un hop sul filo (Parte 1 §3). La KV-cache NON viaggia qui:
-    resta locale all'holder (session affinity, Parte 3)."""
+    """Payload of a hop on the wire (Part 1 §3). The KV-cache does NOT travel
+    here: it stays local to the holder (session affinity, Part 3)."""
     job_id: str
     hop: int
     token_position: int
@@ -437,7 +437,7 @@ class HopPayload:
         )
 ```
 
-- [ ] **Step 4: Esegui il test per vederlo passare**
+- [ ] **Step 4: Run the test to see it pass**
 
 Run: `pytest tests/test_payload.py -v`
 Expected: PASS.
@@ -446,7 +446,7 @@ Expected: PASS.
 
 ```bash
 git add axyn/model/payload.py tests/test_payload.py
-git commit -m "feat(model): serializzazione HopPayload via safetensors (round-trip)"
+git commit -m "feat(model): HopPayload serialization via safetensors (round-trip)"
 ```
 
 ---
@@ -457,9 +457,9 @@ git commit -m "feat(model): serializzazione HopPayload via safetensors (round-tr
 - Create: `axyn/model/blocks.py`
 - Test: `tests/test_blocks.py`
 
-> **Nota di design:** `split_into_blocks` **muta** `layer.self_attn.layer_idx` rimappandolo a indici locali (0-based per blocco), così ogni blocco usa una `DynamicCache` locale per i soli suoi layer (forward-compatibile col modello distribuito). Per questo i test e il golden test (Task 6) catturano sempre il riferimento dal modello intero **prima** di chiamare `split_into_blocks`.
+> **Design note:** `split_into_blocks` **mutates** `layer.self_attn.layer_idx`, remapping it to local indices (0-based per block), so each block uses a local `DynamicCache` for its own layers only (forward-compatible with the distributed model). For this reason the tests and the golden test (Task 6) always capture the reference from the whole model **before** calling `split_into_blocks`.
 
-- [ ] **Step 1: Scrivi il test che fallisce**
+- [ ] **Step 1: Write the failing test**
 
 `tests/test_blocks.py`:
 ```python
@@ -471,7 +471,7 @@ from axyn.model.blocks import split_into_blocks
 @pytest.mark.slow
 def test_embed_block_matches_model_embedding(full_model):
     model, tokenizer = full_model
-    ids = tokenizer("Ciao mondo", return_tensors="pt").input_ids
+    ids = tokenizer("Hello world", return_tensors="pt").input_ids
     expected = model.model.embed_tokens(ids)
     embed, decoders, head = split_into_blocks(model, boundaries=[0, 12, 24])
     out = embed.run_block(ids)
@@ -496,12 +496,12 @@ def test_decoder_blocks_cover_all_layers(full_model):
     assert sum(len(d.layers) for d in decoders) == 24
 ```
 
-- [ ] **Step 2: Esegui il test per vederlo fallire**
+- [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_blocks.py -m slow -v`
-Expected: FAIL con `ImportError` su `axyn.model.blocks`.
+Expected: FAIL with `ImportError` on `axyn.model.blocks`.
 
-- [ ] **Step 3: Implementa `blocks.py`**
+- [ ] **Step 3: Implement `blocks.py`**
 
 ```python
 import torch
@@ -511,7 +511,7 @@ from .masking import build_causal_mask
 
 
 class EmbedBlock:
-    """Primo blocco: input_ids -> hidden_states."""
+    """First block: input_ids -> hidden_states."""
     def __init__(self, embed_tokens):
         self.embed_tokens = embed_tokens
 
@@ -521,8 +521,8 @@ class EmbedBlock:
 
 
 class DecoderBlock:
-    """Slab contiguo di layer [lo, hi). Mantiene una KV-cache LOCALE per i
-    soli suoi layer (indici rimappati 0-based)."""
+    """Contiguous slab of layers [lo, hi). Keeps a LOCAL KV-cache for its
+    own layers only (0-based remapped indices)."""
     def __init__(self, layers, rotary_emb):
         self.layers = layers
         self.rotary_emb = rotary_emb
@@ -549,7 +549,7 @@ class DecoderBlock:
 
 
 class HeadBlock:
-    """Ultimo blocco: hidden_states -> logits (final norm + lm_head)."""
+    """Last block: hidden_states -> logits (final norm + lm_head)."""
     def __init__(self, norm, lm_head):
         self.norm = norm
         self.lm_head = lm_head
@@ -560,12 +560,12 @@ class HeadBlock:
 
 
 def split_into_blocks(model, boundaries: list[int]):
-    """Divide un modello caricato in (EmbedBlock, [DecoderBlock...], HeadBlock).
+    """Split a loaded model into (EmbedBlock, [DecoderBlock...], HeadBlock).
 
-    boundaries: confini dei layer decoder, es. [0, 12, 24] -> due slab [0:12),[12:24).
+    boundaries: decoder layer boundaries, e.g. [0, 12, 24] -> two slabs [0:12),[12:24).
 
-    ATTENZIONE: muta layer.self_attn.layer_idx a indici locali. Catturare ogni
-    riferimento dal modello intero PRIMA di chiamare questa funzione.
+    WARNING: mutates layer.self_attn.layer_idx to local indices. Capture every
+    reference from the whole model BEFORE calling this function.
     """
     inner = model.model
     embed = EmbedBlock(inner.embed_tokens)
@@ -575,16 +575,16 @@ def split_into_blocks(model, boundaries: list[int]):
     for lo, hi in zip(boundaries[:-1], boundaries[1:]):
         layers = inner.layers[lo:hi]
         for local_idx, layer in enumerate(layers):
-            layer.self_attn.layer_idx = local_idx   # rimappa a indice locale del blocco
+            layer.self_attn.layer_idx = local_idx   # remap to the block's local index
         decoders.append(DecoderBlock(layers, inner.rotary_emb))
 
     return embed, decoders, head
 ```
 
-- [ ] **Step 4: Esegui il test per vederlo passare**
+- [ ] **Step 4: Run the test to see it pass**
 
 Run: `pytest tests/test_blocks.py -m slow -v`
-Expected: PASS (3 test).
+Expected: PASS (3 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -595,13 +595,13 @@ git commit -m "feat(model): BlockRunner (EMBED/DECODER/HEAD) + split_into_blocks
 
 ---
 
-## Task 6: Golden test — equivalenza pipeline distribuita vs modello intero
+## Task 6: Golden test — distributed pipeline vs whole model equivalence
 
 **Files:**
 - Create: `axyn/model/generate.py`
 - Test: `tests/test_golden.py`
 
-- [ ] **Step 1: Scrivi il test che fallisce**
+- [ ] **Step 1: Write the failing test**
 
 `tests/test_golden.py`:
 ```python
@@ -614,24 +614,24 @@ from axyn.model.blocks import split_into_blocks
 @pytest.mark.slow
 def test_pipeline_matches_reference_generation(full_model):
     model, tokenizer = full_model
-    ids = tokenizer("La capitale dell'Italia è", return_tensors="pt").input_ids
+    ids = tokenizer("The capital of Italy is", return_tensors="pt").input_ids
 
-    # 1) Riferimento: cattura PRIMA dello split (split muta i layer_idx)
+    # 1) Reference: capture BEFORE the split (split mutates the layer_idx)
     reference = reference_generate(model, ids, max_new_tokens=8)
 
-    # 2) Pipeline distribuita in-process
+    # 2) In-process distributed pipeline
     embed, decoders, head = split_into_blocks(model, boundaries=[0, 12, 24])
     pipeline = pipeline_generate(embed, decoders, head, ids, max_new_tokens=8)
 
-    assert pipeline == reference, f"divergenza: {pipeline} != {reference}"
+    assert pipeline == reference, f"divergence: {pipeline} != {reference}"
 ```
 
-- [ ] **Step 2: Esegui il test per vederlo fallire**
+- [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_golden.py -m slow -v`
-Expected: FAIL con `ImportError` su `axyn.model.generate`.
+Expected: FAIL with `ImportError` on `axyn.model.generate`.
 
-- [ ] **Step 3: Implementa `generate.py`**
+- [ ] **Step 3: Implement `generate.py`**
 
 ```python
 import torch
@@ -640,7 +640,7 @@ from transformers import DynamicCache
 
 @torch.no_grad()
 def reference_generate(model, input_ids: torch.Tensor, max_new_tokens: int) -> list[int]:
-    """Greedy decode col modello intero (riferimento). Deterministico."""
+    """Greedy decode with the whole model (reference). Deterministic."""
     cache = DynamicCache()
     seq_len = input_ids.shape[1]
     cur = input_ids
@@ -660,8 +660,8 @@ def reference_generate(model, input_ids: torch.Tensor, max_new_tokens: int) -> l
 @torch.no_grad()
 def pipeline_generate(embed, decoders, head, input_ids: torch.Tensor,
                       max_new_tokens: int) -> list[int]:
-    """Greedy decode attraverso i blocchi splittati, con KV-cache per-blocco
-    (session affinity). Deve riprodurre reference_generate."""
+    """Greedy decode through the split blocks, with a per-block KV-cache
+    (session affinity). Must reproduce reference_generate."""
     seq_len = input_ids.shape[1]
     cur_ids = input_ids
     cache_position = torch.arange(seq_len)
@@ -678,29 +678,29 @@ def pipeline_generate(embed, decoders, head, input_ids: torch.Tensor,
     return generated
 ```
 
-- [ ] **Step 4: Esegui il test per vederlo passare**
+- [ ] **Step 4: Run the test to see it pass**
 
 Run: `pytest tests/test_golden.py -m slow -v`
-Expected: PASS. Se fallisce con token divergenti, è il mismatch di firma del decoder layer descritto nella nota di versione: allineare `DecoderBlock.run_block` alla `forward` del modello installato.
+Expected: PASS. If it fails with divergent tokens, it is the decoder layer signature mismatch described in the version note: align `DecoderBlock.run_block` with the `forward` of the installed model.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add axyn/model/generate.py tests/test_golden.py
-git commit -m "feat(model): golden test equivalenza pipeline distribuita vs modello intero"
+git commit -m "feat(model): golden test distributed pipeline vs whole model equivalence"
 ```
 
 ---
 
-## Task 7: Capstone — KV-cache sopravvive a round-trip mid-generazione
+## Task 7: Capstone — KV-cache survives a mid-generation round-trip
 
-> De-risca direttamente il **rischio #1** dell'ADR ("correttezza KV-cache tra hop e restart/failover"): a metà generazione serializziamo le cache per-blocco su byte e le ricarichiamo (simulando handoff/restart di un holder), poi continuiamo e pretendiamo la **stessa** sequenza.
+> De-risks directly the ADR's **risk #1** ("KV-cache correctness across hops and restart/failover"): halfway through generation we serialize the per-block caches to bytes and reload them (simulating a holder handoff/restart), then continue and require the **same** sequence.
 
 **Files:**
-- Modify: `axyn/model/blocks.py` (aggiungi get/set della cache)
+- Modify: `axyn/model/blocks.py` (add cache get/set)
 - Test: `tests/test_resilience.py`
 
-- [ ] **Step 1: Scrivi il test che fallisce**
+- [ ] **Step 1: Write the failing test**
 
 `tests/test_resilience.py`:
 ```python
@@ -714,7 +714,7 @@ from axyn.model.cache import cache_to_bytes, cache_from_bytes
 @pytest.mark.slow
 def test_generation_survives_cache_serialization_midway(full_model):
     model, tokenizer = full_model
-    ids = tokenizer("La capitale dell'Italia è", return_tensors="pt").input_ids
+    ids = tokenizer("The capital of Italy is", return_tensors="pt").input_ids
     reference = reference_generate(model, ids, max_new_tokens=8)
 
     embed, decoders, head = split_into_blocks(model, boundaries=[0, 12, 24])
@@ -731,21 +731,21 @@ def test_generation_survives_cache_serialization_midway(full_model):
         cur_ids = next_id
         cache_position = torch.tensor([seq_len + step])
 
-        if step == 3:  # simula handoff/restart: serializza e ricarica ogni cache
+        if step == 3:  # simulate handoff/restart: serialize and reload each cache
             for d in decoders:
                 d.set_cache(cache_from_bytes(cache_to_bytes(d.get_cache())))
 
     assert generated == reference
 ```
 
-- [ ] **Step 2: Esegui il test per vederlo fallire**
+- [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_resilience.py -m slow -v`
-Expected: FAIL con `AttributeError` su `DecoderBlock.set_cache`/`get_cache`.
+Expected: FAIL with `AttributeError` on `DecoderBlock.set_cache`/`get_cache`.
 
-- [ ] **Step 3: Aggiungi get/set della cache in `blocks.py`**
+- [ ] **Step 3: Add cache get/set in `blocks.py`**
 
-In `DecoderBlock`, dopo `run_block`, aggiungi:
+In `DecoderBlock`, after `run_block`, add:
 ```python
     def get_cache(self):
         return self.cache
@@ -754,50 +754,50 @@ In `DecoderBlock`, dopo `run_block`, aggiungi:
         self.cache = cache
 ```
 
-- [ ] **Step 4: Esegui il test per vederlo passare**
+- [ ] **Step 4: Run the test to see it pass**
 
 Run: `pytest tests/test_resilience.py -m slow -v`
-Expected: PASS — la generazione è identica anche dopo il round-trip su byte della cache.
+Expected: PASS — generation is identical even after the cache's byte round-trip.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add axyn/model/blocks.py tests/test_resilience.py
-git commit -m "test(model): KV-cache sopravvive a serializzazione mid-generazione"
+git commit -m "test(model): KV-cache survives mid-generation serialization"
 ```
 
 ---
 
-## Task 8: Suite completa & aggiornamento ROADMAP
+## Task 8: Full suite & ROADMAP update
 
-- [ ] **Step 1: Esegui l'intera suite**
+- [ ] **Step 1: Run the whole suite**
 
-Run: `pytest -v` (unit) poi `pytest -m slow -v` (modello).
-Expected: tutti i test PASS.
+Run: `pytest -v` (unit) then `pytest -m slow -v` (model).
+Expected: all tests PASS.
 
-- [ ] **Step 2: Aggiorna la ROADMAP**
+- [ ] **Step 2: Update the ROADMAP**
 
-In `docs/ROADMAP.md`, sotto "Fase 1 — Implementazione PoC", spunta il primo punto e annota il completamento del blocco fondante della Parte 1 (golden test + serializzazione cache/payload verdi).
+In `docs/ROADMAP.md`, under "Phase 1 — PoC Implementation", check off the first item and note the completion of the Part 1 foundation block (golden test + cache/payload serialization green).
 
 - [ ] **Step 3: Commit**
 
 ```bash
 git add docs/ROADMAP.md
-git commit -m "docs: Parte 1 foundation completata (golden test verde)"
+git commit -m "docs: Part 1 foundation completed (golden test green)"
 ```
 
 ---
 
-## Self-Review (eseguito dall'autore del piano)
+## Self-Review (performed by the plan author)
 
-**Spec coverage (PRD Parte 1):**
+**Spec coverage (PRD Part 1):**
 - §3 `run_block` (EMBED/DECODER/HEAD) → Task 5 ✓
-- §3 KV-cache serializzabile per `(job_id, stage)` → Task 3 + Task 7 ✓
-- §3 payload safetensors → Task 4 ✓
-- §6 golden_test equivalenza vs modello intero → Task 6 ✓
-- §6 round-trip cache senza perdita / generazione ripresa da cache persistita → Task 7 ✓
-- §2 partial-loading via `init_empty_weights`/`load_checkpoint_in_model` → **deferred dichiarato** (piano successivo, va col wire format). Gap intenzionale e documentato nello Scope.
+- §3 KV-cache serializable per `(job_id, stage)` → Task 3 + Task 7 ✓
+- §3 safetensors payload → Task 4 ✓
+- §6 golden_test equivalence vs whole model → Task 6 ✓
+- §6 lossless cache round-trip / generation resumed from a persisted cache → Task 7 ✓
+- §2 partial-loading via `init_empty_weights`/`load_checkpoint_in_model` → **explicitly deferred** (later plan, goes with the wire format). Intentional gap, documented in the Scope.
 
-**Placeholder scan:** nessun TODO/TBD; ogni step ha codice completo.
+**Placeholder scan:** no TODO/TBD; every step has complete code.
 
-**Type consistency:** `split_into_blocks(model, boundaries)` → `(EmbedBlock, list[DecoderBlock], HeadBlock)` usato coerentemente in Task 5/6/7; `cache_to_bytes`/`cache_from_bytes`, `HopPayload.to_bytes`/`from_bytes`, `run_block`, `get_cache`/`set_cache` coerenti tra i task.
+**Type consistency:** `split_into_blocks(model, boundaries)` → `(EmbedBlock, list[DecoderBlock], HeadBlock)` used consistently in Task 5/6/7; `cache_to_bytes`/`cache_from_bytes`, `HopPayload.to_bytes`/`from_bytes`, `run_block`, `get_cache`/`set_cache` consistent across the tasks.

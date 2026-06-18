@@ -1,16 +1,16 @@
-# Part 2 — Coordinator-relay + discovery automatica — Implementation Plan
+# Part 2 — Coordinator-relay + automatic discovery — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Inferenza distribuita che funziona **LAN e internet senza VPN**: i nodi worker si connettono in uscita a un **coordinator** pubblicamente raggiungibile che fa **discovery automatica** (registry dei blocchi) e **instrada** le attivazioni; `axyn infer` è un client sottile.
+**Goal:** Distributed inference that works **on LAN and over the internet without a VPN**: worker nodes connect outbound to a publicly reachable **coordinator** that performs **automatic discovery** (block registry) and **routes** activations; `axyn infer` is a thin client.
 
-**Architecture:** Vedi [ADR-0002](../decisions/ADR-0002-connettivita-nat.md). Coordinator-relay di Milestone 0: WebSocket outbound nodo→coordinator (NAT-friendly); il coordinator tiene il registry, calcola la coverage, e guida il loop di generazione relayando ogni hop al nodo giusto. Riusa l'esecuzione a blocchi e il wire safetensors di Parte 1; cambia solo il *trasporto* (WS relay invece di POST diretti).
+**Architecture:** See [ADR-0002](../decisions/ADR-0002-nat-connectivity.md). Milestone 0 coordinator-relay: outbound WebSocket node→coordinator (NAT-friendly); the coordinator holds the registry, computes coverage, and drives the generation loop by relaying each hop to the right node. It reuses the block execution and the safetensors wire from Part 1; only the *transport* changes (WS relay instead of direct POSTs).
 
-**Tech Stack:** Python · FastAPI WebSocket (coordinator) · `websockets` lib (client nodo) · httpx (client infer) · safetensors · asyncio · l'esistente `axyn/net/` e `axyn/model/`.
+**Tech Stack:** Python · FastAPI WebSocket (coordinator) · `websockets` lib (node client) · httpx (infer client) · safetensors · asyncio · the existing `axyn/net/` and `axyn/model/`.
 
-**Decisioni:** framing binario `4-byte len + JSON header + payload safetensors`; correlazione richiesta/risposta via `req_id` + Future; greedy/argmax; il coordinator possiede il tokenizer; coverage = i range decoder annunciati tassellano `[0, num_layers)`.
+**Decisions:** binary framing `4-byte len + JSON header + safetensors payload`; request/response correlation via `req_id` + Future; greedy/argmax; the coordinator owns the tokenizer; coverage = the announced decoder ranges tile `[0, num_layers)`.
 
-**Fuori scope:** libp2p nativo / hole-punching (futuro, rimuove il coordinator); failover su nodo caduto e store-and-forward durevole (Parte 3); multi-coordinator; auth.
+**Out of scope:** native libp2p / hole-punching (future, removes the coordinator); failover on a downed node and durable store-and-forward (Part 3); multi-coordinator; auth.
 
 ---
 
@@ -19,25 +19,25 @@
 ```
 pyproject.toml                  # + websockets
 axyn/net/
-  framing.py                    # pack()/unpack() — header+payload in un frame
-  node_exec.py                  # NodeState + handle_request() (esecuzione hop, testabile)
-  node.py                       # run_node() — client WS verso il coordinator
-  discovery.py                  # build_chain() — topologia+coverage dal registry
+  framing.py                    # pack()/unpack() — header+payload in one frame
+  node_exec.py                  # NodeState + handle_request() (hop execution, testable)
+  node.py                       # run_node() — WS client toward the coordinator
+  discovery.py                  # build_chain() — topology+coverage from the registry
   coordinator.py                # create_coordinator_app() — WS /node, /registry, POST /infer
 axyn/cli.py                  # + coordinator ; serve --coordinator ; infer --coordinator
 tests/
-  test_framing.py               # round-trip (veloce)
-  test_discovery.py             # build_chain (veloce)
+  test_framing.py               # round-trip (fast)
+  test_discovery.py             # build_chain (fast)
   test_node_exec.py             # handle_request greedy == reference (slow)
-  test_coordinator_e2e.py       # coordinator + 2 nodi reali, /infer == reference (slow)
+  test_coordinator_e2e.py       # coordinator + 2 real nodes, /infer == reference (slow)
   test_cli_coordinator.py       # `axyn infer --coordinator` end-to-end (slow)
 docs/
-  examples/coordinator.md       # quickstart NAT/internet
+  examples/coordinator.md       # NAT/internet quickstart
 ```
 
 ---
 
-## Task 1: framing (header + payload in un frame)
+## Task 1: framing (header + payload in one frame)
 
 **Files:** create `axyn/net/framing.py`, `tests/test_framing.py`.
 
@@ -62,20 +62,20 @@ def test_roundtrip_empty_payload():
 
 - [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_framing.py -v` → ImportError.
 
-- [ ] **Step 3: implementa `axyn/net/framing.py`**
+- [ ] **Step 3: implement `axyn/net/framing.py`**
 ```python
 import json
 import struct
 
 
 def pack(header: dict, payload: bytes = b"") -> bytes:
-    """Un frame = uint32 big-endian (lunghezza header JSON) + header + payload."""
+    """One frame = uint32 big-endian (JSON header length) + header + payload."""
     hb = json.dumps(header).encode("utf-8")
     return struct.pack(">I", len(hb)) + hb + payload
 
 
 def unpack(data: bytes):
-    """Inverso di pack(). Ritorna (header: dict, payload: bytes)."""
+    """Inverse of pack(). Returns (header: dict, payload: bytes)."""
     n = struct.unpack(">I", data[:4])[0]
     header = json.loads(data[4:4 + n].decode("utf-8"))
     return header, data[4 + n:]
@@ -85,12 +85,12 @@ def unpack(data: bytes):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/framing.py tests/test_framing.py && git commit -m "feat(net): framing header+payload per il relay WebSocket"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/framing.py tests/test_framing.py && git commit -m "feat(net): framing header+payload for the WebSocket relay"
 ```
 
 ---
 
-## Task 2: discovery `build_chain` (topologia + coverage dal registry)
+## Task 2: discovery `build_chain` (topology + coverage from the registry)
 
 **Files:** create `axyn/net/discovery.py`, `tests/test_discovery.py`.
 
@@ -117,7 +117,7 @@ def test_build_chain_two_nodes_full_coverage():
 
 
 def test_build_chain_incomplete_coverage_returns_none():
-    reg = {"A": {"embed": True, "head": True, "decoders": ["0-12"]}}  # manca 12-24
+    reg = {"A": {"embed": True, "head": True, "decoders": ["0-12"]}}  # missing 12-24
     assert build_chain(reg, 24) is None
 
 
@@ -128,12 +128,12 @@ def test_build_chain_missing_embed_returns_none():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_discovery.py -v` → ImportError.
 
-- [ ] **Step 3: implementa `axyn/net/discovery.py`**
+- [ ] **Step 3: implement `axyn/net/discovery.py`**
 ```python
 def build_chain(registry: dict, num_layers: int):
-    """Dal registry {conn_id: {'embed','head','decoders':[block_key]}} costruisce
-    (embed_conn, [(block_key, conn)...], head_conn) che tassella [0, num_layers).
-    Ritorna None se la coverage è incompleta o manca embed/head."""
+    """From the registry {conn_id: {'embed','head','decoders':[block_key]}} builds
+    (embed_conn, [(block_key, conn)...], head_conn) that tiles [0, num_layers).
+    Returns None if coverage is incomplete or embed/head is missing."""
     embed_c = next((cid for cid, s in registry.items() if s.get("embed")), None)
     head_c = next((cid for cid, s in registry.items() if s.get("head")), None)
     if embed_c is None or head_c is None:
@@ -161,12 +161,12 @@ def build_chain(registry: dict, num_layers: int):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): build_chain (topologia + coverage dal registry del coordinator)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): build_chain (topology + coverage from the coordinator registry)"
 ```
 
 ---
 
-## Task 3: `NodeState` + `handle_request` (esecuzione hop)
+## Task 3: `NodeState` + `handle_request` (hop execution)
 
 **Files:** create `axyn/net/node_exec.py`, `tests/test_node_exec.py`.
 
@@ -183,8 +183,8 @@ from axyn.model.generate import reference_generate
 @pytest.mark.slow
 def test_handle_request_greedy_matches_reference(full_model):
     model, tokenizer = full_model
-    ids = tokenizer("La capitale dell'Italia è", return_tensors="pt").input_ids
-    reference = reference_generate(model, ids, max_new_tokens=6)   # PRIMA di NodeState (remap)
+    ids = tokenizer("The capital of Italy is", return_tensors="pt").input_ids
+    reference = reference_generate(model, ids, max_new_tokens=6)   # BEFORE NodeState (remap)
 
     state = NodeState(model, StageSpec(embed=True, head=True, decoders=[(0, 24)]))
     L = ids.shape[1]
@@ -207,14 +207,14 @@ def test_handle_request_greedy_matches_reference(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_node_exec.py -m slow -v` → ImportError.
 
-- [ ] **Step 3: implementa `axyn/net/node_exec.py`**
+- [ ] **Step 3: implement `axyn/net/node_exec.py`**
 ```python
 from axyn.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
 from axyn.net.wire import encode_tensors, decode_tensors
 
 
 class NodeState:
-    """Stato locale di un nodo worker: blocchi serviti + KV-cache per-job."""
+    """Local state of a worker node: served blocks + per-job KV-cache."""
     def __init__(self, model, stages):
         self.embed_block = EmbedBlock(model.model.embed_tokens) if stages.embed else None
         self.head_block = HeadBlock(model.model.norm, model.lm_head) if stages.head else None
@@ -228,7 +228,7 @@ class NodeState:
 
 
 def handle_request(state: NodeState, header: dict, payload: bytes):
-    """Esegue un hop. Ritorna (resp_header: dict, resp_payload: bytes)."""
+    """Executes one hop. Returns (resp_header: dict, resp_payload: bytes)."""
     op = header["op"]
     if op == "embed":
         t = decode_tensors(payload)
@@ -252,23 +252,23 @@ def handle_request(state: NodeState, header: dict, payload: bytes):
     if op == "end":
         state.jobs.pop(header["job_id"], None)
         return {"ok": True}, b""
-    return {"ok": False, "error": f"op sconosciuta: {op}"}, b""
+    return {"ok": False, "error": f"unknown op: {op}"}, b""
 ```
 
 - [ ] **Step 4: run PASS** — `... pytest tests/test_node_exec.py -m slow -v` → PASS.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/node_exec.py tests/test_node_exec.py && git commit -m "feat(net): NodeState + handle_request (esecuzione hop per il relay)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/node_exec.py tests/test_node_exec.py && git commit -m "feat(net): NodeState + handle_request (hop execution for the relay)"
 ```
 
 ---
 
-## Task 4: coordinator + node client + golden distribuito via relay
+## Task 4: coordinator + node client + distributed golden via relay
 
 **Files:** modify `pyproject.toml`; create `axyn/net/coordinator.py`, `axyn/net/node.py`, `tests/test_coordinator_e2e.py`.
 
-- [ ] **Step 1: aggiungi `websockets` a `pyproject.toml`** (lista `dependencies`): `"websockets>=12"`. Poi `cd /Users/alberto/Projects/AI/axyn && .venv/bin/pip install -e ".[dev]"`. (Se la rete è giù e `websockets` non è importabile, BLOCKED.)
+- [ ] **Step 1: add `websockets` to `pyproject.toml`** (`dependencies` list): `"websockets>=12"`. Then `cd /Users/alberto/Projects/AI/axyn && .venv/bin/pip install -e ".[dev]"`. (If the network is down and `websockets` is not importable, BLOCKED.)
 
 - [ ] **Step 2: test `tests/test_coordinator_e2e.py`**
 ```python
@@ -313,8 +313,8 @@ def _run_node_thread(ws_url, state):
 @pytest.mark.slow
 def test_two_nodes_via_coordinator_match_reference(full_model):
     model, tokenizer = full_model
-    ids = tokenizer("La capitale dell'Italia è", return_tensors="pt").input_ids
-    reference = reference_generate(model, ids, max_new_tokens=6)   # PRIMA dei NodeState
+    ids = tokenizer("The capital of Italy is", return_tensors="pt").input_ids
+    reference = reference_generate(model, ids, max_new_tokens=6)   # BEFORE the NodeStates
 
     port = _free_port()
     app = create_coordinator_app("Qwen/Qwen2.5-0.5B-Instruct", num_layers=24, tokenizer=tokenizer)
@@ -324,7 +324,7 @@ def test_two_nodes_via_coordinator_match_reference(full_model):
         _run_node_thread(ws_url, NodeState(model, StageSpec(embed=True, decoders=[(0, 12)])))
         _run_node_thread(ws_url, NodeState(model, StageSpec(head=True, decoders=[(12, 24)])))
 
-        # attende che entrambi i nodi siano registrati e la coverage sia completa
+        # waits until both nodes are registered and coverage is complete
         with httpx.Client(timeout=30.0) as client:
             for _ in range(200):
                 reg = client.get(f"http://127.0.0.1:{port}/registry").json()
@@ -332,7 +332,7 @@ def test_two_nodes_via_coordinator_match_reference(full_model):
                     break
                 time.sleep(0.05)
             r = client.post(f"http://127.0.0.1:{port}/infer",
-                            json={"prompt": "La capitale dell'Italia è", "max_new_tokens": 6})
+                            json={"prompt": "The capital of Italy is", "max_new_tokens": 6})
             data = r.json()
         assert data["ok"] is True, data
         assert data["tokens"] == reference
@@ -342,7 +342,7 @@ def test_two_nodes_via_coordinator_match_reference(full_model):
 
 - [ ] **Step 3: run FAIL** — `... pytest tests/test_coordinator_e2e.py -m slow -v` → ImportError.
 
-- [ ] **Step 4: implementa `axyn/net/coordinator.py`**
+- [ ] **Step 4: implement `axyn/net/coordinator.py`**
 ```python
 import asyncio
 
@@ -355,8 +355,8 @@ from axyn.net.discovery import build_chain
 
 
 def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
-    """Coordinator-relay: i nodi si connettono via WS e annunciano gli stage; POST /infer
-    guida la generazione relayando ogni hop al nodo giusto."""
+    """Coordinator-relay: nodes connect via WS and announce their stages; POST /infer
+    drives generation by relaying each hop to the right node."""
     app = FastAPI()
     conns = {}        # conn_id -> {"ws", "stages", "pending": {req_id: Future}}
     counter = {"n": 0}
@@ -400,7 +400,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
         max_new = int(body.get("max_new_tokens", 8))
         chain = build_chain({cid: c["stages"] for cid, c in conns.items()}, num_layers)
         if chain is None:
-            return {"ok": False, "error": "modello non operativo: coverage incompleta"}
+            return {"ok": False, "error": "model not operational: incomplete coverage"}
         embed_c, decoders, head_c = chain
 
         ids = tokenizer(prompt, return_tensors="pt").input_ids
@@ -435,7 +435,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
     return app
 ```
 
-- [ ] **Step 5: implementa `axyn/net/node.py`**
+- [ ] **Step 5: implement `axyn/net/node.py`**
 ```python
 import asyncio
 
@@ -446,8 +446,8 @@ from axyn.net.node_exec import handle_request
 
 
 async def run_node(coordinator_ws_url: str, state):
-    """Si connette (outbound, NAT-friendly) al coordinator, annuncia gli stage e serve
-    gli hop relayati. Il calcolo torch gira in un executor per non bloccare il loop."""
+    """Connects (outbound, NAT-friendly) to the coordinator, announces its stages and serves
+    the relayed hops. The torch computation runs in an executor so it does not block the loop."""
     async with websockets.connect(coordinator_ws_url, max_size=None) as ws:
         await ws.send(pack({"type": "announce", "stages": state.stages_dict()}))
         loop = asyncio.get_event_loop()
@@ -458,11 +458,11 @@ async def run_node(coordinator_ws_url: str, state):
             await ws.send(pack({**resp_header, "req_id": header.get("req_id")}, resp_payload))
 ```
 
-- [ ] **Step 6: run PASS** — `... pytest tests/test_coordinator_e2e.py -m slow -v` → PASS (2 nodi via relay == reference). Se i nodi non si registrano, aumenta l'attesa; verifica che `websockets.connect` usi l'URL `ws://`.
+- [ ] **Step 6: run PASS** — `... pytest tests/test_coordinator_e2e.py -m slow -v` → PASS (2 nodes via relay == reference). If the nodes do not register, increase the wait; verify that `websockets.connect` uses the `ws://` URL.
 
 - [ ] **Step 7: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add pyproject.toml axyn/net/coordinator.py axyn/net/node.py tests/test_coordinator_e2e.py && git commit -m "feat(net): coordinator-relay + node WS client (golden distribuito via relay)"
+cd /Users/alberto/Projects/AI/axyn && git add pyproject.toml axyn/net/coordinator.py axyn/net/node.py tests/test_coordinator_e2e.py && git commit -m "feat(net): coordinator-relay + node WS client (distributed golden via relay)"
 ```
 
 ---
@@ -516,7 +516,7 @@ def _run_node_thread(ws_url, state):
 @pytest.mark.slow
 def test_cli_infer_via_coordinator(full_model):
     model, tokenizer = full_model
-    ids = tokenizer("La capitale dell'Italia è", return_tensors="pt").input_ids
+    ids = tokenizer("The capital of Italy is", return_tensors="pt").input_ids
     reference = reference_generate(model, ids, max_new_tokens=6)
 
     port = _free_port()
@@ -533,7 +533,7 @@ def test_cli_infer_via_coordinator(full_model):
                 time.sleep(0.05)
 
         result = runner.invoke(cli_app, ["--json", "infer", "--coordinator", f"http://127.0.0.1:{port}",
-                                         "--prompt", "La capitale dell'Italia è", "--max-new-tokens", "6"])
+                                         "--prompt", "The capital of Italy is", "--max-new-tokens", "6"])
         assert result.exit_code == 0, result.stdout
         payload = json.loads(result.stdout)
         assert payload["ok"] is True
@@ -542,28 +542,28 @@ def test_cli_infer_via_coordinator(full_model):
         server.should_exit = True
 ```
 
-- [ ] **Step 2: run FAIL** — `... pytest tests/test_cli_coordinator.py -m slow -v` → FAIL (manca `--coordinator`).
+- [ ] **Step 2: run FAIL** — `... pytest tests/test_cli_coordinator.py -m slow -v` → FAIL (`--coordinator` missing).
 
-- [ ] **Step 3: modifica `axyn/cli.py`**
+- [ ] **Step 3: modify `axyn/cli.py`**
 
-Aggiungi import vicino agli altri `from axyn.net...`:
+Add imports near the other `from axyn.net...`:
 ```python
 from axyn.net.node_exec import NodeState
 from axyn.net.node import run_node
 from axyn.net.coordinator import create_coordinator_app
 from axyn.model.loader import model_config_dims
 ```
-(se `model_config_dims` è già importato, non duplicarlo.)
+(if `model_config_dims` is already imported, do not duplicate it.)
 
-Aggiungi il comando `coordinator` (dopo `serve`):
+Add the `coordinator` command (after `serve`):
 ```python
 @app.command()
 def coordinator(
-    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="ID del modello (per tokenizer + num_layers)"),
-    host: str = typer.Option("0.0.0.0", "--host", help="Host di ascolto"),
-    port: int = typer.Option(9000, "--port", help="Porta di ascolto"),
+    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="Model ID (for tokenizer + num_layers)"),
+    host: str = typer.Option("0.0.0.0", "--host", help="Listen host"),
+    port: int = typer.Option(9000, "--port", help="Listen port"),
 ):
-    """Avvia il coordinator-relay (deve essere raggiungibile dai nodi)."""
+    """Start the coordinator-relay (must be reachable by the nodes)."""
     import uvicorn
     from transformers import AutoTokenizer
     try:
@@ -572,22 +572,22 @@ def coordinator(
     except Exception as e:
         _fail("coordinator", "MODEL_LOAD_FAILED", str(e))
     coord_app = create_coordinator_app(model_id, num_layers, tokenizer)
-    typer.echo(f"axyn coordinator: model={model_id} layers={num_layers} su http://{host}:{port}", err=True)
+    typer.echo(f"axyn coordinator: model={model_id} layers={num_layers} on http://{host}:{port}", err=True)
     uvicorn.run(coord_app, host=host, port=port, log_level="info")
 ```
 
-Modifica `serve` per supportare la modalità coordinator (connessione in uscita). Aggiungi un'opzione `--coordinator` e, se presente, avvia il client nodo invece del server HTTP. Sostituisci il corpo di `serve` con:
+Modify `serve` to support coordinator mode (outbound connection). Add a `--coordinator` option and, if present, start the node client instead of the HTTP server. Replace the body of `serve` with:
 ```python
 @app.command()
 def serve(
-    stages: str = typer.Option(..., "--stages", help="Stage serviti, es. 'embed,decoder:0-12'"),
-    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="ID del modello Hugging Face"),
-    coordinator: str = typer.Option(None, "--coordinator", help="URL WS del coordinator (es. ws://host:9000/node). Se assente, avvia un server HTTP diretto (modalità LAN/topologia statica)."),
-    host: str = typer.Option("0.0.0.0", "--host", help="[modalità diretta] host di ascolto"),
-    port: int = typer.Option(8001, "--port", help="[modalità diretta] porta di ascolto"),
+    stages: str = typer.Option(..., "--stages", help="Served stages, e.g. 'embed,decoder:0-12'"),
+    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="Hugging Face model ID"),
+    coordinator: str = typer.Option(None, "--coordinator", help="Coordinator WS URL (e.g. ws://host:9000/node). If absent, starts a direct HTTP server (LAN/static-topology mode)."),
+    host: str = typer.Option("0.0.0.0", "--host", help="[direct mode] listen host"),
+    port: int = typer.Option(8001, "--port", help="[direct mode] listen port"),
 ):
-    """Avvia un nodo worker. Con --coordinator si connette in uscita (NAT-friendly);
-    senza, espone un BlockServer HTTP diretto (richiede raggiungibilità diretta)."""
+    """Start a worker node. With --coordinator it connects outbound (NAT-friendly);
+    without it, exposes a direct HTTP BlockServer (requires direct reachability)."""
     try:
         spec = parse_stages(stages)
     except ValueError as e:
@@ -606,20 +606,20 @@ def serve(
     else:
         import uvicorn
         fastapi_app = create_app(model, tokenizer, spec)
-        typer.echo(f"axyn serve (diretto): stages={stages} su http://{host}:{port}", err=True)
+        typer.echo(f"axyn serve (direct): stages={stages} on http://{host}:{port}", err=True)
         uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
 ```
 
-Modifica `infer` per supportare `--coordinator` (client sottile) accanto al `--topology` esistente. Sostituisci la firma e l'inizio di `infer` così che `--topology` e `--coordinator` siano alternativi:
+Modify `infer` to support `--coordinator` (thin client) alongside the existing `--topology`. Replace the signature and the start of `infer` so that `--topology` and `--coordinator` are mutually exclusive:
 ```python
 @app.command()
 def infer(
-    prompt: str = typer.Option(..., "--prompt", help="Prompt ('-' legge da stdin)"),
-    topology: str = typer.Option(None, "--topology", help="[modalità diretta] file JSON di topologia statica"),
-    coordinator: str = typer.Option(None, "--coordinator", help="[modalità coordinator] URL HTTP del coordinator"),
-    max_new_tokens: int = typer.Option(8, "--max-new-tokens", help="Numero di token da generare"),
+    prompt: str = typer.Option(..., "--prompt", help="Prompt ('-' reads from stdin)"),
+    topology: str = typer.Option(None, "--topology", help="[direct mode] static-topology JSON file"),
+    coordinator: str = typer.Option(None, "--coordinator", help="[coordinator mode] coordinator HTTP URL"),
+    max_new_tokens: int = typer.Option(8, "--max-new-tokens", help="Number of tokens to generate"),
 ):
-    """Inferenza distribuita: via coordinator (--coordinator) o topologia statica (--topology)."""
+    """Distributed inference: via coordinator (--coordinator) or static topology (--topology)."""
     import httpx
     prompt = _read_prompt(prompt)
     if coordinator:
@@ -631,19 +631,19 @@ def infer(
         except Exception as e:
             _fail("infer", "GENERATION_FAILED", str(e))
         if not body.get("ok"):
-            _fail("infer", "NOT_OPERATIONAL", body.get("error", "coordinator non pronto"))
+            _fail("infer", "NOT_OPERATIONAL", body.get("error", "coordinator not ready"))
         _emit_ok("infer", body, human=body["text"])
         return
     if not topology:
-        _fail("infer", "USAGE_ERROR", "specificare --coordinator oppure --topology", exit_code=2)
-    # ---- modalità topologia statica (Parte 1) ----
+        _fail("infer", "USAGE_ERROR", "specify --coordinator or --topology", exit_code=2)
+    # ---- static topology mode (Part 1) ----
     from transformers import AutoTokenizer
     from axyn.net.orchestrator import distributed_generate
     try:
         with open(topology) as f:
             topo = load_topology(_json.loads(f.read()))
     except Exception as e:
-        _fail("infer", "USAGE_ERROR", f"topologia non leggibile: {e}", exit_code=2)
+        _fail("infer", "USAGE_ERROR", f"topology not readable: {e}", exit_code=2)
     try:
         tokenizer = AutoTokenizer.from_pretrained(topo.model)
     except Exception as e:
@@ -655,65 +655,65 @@ def infer(
         _fail("infer", "GENERATION_FAILED", str(e))
     _emit_ok("infer", {"model": topo.model, "prompt": prompt, **result}, human=result["text"])
 ```
-> Nota: questo sostituisce il comando `infer` di Parte 1 mantenendone la modalità `--topology`. Assicurati che gli import duplicati (`AutoTokenizer`, `distributed_generate`) non siano già a livello modulo in modo conflittuale; vanno bene come import locali.
+> Note: this replaces the Part 1 `infer` command while preserving its `--topology` mode. Make sure the duplicate imports (`AutoTokenizer`, `distributed_generate`) are not already at module level in a conflicting way; they are fine as local imports.
 
-- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_coordinator.py -m slow -v` → PASS. Verifica anche `cd /Users/alberto/Projects/AI/axyn && .venv/bin/axyn --help` elenca `coordinator`.
+- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_coordinator.py -m slow -v` → PASS. Also verify that `cd /Users/alberto/Projects/AI/axyn && .venv/bin/axyn --help` lists `coordinator`.
 
-- [ ] **Step 5: assicura che i test di Parte 1 (`tests/test_cli_infer.py`) passino ancora** (modalità `--topology` invariata):
+- [ ] **Step 5: ensure the Part 1 tests (`tests/test_cli_infer.py`) still pass** (`--topology` mode unchanged):
 `... pytest tests/test_cli_infer.py -m slow -v` → PASS.
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli_coordinator.py && git commit -m "feat(cli): comando coordinator + serve/infer in modalità coordinator (NAT-friendly)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli_coordinator.py && git commit -m "feat(cli): coordinator command + serve/infer in coordinator mode (NAT-friendly)"
 ```
 
 ---
 
-## Task 6: quickstart NAT/internet + suite + ROADMAP
+## Task 6: NAT/internet quickstart + suite + ROADMAP
 
 **Files:** create `docs/examples/coordinator.md`; modify `README.md`, `docs/ROADMAP.md`.
 
-- [ ] **Step 1: crea `docs/examples/coordinator.md`** con il quickstart:
+- [ ] **Step 1: create `docs/examples/coordinator.md`** with the quickstart:
 ```markdown
-# Quickstart — coordinator (LAN e internet, senza VPN)
+# Quickstart — coordinator (LAN and internet, without a VPN)
 
-I nodi worker si connettono **in uscita** al coordinator: funzionano dietro NAT senza port-forwarding. Solo il **coordinator** deve essere raggiungibile (IP pubblico / VPS / un solo port-forward).
+Worker nodes connect **outbound** to the coordinator: they work behind NAT without port-forwarding. Only the **coordinator** has to be reachable (public IP / VPS / a single port-forward).
 
 ```bash
-# 1) Coordinator (su una macchina raggiungibile dagli altri; es. IP pubblico 203.0.113.5)
+# 1) Coordinator (on a machine reachable by the others; e.g. public IP 203.0.113.5)
 axyn coordinator --model Qwen/Qwen2.5-0.5B-Instruct --port 9000
 
-# 2) Nodo A (qualsiasi rete, dietro NAT) — embedding + primi 12 layer
+# 2) Node A (any network, behind NAT) — embedding + first 12 layers
 axyn serve --coordinator ws://203.0.113.5:9000/node --stages "embed,decoder:0-12"
 
-# 3) Nodo B (altra rete) — ultimi 12 layer + head
+# 3) Node B (another network) — last 12 layers + head
 axyn serve --coordinator ws://203.0.113.5:9000/node --stages "decoder:12-24,head"
 
-# 4) Inferenza (client sottile, da qualunque rete)
-axyn --json infer --coordinator http://203.0.113.5:9000 --prompt "La capitale dell'Italia è"
+# 4) Inference (thin client, from any network)
+axyn --json infer --coordinator http://203.0.113.5:9000 --prompt "The capital of Italy is"
 ```
 
-Il coordinator calcola la coverage: finché embed + tutti i range decoder + head non sono coperti, `infer` risponde `NOT_OPERATIONAL`. In LAN, metti il coordinator su un IP locale. Con una VPN, usa l'IP della VPN.
+The coordinator computes coverage: until embed + all decoder ranges + head are covered, `infer` responds `NOT_OPERATIONAL`. On a LAN, put the coordinator on a local IP. With a VPN, use the VPN IP.
 ```
 
-- [ ] **Step 2: aggiungi un richiamo nel `README.md`** (dopo la sezione "Quickstart multi-nodo"): una frase + link a `docs/examples/coordinator.md` per la modalità coordinator (LAN/internet senza VPN).
+- [ ] **Step 2: add a pointer in `README.md`** (after the "Multi-node quickstart" section): one sentence + a link to `docs/examples/coordinator.md` for the coordinator mode (LAN/internet without a VPN).
 
-- [ ] **Step 3: aggiorna `docs/ROADMAP.md`** — sotto "Discovery & Routing" segna discovery automatica via coordinator-relay come fatta (link a [ADR-0002](./decisions/ADR-0002-connettivita-nat.md) e a questo piano), e aggiorna la riga "Ultimo aggiornamento". Nota: failover e libp2p nativo restano da fare.
+- [ ] **Step 3: update `docs/ROADMAP.md`** — under "Discovery & Routing" mark automatic discovery via coordinator-relay as done (link to [ADR-0002](../decisions/ADR-0002-nat-connectivity.md) and to this plan), and update the "Last updated" line. Note: failover and native libp2p remain to be done.
 
-- [ ] **Step 4: suite completa** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q -p no:warnings` → tutti PASS.
+- [ ] **Step 4: full suite** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q -p no:warnings` → all PASS.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add docs/examples/coordinator.md README.md docs/ROADMAP.md && git commit -m "docs: quickstart coordinator (LAN/internet senza VPN); ROADMAP discovery"
+cd /Users/alberto/Projects/AI/axyn && git add docs/examples/coordinator.md README.md docs/ROADMAP.md && git commit -m "docs: coordinator quickstart (LAN/internet without a VPN); ROADMAP discovery"
 ```
 
 ---
 
 ## Self-Review
 
-**Coverage (ADR-0002 + PRD Parte 2):** discovery automatica via registry (Task 4 coordinator + Task 2 build_chain) ✓; transport NAT-friendly outbound WS (Task 4 node.py) ✓; coverage gate ✓; CLI `coordinator`/`serve --coordinator`/`infer --coordinator` ✓; modalità diretta Parte 1 conservata ✓; quickstart internet ✓. Failover/libp2p esplicitamente fuori scope.
+**Coverage (ADR-0002 + Part 2 PRD):** automatic discovery via registry (Task 4 coordinator + Task 2 build_chain) ✓; NAT-friendly outbound WS transport (Task 4 node.py) ✓; coverage gate ✓; CLI `coordinator`/`serve --coordinator`/`infer --coordinator` ✓; Part 1 direct mode preserved ✓; internet quickstart ✓. Failover/libp2p explicitly out of scope.
 
-**Placeholder scan:** nessun TODO/TBD; codice completo.
+**Placeholder scan:** no TODO/TBD; code complete.
 
-**Type consistency:** `pack/unpack`, `NodeState.stages_dict()`, `handle_request(state, header, payload)->(header,payload)`, `build_chain(registry, num_layers)->(embed,decoders,head)|None`, `create_coordinator_app(model_id, num_layers, tokenizer)`, `run_node(ws_url, state)` coerenti tra i task. Reference catturato PRIMA di `NodeState` (che chiama `prepare_decoder_block`, muta `layer_idx`).
+**Type consistency:** `pack/unpack`, `NodeState.stages_dict()`, `handle_request(state, header, payload)->(header,payload)`, `build_chain(registry, num_layers)->(embed,decoders,head)|None`, `create_coordinator_app(model_id, num_layers, tokenizer)`, `run_node(ws_url, state)` consistent across the tasks. Reference captured BEFORE `NodeState` (which calls `prepare_decoder_block`, mutating `layer_idx`).
 ```
