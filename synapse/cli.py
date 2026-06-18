@@ -63,6 +63,19 @@ def _fail(command: str, code: str, message: str, exit_code: int = 1):
     raise typer.Exit(exit_code)
 
 
+def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
+                     stages_by_url: dict, target: int) -> str:
+    """Decide lo stage spec da rivendicare combinando capacita (fit) e buchi (gaps)."""
+    from synapse.net.capacity import fit_layers
+    from synapse.net.discovery import coverage_gaps
+    from synapse.net.allocator import choose_stages
+    nl = dims["num_layers"]
+    fit = fit_layers(dims, bytes_per, ram_gb, reserve)
+    gaps = coverage_gaps(stages_by_url, nl, target=target)
+    take_eh = fit["fits_whole_model"] or fit["max_decoder_layers"] >= nl
+    return choose_stages(gaps, fit["max_decoder_layers"], nl, take_embed_head=take_eh)
+
+
 @app.command()
 def version():
     """Stampa la versione del pacchetto."""
@@ -241,7 +254,7 @@ def selfcheck(
 
 @app.command()
 def serve(
-    stages: str = typer.Option(..., "--stages", help="Stage serviti, es. 'embed,decoder:0-12'"),
+    stages: str = typer.Option(None, "--stages", help="Stage serviti, es. 'embed,decoder:0-12'"),
     model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="ID del modello Hugging Face"),
     host: str = typer.Option("0.0.0.0", "--host", help="Host di ascolto"),
     port: int = typer.Option(8001, "--port", help="Porta di ascolto"),
@@ -250,12 +263,36 @@ def serve(
     num_layers: int = typer.Option(None, "--num-layers", help="Numero totale layer (per coverage). Default: dal config."),
     coordinator: str = typer.Option(None, "--coordinator", help="URL WS del coordinator (es. ws://host:9000/node). Se presente, il nodo si connette in uscita invece di esporre un server diretto."),
     dtype: str = typer.Option("float32", "--dtype", help="float32 | bfloat16 | float16 (bf16 per modelli grandi)"),
+    auto: bool = typer.Option(False, "--auto", help="Auto-assegna i layer dai buchi del registry + capacita RAM"),
+    ram: float = typer.Option(None, "--ram", help="RAM da usare per l'auto-assegnazione, GB (default: rilevata)"),
+    reserve: float = typer.Option(0.2, "--reserve", help="Frazione RAM riservata (auto)"),
+    target: int = typer.Option(1, "--target", help="Replica desiderata per range (auto; 2 = ridondanza)"),
 ):
     """Avvia un BlockServer che ospita gli stage indicati (processo a lunga durata).
 
     Carica in RAM SOLO i layer assegnati (partial loading): un nodo non deve avere
     risorse per il modello intero, basta per i suoi stage."""
     import uvicorn
+    if auto:
+        import torch
+        import httpx
+        from synapse.net.capacity import probe_capacity
+        from synapse.config import parse_dtype as _pdt
+        _bp = torch.finfo(_pdt(dtype)).bits // 8
+        dims = model_config_dims(model_id)
+        ram_gb = ram if ram is not None else (probe_capacity().get("ram_free_gb") or 4.0)
+        learned = {}
+        for seed in ([p.strip() for p in peers.split(",")] if peers else []):
+            try:
+                learned.update(httpx.get(f"{seed}/registry", timeout=5).json().get("nodes", {}))
+            except Exception:
+                pass
+        stages = plan_auto_stages(dims, _bp, ram_gb, reserve, learned, target)
+        if not stages:
+            _fail("serve", "NO_GAP", "nessun range da coprire (coverage completa o RAM insufficiente)", exit_code=2)
+        typer.echo(f"synapse serve --auto: rivendico stages={stages} (ram={ram_gb}GB, target={target})", err=True)
+    elif stages is None:
+        _fail("serve", "USAGE_ERROR", "specifica --stages oppure --auto", exit_code=2)
     try:
         spec = parse_stages(stages)
     except ValueError as e:

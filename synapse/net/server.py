@@ -25,6 +25,8 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
     prepared = {f"{lo}-{hi}": prepare_decoder_block(model, lo, hi) for (lo, hi) in stages.decoders}
     jobs = {}
     own_stages = {"embed": stages.embed, "head": stages.head, "decoders": list(prepared.keys())}
+    from synapse.net.capacity import probe_capacity
+    own_stages["capacity"] = probe_capacity()
     registry = Registry()
     if node_url:
         registry.upsert(node_url, own_stages, now=time.time(), ttl=ttl)
