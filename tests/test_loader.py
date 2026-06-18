@@ -1,5 +1,5 @@
 import pytest
-from synapse.model.loader import model_dims
+from axyn.model.loader import model_dims
 
 @pytest.mark.slow
 def test_loads_with_expected_dims(full_model):

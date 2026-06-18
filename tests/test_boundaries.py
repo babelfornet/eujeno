@@ -1,5 +1,5 @@
 import pytest
-from synapse.model.blocks import compute_boundaries
+from axyn.model.blocks import compute_boundaries
 
 
 def test_even_split():

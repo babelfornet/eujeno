@@ -1,7 +1,7 @@
 import json
 import pytest
 from typer.testing import CliRunner
-from synapse.cli import app
+from axyn.cli import app
 
 runner = CliRunner()
 
@@ -18,7 +18,7 @@ def test_version_json_is_valid_envelope():
 def test_version_text_mode():
     result = runner.invoke(app, ["version"])
     assert result.exit_code == 0
-    assert "synapse" in result.stdout
+    assert "axyn" in result.stdout
 
 
 @pytest.mark.slow

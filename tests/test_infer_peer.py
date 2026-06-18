@@ -7,10 +7,10 @@ import pytest
 import uvicorn
 
 from typer.testing import CliRunner
-from synapse.cli import app as cli_app
-from synapse.net.topology import StageSpec
-from synapse.net.server import create_app
-from synapse.model.generate import reference_generate
+from axyn.cli import app as cli_app
+from axyn.net.topology import StageSpec
+from axyn.net.server import create_app
+from axyn.model.generate import reference_generate
 
 runner = CliRunner()
 

@@ -1,9 +1,9 @@
 import pytest
 import torch
-from synapse.net.node_exec import NodeState, handle_request
-from synapse.net.wire import encode_tensors, decode_tensors
-from synapse.net.topology import StageSpec
-from synapse.model.generate import reference_generate
+from axyn.net.node_exec import NodeState, handle_request
+from axyn.net.wire import encode_tensors, decode_tensors
+from axyn.net.topology import StageSpec
+from axyn.model.generate import reference_generate
 
 
 @pytest.mark.slow

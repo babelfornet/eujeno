@@ -1,6 +1,6 @@
 import json
 from typer.testing import CliRunner
-from synapse.cli import app
+from axyn.cli import app
 
 runner = CliRunner()
 
@@ -15,7 +15,7 @@ def test_models_lists_examples():
 
 def test_up_dry_run_prints_commands(monkeypatch):
     # evita il download config: stub model_config_dims
-    import synapse.cli as cli
+    import axyn.cli as cli
     monkeypatch.setattr(cli, "model_config_dims", lambda mid: {"num_layers": 24})
     r = runner.invoke(app, ["--json", "up", "--model", "X", "--dtype", "bfloat16", "--dry-run"])
     assert r.exit_code == 0

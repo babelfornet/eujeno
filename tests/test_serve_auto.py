@@ -1,4 +1,4 @@
-from synapse.cli import plan_auto_stages
+from axyn.cli import plan_auto_stages
 
 DIMS = {"num_layers": 24, "hidden_size": 896, "num_attention_heads": 14,
         "num_key_value_heads": 2, "intermediate_size": 4864, "vocab_size": 151936}

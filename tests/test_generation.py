@@ -1,7 +1,7 @@
 import asyncio
 import torch
 from transformers import AutoTokenizer
-from synapse.net.generation import generate_tokens
+from axyn.net.generation import generate_tokens
 
 
 def _tok():

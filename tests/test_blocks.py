@@ -1,6 +1,6 @@
 import pytest
 import torch
-from synapse.model.blocks import split_into_blocks
+from axyn.model.blocks import split_into_blocks
 
 
 @pytest.mark.slow

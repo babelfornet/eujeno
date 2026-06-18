@@ -1,5 +1,5 @@
 import json
-from synapse.ui.agent import run_tool_loop
+from axyn.ui.agent import run_tool_loop
 
 
 def test_loop_executes_tool_then_finishes():

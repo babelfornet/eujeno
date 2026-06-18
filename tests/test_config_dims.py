@@ -1,5 +1,5 @@
 import pytest
-from synapse.model.loader import model_config_dims
+from axyn.model.loader import model_config_dims
 
 
 @pytest.mark.slow

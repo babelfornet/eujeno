@@ -6,8 +6,8 @@ import pytest
 import httpx
 import uvicorn
 
-from synapse.net.topology import StageSpec
-from synapse.net.server import create_app
+from axyn.net.topology import StageSpec
+from axyn.net.server import create_app
 
 
 def _free_port():

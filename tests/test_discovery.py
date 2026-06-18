@@ -1,4 +1,4 @@
-from synapse.net.discovery import Registry, build_chain
+from axyn.net.discovery import Registry, build_chain
 
 
 def test_build_chain_full_coverage():

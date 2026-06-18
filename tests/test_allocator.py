@@ -1,4 +1,4 @@
-from synapse.net.allocator import choose_stages
+from axyn.net.allocator import choose_stages
 
 
 def gaps(decoder_gaps, e=0, h=0, target=1):

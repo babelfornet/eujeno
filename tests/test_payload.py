@@ -1,5 +1,5 @@
 import torch
-from synapse.model.payload import HopPayload
+from axyn.model.payload import HopPayload
 
 
 def test_payload_roundtrip():
