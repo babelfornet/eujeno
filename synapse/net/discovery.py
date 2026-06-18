@@ -43,3 +43,31 @@ def build_chain(stages_by_url: dict, num_layers: int, exclude=None):
     if cursor != num_layers:
         return None
     return embed, chain, head
+
+
+def coverage_gaps(stages_by_url: dict, num_layers: int, target: int = 1) -> dict:
+    """Range decoder con replica < target (scoperti o sotto-replicati), più il
+    numero di replica di embed/head. `stages_by_url`: {url: {'embed','head','decoders'}}."""
+    cover = [0] * num_layers
+    for s in stages_by_url.values():
+        for bk in s.get("decoders", []):
+            lo, hi = (int(x) for x in bk.split("-"))
+            for i in range(max(0, lo), min(hi, num_layers)):
+                cover[i] += 1
+    gaps = []
+    i = 0
+    while i < num_layers:
+        if cover[i] < target:
+            j = i
+            while j < num_layers and cover[j] < target:
+                j += 1
+            gaps.append({"lo": i, "hi": j, "replicas": min(cover[i:j])})
+            i = j
+        else:
+            i += 1
+    return {
+        "decoder_gaps": gaps,
+        "embed_replicas": sum(1 for s in stages_by_url.values() if s.get("embed")),
+        "head_replicas": sum(1 for s in stages_by_url.values() if s.get("head")),
+        "target": target,
+    }
