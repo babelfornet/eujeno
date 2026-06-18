@@ -2,18 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`).
 
-**Goal:** Rendere fluido il caso d'uso "un AI (Claude Code) configura/usa il nodo da CLI": `--dtype` (modelli grandi in bf16), `synapse models` + check compatibilità (sapere quali modelli usare), `synapse up` (bring-up in un comando), e un `CLAUDE.md` che insegna a un agente a pilotare la CLI.
+**Goal:** Rendere fluido il caso d'uso "un AI (Claude Code) configura/usa il nodo da CLI": `--dtype` (modelli grandi in bf16), `axyn models` + check compatibilità (sapere quali modelli usare), `axyn up` (bring-up in un comando), e un `CLAUDE.md` che insegna a un agente a pilotare la CLI.
 
-**Architecture:** `parse_dtype` in `config.py`; `--dtype` su `serve`/`generate`/`selfcheck`. `synapse models` (lista curata) + campo `compatible` in `model --info` (riconosce l'architettura `qwen2`/`llama`). `synapse up --model X [--dtype]` avvia coordinator + un nodo serve che copre tutti i layer (sottoprocessi), attende l'operatività e stampa gli endpoint (`--dry-run` per testabilità/anteprima). `CLAUDE.md` + sezione Getting started nel README.
+**Architecture:** `parse_dtype` in `config.py`; `--dtype` su `serve`/`generate`/`selfcheck`. `axyn models` (lista curata) + campo `compatible` in `model --info` (riconosce l'architettura `qwen2`/`llama`). `axyn up --model X [--dtype]` avvia coordinator + un nodo serve che copre tutti i layer (sottoprocessi), attende l'operatività e stampa gli endpoint (`--dry-run` per testabilità/anteprima). `CLAUDE.md` + sezione Getting started nel README.
 
-**Tech Stack:** Python · Typer · l'esistente `synapse/{config,cli}.py`, `model_config_dims`, `NodeManager`.
+**Tech Stack:** Python · Typer · l'esistente `axyn/{config,cli}.py`, `model_config_dims`, `NodeManager`.
 
 ---
 
 ## File Structure
 ```
-synapse/config.py               # MOD: parse_dtype + SUPPORTED_ARCHS
-synapse/cli.py                  # MOD: --dtype (serve/generate/selfcheck), models, model --info compatible, up
+axyn/config.py               # MOD: parse_dtype + SUPPORTED_ARCHS
+axyn/cli.py                  # MOD: --dtype (serve/generate/selfcheck), models, model --info compatible, up
 tests/test_dtype.py             # NUOVO: parse_dtype (veloce)
 tests/test_cli_models.py        # NUOVO: models + up --dry-run (veloce)
 CLAUDE.md                       # NUOVO
@@ -25,13 +25,13 @@ docs/examples/agents.md         # MOD (models/up)
 
 ## Task 1: `--dtype` (bf16/fp16 per modelli grandi)
 
-**Files:** modify `synapse/config.py`, `synapse/cli.py`; create `tests/test_dtype.py`.
+**Files:** modify `axyn/config.py`, `axyn/cli.py`; create `tests/test_dtype.py`.
 
 - [ ] **Step 1: test `tests/test_dtype.py`**
 ```python
 import torch
 import pytest
-from synapse.config import parse_dtype
+from axyn.config import parse_dtype
 
 
 def test_parse_known():
@@ -48,7 +48,7 @@ def test_parse_unknown_raises():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_dtype.py -v` → ImportError.
 
-- [ ] **Step 3: in `synapse/config.py`** aggiungi:
+- [ ] **Step 3: in `axyn/config.py`** aggiungi:
 ```python
 _DTYPES = {
     "float32": torch.float32, "fp32": torch.float32,
@@ -66,13 +66,13 @@ def parse_dtype(name: str):
     return _DTYPES[key]
 ```
 
-- [ ] **Step 4: in `synapse/cli.py` aggiungi `--dtype` al comando `serve`** — opzione e uso. Aggiungi alla firma di `serve`:
+- [ ] **Step 4: in `axyn/cli.py` aggiungi `--dtype` al comando `serve`** — opzione e uso. Aggiungi alla firma di `serve`:
 ```python
     dtype: str = typer.Option("float32", "--dtype", help="float32 | bfloat16 | float16 (bf16 per modelli grandi)"),
 ```
 e dove `serve` carica il modello (`load_partial_model(model_id, spec, DTYPE, DEVICE)`), sostituisci `DTYPE` con il dtype scelto:
 ```python
-    from synapse.config import parse_dtype
+    from axyn.config import parse_dtype
     try:
         _dtype = parse_dtype(dtype)
     except ValueError as e:
@@ -82,24 +82,24 @@ e dove `serve` carica il modello (`load_partial_model(model_id, spec, DTYPE, DEV
 ```
 (Assicurati che `parse_dtype` sia importato; il default `"float32"` mantiene il comportamento attuale.)
 
-- [ ] **Step 5: run PASS** — `... pytest tests/test_dtype.py -v` → 2 passed. Verifica che la CLI importi: `.venv/bin/synapse serve --help | grep -q dtype && echo ok`.
+- [ ] **Step 5: run PASS** — `... pytest tests/test_dtype.py -v` → 2 passed. Verifica che la CLI importi: `.venv/bin/axyn serve --help | grep -q dtype && echo ok`.
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/config.py synapse/cli.py tests/test_dtype.py && git commit -m "feat(cli): --dtype (bf16/fp16) su serve per modelli grandi"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/config.py axyn/cli.py tests/test_dtype.py && git commit -m "feat(cli): --dtype (bf16/fp16) su serve per modelli grandi"
 ```
 
 ---
 
-## Task 2: `synapse models` + check compatibilità in `model --info`
+## Task 2: `axyn models` + check compatibilità in `model --info`
 
-**Files:** modify `synapse/cli.py`; create `tests/test_cli_models.py`.
+**Files:** modify `axyn/cli.py`; create `tests/test_cli_models.py`.
 
 - [ ] **Step 1: test `tests/test_cli_models.py`**
 ```python
 import json
 from typer.testing import CliRunner
-from synapse.cli import app
+from axyn.cli import app
 
 runner = CliRunner()
 
@@ -114,12 +114,12 @@ def test_models_lists_examples():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_cli_models.py -v` → no `models` command.
 
-- [ ] **Step 3: in `synapse/cli.py` aggiungi il comando `models`** (dopo `model`):
+- [ ] **Step 3: in `axyn/cli.py` aggiungi il comando `models`** (dopo `model`):
 ```python
 @app.command()
 def models():
     """Elenca i modelli/famiglie compatibili (architettura Llama/Qwen2)."""
-    from synapse.config import SUPPORTED_ARCHS
+    from axyn.config import SUPPORTED_ARCHS
     examples = [
         "Qwen/Qwen2.5-0.5B-Instruct", "Qwen/Qwen2.5-1.5B-Instruct", "Qwen/Qwen2.5-3B-Instruct",
         "Qwen/Qwen2.5-7B-Instruct", "Qwen/Qwen2.5-14B-Instruct", "Qwen/Qwen2.5-32B-Instruct",
@@ -127,38 +127,38 @@ def models():
         "meta-llama/Llama-3.2-3B-Instruct", "meta-llama/Llama-3.1-8B-Instruct",
     ]
     data = {"supported_architectures": sorted(SUPPORTED_ARCHS), "examples": examples,
-            "note": "Architettura Llama/Qwen2 (decoder-only). Verifica con 'synapse model --info --model <id>'. "
+            "note": "Architettura Llama/Qwen2 (decoder-only). Verifica con 'axyn model --info --model <id>'. "
                     "Per modelli grandi usa --dtype bfloat16 e/o splitta su piu nodi."}
     human = "Modelli compatibili (Llama/Qwen2):\n" + "\n".join(f"  - {m}" for m in examples)
     _emit_ok("models", data, human=human)
 ```
 Inoltre, nel comando `model` (`--info`) aggiungi i campi compatibilità. Dove costruisce `data` con i dim del modello, aggiungi `architecture` e `compatible`:
 ```python
-        from synapse.config import SUPPORTED_ARCHS
+        from axyn.config import SUPPORTED_ARCHS
         arch = getattr(__import__("transformers").AutoConfig.from_pretrained(model_id), "model_type", "?")
         data["architecture"] = arch
         data["compatible"] = arch in SUPPORTED_ARCHS
 ```
 > Nota: `model --info` carica gia `AutoConfig` via `model_config_dims`. Se preferisci evitare un secondo `from_pretrained`, fai restituire `model_type` da `model_config_dims` (aggiungi `"model_type": cfg.model_type` al dict in `loader.py`) e usalo qui. Scegli l'opzione piu pulita; l'importante e che `model --info --json` includa `architecture` e `compatible`.
 
-- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_models.py -v` → PASS. Verifica `.venv/bin/synapse --help | grep -q models`.
+- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_models.py -v` → PASS. Verifica `.venv/bin/axyn --help | grep -q models`.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py synapse/model/loader.py tests/test_cli_models.py && git commit -m "feat(cli): comando 'models' + check compatibilita in 'model --info'"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py axyn/model/loader.py tests/test_cli_models.py && git commit -m "feat(cli): comando 'models' + check compatibilita in 'model --info'"
 ```
 
 ---
 
-## Task 3: `synapse up` (bring-up in un comando)
+## Task 3: `axyn up` (bring-up in un comando)
 
-**Files:** modify `synapse/cli.py`; modify `tests/test_cli_models.py` (append).
+**Files:** modify `axyn/cli.py`; modify `tests/test_cli_models.py` (append).
 
 - [ ] **Step 1: append a `tests/test_cli_models.py`**
 ```python
 def test_up_dry_run_prints_commands(monkeypatch):
     # evita il download config: stub model_config_dims
-    import synapse.cli as cli
+    import axyn.cli as cli
     monkeypatch.setattr(cli, "model_config_dims", lambda mid: {"num_layers": 24})
     r = runner.invoke(app, ["--json", "up", "--model", "X", "--dtype", "bfloat16", "--dry-run"])
     assert r.exit_code == 0
@@ -171,7 +171,7 @@ def test_up_dry_run_prints_commands(monkeypatch):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_cli_models.py::test_up_dry_run_prints_commands -v` → no `up`.
 
-- [ ] **Step 3: in `synapse/cli.py` aggiungi il comando `up`** (dopo `coordinator`):
+- [ ] **Step 3: in `axyn/cli.py` aggiungi il comando `up`** (dopo `coordinator`):
 ```python
 @app.command()
 def up(
@@ -183,10 +183,10 @@ def up(
 ):
     """Avvia in un colpo una rete operativa a nodo singolo (coordinator + un nodo che copre tutto il modello)."""
     nl = model_config_dims(model_id)["num_layers"]
-    coord_cmd = [sys.executable, "-m", "synapse", "coordinator", "--model", model_id,
+    coord_cmd = [sys.executable, "-m", "axyn", "coordinator", "--model", model_id,
                  "--host", host, "--port", str(port)]
     ws = f"ws://{host}:{port}/node"
-    serve_cmd = [sys.executable, "-m", "synapse", "serve", "--coordinator", ws,
+    serve_cmd = [sys.executable, "-m", "axyn", "serve", "--coordinator", ws,
                  "--stages", f"embed,decoder:0-{nl},head", "--model", model_id, "--dtype", dtype]
     if dry_run:
         _emit_ok("up", {"commands": [coord_cmd, serve_cmd],
@@ -200,7 +200,7 @@ def up(
     _t.sleep(4)
     procs.append(subprocess.Popen(serve_cmd))
     base = f"http://{host}:{port}"
-    typer.echo(f"synapse up: avvio rete per {model_id} (dtype={dtype})…", err=True)
+    typer.echo(f"axyn up: avvio rete per {model_id} (dtype={dtype})…", err=True)
     operational = False
     for _ in range(120):
         try:
@@ -212,8 +212,8 @@ def up(
             pass
         _t.sleep(2)
     if operational:
-        typer.echo(f"PRONTO. Interroga: synapse infer --coordinator {base} --prompt \"...\"", err=True)
-        typer.echo(f"Frontend:        synapse ui --coordinator {base}", err=True)
+        typer.echo(f"PRONTO. Interroga: axyn infer --coordinator {base} --prompt \"...\"", err=True)
+        typer.echo(f"Frontend:        axyn ui --coordinator {base}", err=True)
     else:
         typer.echo("rete non ancora operativa (controlla i log).", err=True)
     try:
@@ -226,11 +226,11 @@ def up(
                 p.terminate()
 ```
 
-- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_models.py -v` → PASS. Verifica `.venv/bin/synapse --help | grep -q up`.
+- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_models.py -v` → PASS. Verifica `.venv/bin/axyn --help | grep -q up`.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py tests/test_cli_models.py && git commit -m "feat(cli): comando 'up' (bring-up rete a nodo singolo in un comando)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli_models.py && git commit -m "feat(cli): comando 'up' (bring-up rete a nodo singolo in un comando)"
 ```
 
 ---
@@ -239,9 +239,9 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py tests/test_cli_m
 
 **Files:** create `CLAUDE.md`; modify `README.md`, `docs/examples/agents.md`. (Lo fa il controller, non un subagent.)
 
-- [ ] **Step 1:** crea `CLAUDE.md` (guida per un agente: cos'e Synapse, install, comandi chiave con esempi — model/models/up/serve/coordinator/infer/ui/mcp — modelli supportati, workflow tipici a/b/c/d, nota dtype/memoria).
-- [ ] **Step 2:** aggiungi al `README.md` una sezione "## Installazione / Getting started" in cima (clone → venv → `pip install -e .` → `synapse --help`; quickstart `synapse up`).
-- [ ] **Step 3:** in `docs/examples/agents.md` cita `synapse models` e `synapse up`.
+- [ ] **Step 1:** crea `CLAUDE.md` (guida per un agente: cos'e Axyn, install, comandi chiave con esempi — model/models/up/serve/coordinator/infer/ui/mcp — modelli supportati, workflow tipici a/b/c/d, nota dtype/memoria).
+- [ ] **Step 2:** aggiungi al `README.md` una sezione "## Installazione / Getting started" in cima (clone → venv → `pip install -e .` → `axyn --help`; quickstart `axyn up`).
+- [ ] **Step 3:** in `docs/examples/agents.md` cita `axyn models` e `axyn up`.
 - [ ] **Step 4:** suite completa `... pytest -q -p no:warnings` → verde.
 - [ ] **Step 5:** commit `docs: CLAUDE.md + Getting started (install + up + models)`.
 
@@ -253,5 +253,5 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py tests/test_cli_m
 
 **Placeholder scan:** codice completo; CLAUDE.md scritto nel Task 4.
 
-**Type consistency:** `parse_dtype(str)->torch.dtype`; `serve --dtype` usa `load_partial_model(..., _dtype, ...)`; `models` ritorna `{supported_architectures, examples, note}`; `model --info` aggiunge `architecture`/`compatible`; `up` costruisce comandi `python -m synapse coordinator|serve` con stage `embed,decoder:0-N,head` e `--dtype`.
+**Type consistency:** `parse_dtype(str)->torch.dtype`; `serve --dtype` usa `load_partial_model(..., _dtype, ...)`; `models` ritorna `{supported_architectures, examples, note}`; `model --info` aggiunge `architecture`/`compatible`; `up` costruisce comandi `python -m axyn coordinator|serve` con stage `embed,decoder:0-N,head` e `--dtype`.
 ```

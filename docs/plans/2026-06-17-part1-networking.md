@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Eseguire la pipeline di inferenza splittata **attraverso più processi/macchine via HTTP**, riproducendo esattamente la generazione del modello intero, lanciabile dalla CLI `synapse` (`serve` + `infer`) su 2-3 nodi.
+**Goal:** Eseguire la pipeline di inferenza splittata **attraverso più processi/macchine via HTTP**, riproducendo esattamente la generazione del modello intero, lanciabile dalla CLI `axyn` (`serve` + `infer`) su 2-3 nodi.
 
 **Architecture:** Milestone 0 dell'[ADR-0001](../decisions/ADR-0001-implementation-forks.md): un **orchestrator** (entry node) guida la generazione autoregressiva chiamando dei **BlockServer** (FastAPI) via HTTP; le attivazioni viaggiano come **safetensors bytes**. Ogni BlockServer ospita uno o più *stage* (`embed`, `decoder:lo-hi`, `head`), mantiene la **KV-cache per-job in memoria**, ed espone endpoint stateless per embed/head e stateful per decode. La topologia (quale URL serve quale stage) è un **file JSON statico** in questo slice; la discovery DHT che auto-organizza i nodi arriva in Parte 2.
 
-**Tech Stack:** Python · FastAPI + uvicorn (server) · httpx (client) · safetensors (wire) · l'esistente `synapse/model/` (loader, blocks, generate) · pytest.
+**Tech Stack:** Python · FastAPI + uvicorn (server) · httpx (client) · safetensors (wire) · l'esistente `axyn/model/` (loader, blocks, generate) · pytest.
 
 **Decisioni di questo slice:**
 - **Caricamento:** ogni nodo carica il modello intero ma serve solo i suoi stage (semplice e corretto per il modello piccolo del PoC). Partial-loading reale = ottimizzazione successiva.
@@ -21,7 +21,7 @@
 
 ```
 pyproject.toml                  # MODIFICA: + fastapi, uvicorn, httpx
-synapse/
+axyn/
   model/blocks.py               # MODIFICA: + prepare_decoder_block()
   net/
     __init__.py                 # NUOVO (vuoto)
@@ -36,7 +36,7 @@ tests/
   test_prepare_block.py         # prepare_decoder_block (slow)
   test_server.py                # un app con tutti gli stage via TestClient (slow)
   test_orchestrator.py          # 2 server in thread, distribuito == reference (slow)
-  test_cli_infer.py             # `synapse infer` contro 2 server (slow)
+  test_cli_infer.py             # `axyn infer` contro 2 server (slow)
 docs/
   examples/topology.localhost.json   # NUOVO: topologia di esempio
 ```
@@ -45,7 +45,7 @@ docs/
 
 ## Task 1: dipendenze + `net` package + wire
 
-**Files:** modify `pyproject.toml`; create `synapse/net/__init__.py`, `synapse/net/wire.py`, `tests/test_wire.py`.
+**Files:** modify `pyproject.toml`; create `axyn/net/__init__.py`, `axyn/net/wire.py`, `tests/test_wire.py`.
 
 - [ ] **Step 1: aggiungi dipendenze in `pyproject.toml`**
 
@@ -57,17 +57,17 @@ Nella lista `[project] dependencies` aggiungi:
 ```
 Poi reinstalla:
 ```bash
-cd /Users/alberto/Projects/AI/synapse && .venv/bin/pip install -e ".[dev]"
+cd /Users/alberto/Projects/AI/axyn && .venv/bin/pip install -e ".[dev]"
 ```
 (Se la rete è bloccata e i pacchetti non sono installabili, riporta BLOCKED.)
 
-- [ ] **Step 2: crea `synapse/net/__init__.py`** (file vuoto).
+- [ ] **Step 2: crea `axyn/net/__init__.py`** (file vuoto).
 
 - [ ] **Step 3: scrivi il test `tests/test_wire.py`**
 
 ```python
 import torch
-from synapse.net.wire import encode_tensors, decode_tensors
+from axyn.net.wire import encode_tensors, decode_tensors
 
 
 def test_roundtrip_preserves_tensors_and_dtype():
@@ -83,10 +83,10 @@ def test_roundtrip_preserves_tensors_and_dtype():
 
 - [ ] **Step 4: esegui per vederlo fallire**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_wire.py -v`
-Expected: ImportError su `synapse.net.wire`.
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_wire.py -v`
+Expected: ImportError su `axyn.net.wire`.
 
-- [ ] **Step 5: implementa `synapse/net/wire.py`**
+- [ ] **Step 5: implementa `axyn/net/wire.py`**
 
 ```python
 import safetensors.torch
@@ -104,26 +104,26 @@ def decode_tensors(data: bytes) -> dict:
 
 - [ ] **Step 6: esegui per vederlo passare**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_wire.py -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_wire.py -v`
 Expected: 1 passed.
 
 - [ ] **Step 7: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add pyproject.toml synapse/net/__init__.py synapse/net/wire.py tests/test_wire.py && git commit -m "feat(net): dipendenze HTTP + wire safetensors per le attivazioni"
+cd /Users/alberto/Projects/AI/axyn && git add pyproject.toml axyn/net/__init__.py axyn/net/wire.py tests/test_wire.py && git commit -m "feat(net): dipendenze HTTP + wire safetensors per le attivazioni"
 ```
 
 ---
 
 ## Task 2: topology (`parse_stages` + `Topology`)
 
-**Files:** create `synapse/net/topology.py`, `tests/test_topology.py`.
+**Files:** create `axyn/net/topology.py`, `tests/test_topology.py`.
 
 - [ ] **Step 1: scrivi `tests/test_topology.py`**
 
 ```python
 import pytest
-from synapse.net.topology import parse_stages, StageSpec, Topology, load_topology
+from axyn.net.topology import parse_stages, StageSpec, Topology, load_topology
 
 
 def test_parse_stages_all_kinds():
@@ -160,10 +160,10 @@ def test_load_topology_resolves_stages():
 
 - [ ] **Step 2: esegui per vederlo fallire**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_topology.py -v`
-Expected: ImportError su `synapse.net.topology`.
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_topology.py -v`
+Expected: ImportError su `axyn.net.topology`.
 
-- [ ] **Step 3: implementa `synapse/net/topology.py`**
+- [ ] **Step 3: implementa `axyn/net/topology.py`**
 
 ```python
 from dataclasses import dataclass, field
@@ -171,7 +171,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class StageSpec:
-    """Quali stage serve un nodo (per `synapse serve`)."""
+    """Quali stage serve un nodo (per `axyn serve`)."""
     embed: bool = False
     head: bool = False
     decoders: list = field(default_factory=list)   # list[tuple[int, int]]
@@ -202,7 +202,7 @@ def parse_stages(spec: str) -> StageSpec:
 
 @dataclass
 class Topology:
-    """Mappa stage->URL per l'inferenza distribuita (per `synapse infer`)."""
+    """Mappa stage->URL per l'inferenza distribuita (per `axyn infer`)."""
     model: str
     embed: str
     head: str
@@ -224,13 +224,13 @@ def load_topology(data: dict) -> Topology:
 
 - [ ] **Step 4: esegui per vederlo passare**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_topology.py -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_topology.py -v`
 Expected: 4 passed.
 
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/topology.py tests/test_topology.py && git commit -m "feat(net): parsing stage + modello Topology per inferenza distribuita"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/topology.py tests/test_topology.py && git commit -m "feat(net): parsing stage + modello Topology per inferenza distribuita"
 ```
 
 ---
@@ -239,14 +239,14 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/net/topology.py tests/t
 
 > Il server condivide i moduli dei layer tra i job ma tiene una KV-cache separata per job. Serve quindi un modo per preparare i layer (slice + remap `layer_idx` a indici locali) UNA volta, e creare poi una `DecoderBlock` per-job (con la sua cache) sopra quei layer.
 
-**Files:** modify `synapse/model/blocks.py`; create `tests/test_prepare_block.py`.
+**Files:** modify `axyn/model/blocks.py`; create `tests/test_prepare_block.py`.
 
 - [ ] **Step 1: scrivi `tests/test_prepare_block.py`**
 
 ```python
 import pytest
 import torch
-from synapse.model.blocks import prepare_decoder_block, DecoderBlock
+from axyn.model.blocks import prepare_decoder_block, DecoderBlock
 
 
 @pytest.mark.slow
@@ -264,10 +264,10 @@ def test_prepare_returns_local_indexed_layers(full_model):
 
 - [ ] **Step 2: esegui per vederlo fallire**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_prepare_block.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_prepare_block.py -m slow -v`
 Expected: ImportError/AttributeError su `prepare_decoder_block`.
 
-- [ ] **Step 3: implementa in `synapse/model/blocks.py`**
+- [ ] **Step 3: implementa in `axyn/model/blocks.py`**
 
 Aggiungi in fondo al file:
 ```python
@@ -287,20 +287,20 @@ def prepare_decoder_block(model, lo: int, hi: int):
 
 - [ ] **Step 4: esegui per vederlo passare**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_prepare_block.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_prepare_block.py -m slow -v`
 Expected: PASS.
 
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/model/blocks.py tests/test_prepare_block.py && git commit -m "feat(model): prepare_decoder_block (layer condivisi, cache DecoderBlock per-job)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/model/blocks.py tests/test_prepare_block.py && git commit -m "feat(model): prepare_decoder_block (layer condivisi, cache DecoderBlock per-job)"
 ```
 
 ---
 
 ## Task 4: `BlockServer` (FastAPI)
 
-**Files:** create `synapse/net/server.py`, `tests/test_server.py`.
+**Files:** create `axyn/net/server.py`, `tests/test_server.py`.
 
 - [ ] **Step 1: scrivi `tests/test_server.py`**
 
@@ -308,10 +308,10 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/model/blocks.py tests/t
 import pytest
 import torch
 from fastapi.testclient import TestClient
-from synapse.net.wire import encode_tensors, decode_tensors
-from synapse.net.topology import StageSpec
-from synapse.net.server import create_app
-from synapse.model.generate import reference_generate
+from axyn.net.wire import encode_tensors, decode_tensors
+from axyn.net.topology import StageSpec
+from axyn.net.server import create_app
+from axyn.model.generate import reference_generate
 
 
 @pytest.mark.slow
@@ -346,17 +346,17 @@ def test_single_node_serving_all_stages_matches_reference(full_model):
 
 - [ ] **Step 2: esegui per vederlo fallire**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_server.py -m slow -v`
-Expected: ImportError su `synapse.net.server`.
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_server.py -m slow -v`
+Expected: ImportError su `axyn.net.server`.
 
-- [ ] **Step 3: implementa `synapse/net/server.py`**
+- [ ] **Step 3: implementa `axyn/net/server.py`**
 
 ```python
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from synapse.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
-from synapse.net.wire import encode_tensors, decode_tensors
+from axyn.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
+from axyn.net.wire import encode_tensors, decode_tensors
 
 _OCTET = "application/octet-stream"
 
@@ -420,20 +420,20 @@ def create_app(model, tokenizer, stages):
 
 - [ ] **Step 4: esegui per vederlo passare**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_server.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_server.py -m slow -v`
 Expected: PASS (i token generati via HTTP coincidono col riferimento).
 
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/server.py tests/test_server.py && git commit -m "feat(net): BlockServer FastAPI (embed/decode/head, KV-cache per-job)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/server.py tests/test_server.py && git commit -m "feat(net): BlockServer FastAPI (embed/decode/head, KV-cache per-job)"
 ```
 
 ---
 
 ## Task 5: orchestrator + golden distribuito su 2 nodi
 
-**Files:** create `synapse/net/orchestrator.py`, `tests/test_orchestrator.py`.
+**Files:** create `axyn/net/orchestrator.py`, `tests/test_orchestrator.py`.
 
 - [ ] **Step 1: scrivi `tests/test_orchestrator.py`**
 
@@ -446,10 +446,10 @@ import pytest
 import httpx
 import uvicorn
 
-from synapse.net.topology import StageSpec, Topology
-from synapse.net.server import create_app
-from synapse.net.orchestrator import distributed_generate
-from synapse.model.generate import reference_generate
+from axyn.net.topology import StageSpec, Topology
+from axyn.net.server import create_app
+from axyn.net.orchestrator import distributed_generate
+from axyn.model.generate import reference_generate
 
 
 def _free_port():
@@ -501,15 +501,15 @@ def test_two_node_distributed_matches_reference(full_model):
 
 - [ ] **Step 2: esegui per vederlo fallire**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_orchestrator.py -m slow -v`
-Expected: ImportError su `synapse.net.orchestrator`.
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_orchestrator.py -m slow -v`
+Expected: ImportError su `axyn.net.orchestrator`.
 
-- [ ] **Step 3: implementa `synapse/net/orchestrator.py`**
+- [ ] **Step 3: implementa `axyn/net/orchestrator.py`**
 
 ```python
 import torch
 
-from synapse.net.wire import encode_tensors, decode_tensors
+from axyn.net.wire import encode_tensors, decode_tensors
 
 
 def distributed_generate(topology, prompt: str, max_new_tokens: int, client, tokenizer,
@@ -554,20 +554,20 @@ def distributed_generate(topology, prompt: str, max_new_tokens: int, client, tok
 
 - [ ] **Step 4: esegui per vederlo passare**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_orchestrator.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_orchestrator.py -m slow -v`
 Expected: PASS — l'inferenza distribuita su 2 nodi reali (uvicorn) coincide col riferimento.
 
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/orchestrator.py tests/test_orchestrator.py && git commit -m "feat(net): orchestrator distribuito (golden su 2 nodi reali)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/orchestrator.py tests/test_orchestrator.py && git commit -m "feat(net): orchestrator distribuito (golden su 2 nodi reali)"
 ```
 
 ---
 
 ## Task 6: comandi CLI `serve` e `infer`
 
-**Files:** modify `synapse/cli.py`; create `tests/test_cli_infer.py`.
+**Files:** modify `axyn/cli.py`; create `tests/test_cli_infer.py`.
 
 - [ ] **Step 1: scrivi `tests/test_cli_infer.py`**
 
@@ -581,10 +581,10 @@ import pytest
 import uvicorn
 
 from typer.testing import CliRunner
-from synapse.cli import app as cli_app
-from synapse.net.topology import StageSpec
-from synapse.net.server import create_app
-from synapse.model.generate import reference_generate
+from axyn.cli import app as cli_app
+from axyn.net.topology import StageSpec
+from axyn.net.server import create_app
+from axyn.model.generate import reference_generate
 
 runner = CliRunner()
 
@@ -638,17 +638,17 @@ def test_cli_infer_against_two_nodes(full_model, tmp_path):
 
 - [ ] **Step 2: esegui per vederlo fallire**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_cli_infer.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli_infer.py -m slow -v`
 Expected: FAIL (comando `infer` inesistente).
 
-- [ ] **Step 3: implementa in `synapse/cli.py`**
+- [ ] **Step 3: implementa in `axyn/cli.py`**
 
-Aggiungi gli import vicino agli altri `from synapse...`:
+Aggiungi gli import vicino agli altri `from axyn...`:
 ```python
 import json as _json2   # (se _json già esiste come json, riusa _json; NON ridefinire)
-from synapse.net.topology import parse_stages, load_topology
-from synapse.net.server import create_app
-from synapse.net.orchestrator import distributed_generate
+from axyn.net.topology import parse_stages, load_topology
+from axyn.net.server import create_app
+from axyn.net.orchestrator import distributed_generate
 ```
 > Nota: il modulo `cli.py` importa già `json` come `_json`. Per leggere il file topologia usa `_json.loads(...)`. NON aggiungere un secondo import di json; rimuovi la riga `import json as _json2` se hai già `_json`.
 
@@ -673,7 +673,7 @@ def serve(
     except Exception as e:
         _fail("serve", "MODEL_LOAD_FAILED", str(e))
     fastapi_app = create_app(model, tokenizer, spec)
-    typer.echo(f"synapse serve: stages={stages} su http://{host}:{port}  (model={model_id})", err=True)
+    typer.echo(f"axyn serve: stages={stages} su http://{host}:{port}  (model={model_id})", err=True)
     uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
 
 
@@ -708,13 +708,13 @@ def infer(
 
 - [ ] **Step 4: esegui per vederlo passare**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_cli_infer.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli_infer.py -m slow -v`
 Expected: PASS.
 
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py tests/test_cli_infer.py && git commit -m "feat(cli): comandi serve (BlockServer) e infer (inferenza distribuita)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli_infer.py && git commit -m "feat(cli): comandi serve (BlockServer) e infer (inferenza distribuita)"
 ```
 
 ---
@@ -749,16 +749,16 @@ Inferenza distribuita di un modello su 2 nodi (qui in localhost; su LAN sostitui
 pip install -e .
 
 # Nodo A (serve embedding + primi 12 layer)
-synapse serve --stages "embed,decoder:0-12" --port 8001
+axyn serve --stages "embed,decoder:0-12" --port 8001
 
 # Nodo B (serve gli ultimi 12 layer + la testa) — altro terminale/macchina
-synapse serve --stages "decoder:12-24,head" --port 8002
+axyn serve --stages "decoder:12-24,head" --port 8002
 
 # Entry: esegue l'inferenza attraverso i due nodi
-synapse --json infer --topology docs/examples/topology.localhost.json --prompt "La capitale dell'Italia è"
+axyn --json infer --topology docs/examples/topology.localhost.json --prompt "La capitale dell'Italia è"
 ```
 
-Su 3 macchine: avvia un `synapse serve` per nodo con range di layer diversi, copia `topology.localhost.json` mettendo gli **IP:porta reali** di ogni nodo, e lancia `synapse infer` puntando a quel file. Tutte le macchine devono raggiungersi sulla rete (LAN/VPN) e avranno scaricato il modello da Hugging Face al primo avvio.
+Su 3 macchine: avvia un `axyn serve` per nodo con range di layer diversi, copia `topology.localhost.json` mettendo gli **IP:porta reali** di ogni nodo, e lancia `axyn infer` puntando a quel file. Tutte le macchine devono raggiungersi sulla rete (LAN/VPN) e avranno scaricato il modello da Hugging Face al primo avvio.
 ```
 
 - [ ] **Step 3: aggiorna `docs/ROADMAP.md`**
@@ -771,17 +771,17 @@ e aggiorna la riga "Ultimo aggiornamento" con la data e una nota.
 
 - [ ] **Step 4: esegui l'INTERA suite**
 
-Run: `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest -q`
+Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q`
 Expected: tutti i test PASS (foundation + CLI + net).
 
 - [ ] **Step 5: smoke test manuale a 2 nodi (localhost)**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse
-.venv/bin/synapse serve --stages "embed,decoder:0-12" --port 8001 &
-.venv/bin/synapse serve --stages "decoder:12-24,head" --port 8002 &
+cd /Users/alberto/Projects/AI/axyn
+.venv/bin/axyn serve --stages "embed,decoder:0-12" --port 8001 &
+.venv/bin/axyn serve --stages "decoder:12-24,head" --port 8002 &
 sleep 60   # attende il caricamento del modello su entrambi
-.venv/bin/synapse --json infer --topology docs/examples/topology.localhost.json --prompt "La capitale dell'Italia è" --max-new-tokens 8
+.venv/bin/axyn --json infer --topology docs/examples/topology.localhost.json --prompt "La capitale dell'Italia è" --max-new-tokens 8
 kill %1 %2
 ```
 Expected: envelope JSON con `data.text` plausibile (es. menziona Roma).
@@ -789,7 +789,7 @@ Expected: envelope JSON con `data.text` plausibile (es. menziona Roma).
 - [ ] **Step 6: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add docs/examples/topology.localhost.json README.md docs/ROADMAP.md && git commit -m "docs: quickstart multi-nodo + topologia di esempio; ROADMAP transport di rete"
+cd /Users/alberto/Projects/AI/axyn && git add docs/examples/topology.localhost.json README.md docs/ROADMAP.md && git commit -m "docs: quickstart multi-nodo + topologia di esempio; ROADMAP transport di rete"
 ```
 
 ---

@@ -6,7 +6,7 @@
 
 **Architecture:** [ADR-0001](../decisions/ADR-0001-implementation-forks.md) Fork C (failover = re-dispatch su holder ridondante). Implementazione di Milestone 0: il coordinator guida la generazione; se un hop fallisce (nodo disconnesso → la Future pendente solleva `ConnectionError`), esclude quel nodo, ricalcola la catena dai nodi rimasti (`build_chain(..., exclude)`) e **riavvia la generazione da capo** con un nuovo `job_id`, fino a K failover. Richiede **ridondanza**: ≥2 nodi che servono lo stesso blocco. (Il re-dispatch per-hop con replay del prefisso e lo store-and-forward durevole su SQLite restano un approfondimento successivo; riavviare da capo è semplice, corretto e accettabile sotto il framing async.)
 
-**Tech Stack:** Python · l'esistente `synapse/net/{coordinator,discovery,node,node_exec}.py` · asyncio · pytest.
+**Tech Stack:** Python · l'esistente `axyn/net/{coordinator,discovery,node,node_exec}.py` · asyncio · pytest.
 
 **Fuori scope:** failover per-hop con replay del prefisso (preserva il progresso); store-and-forward durevole SQLite; failover nella modalità P2P diretta (follow-up); failover del coordinator stesso.
 
@@ -15,8 +15,8 @@
 ## File Structure
 
 ```
-synapse/net/discovery.py        # MODIFICA: build_chain(..., exclude=None)
-synapse/net/coordinator.py      # MODIFICA: failover loop (escludi nodo caduto, ricalcola, riavvia)
+axyn/net/discovery.py        # MODIFICA: build_chain(..., exclude=None)
+axyn/net/coordinator.py      # MODIFICA: failover loop (escludi nodo caduto, ricalcola, riavvia)
 tests/
   test_discovery.py             # MODIFICA: + test build_chain con exclude e ridondanza
   test_failover_e2e.py          # NUOVO: nodo che crasha mid-hop -> completa via ridondante (slow)
@@ -28,7 +28,7 @@ docs/ROADMAP.md
 
 ## Task 1: `build_chain(exclude)` — consapevole di ridondanza
 
-**Files:** modify `synapse/net/discovery.py`; modify `tests/test_discovery.py`.
+**Files:** modify `axyn/net/discovery.py`; modify `tests/test_discovery.py`.
 
 - [ ] **Step 1: aggiungi i test in coda a `tests/test_discovery.py`**
 ```python
@@ -56,9 +56,9 @@ def test_build_chain_exclude_breaks_coverage_returns_none():
     assert build_chain(reg, 24, exclude={"B"}) is None   # senza B manca 12-24
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_discovery.py -v` → TypeError (build_chain non accetta `exclude`).
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_discovery.py -v` → TypeError (build_chain non accetta `exclude`).
 
-- [ ] **Step 3: modifica `build_chain` in `synapse/net/discovery.py`**
+- [ ] **Step 3: modifica `build_chain` in `axyn/net/discovery.py`**
 
 Sostituisci la firma e l'inizio della funzione `build_chain` con:
 ```python
@@ -94,14 +94,14 @@ def build_chain(stages_by_url: dict, num_layers: int, exclude=None):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): build_chain con exclude (ridondanza-aware per il failover)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): build_chain con exclude (ridondanza-aware per il failover)"
 ```
 
 ---
 
 ## Task 2: failover nel coordinator + e2e con nodo che crasha
 
-**Files:** modify `synapse/net/coordinator.py`; create `tests/test_failover_e2e.py`.
+**Files:** modify `axyn/net/coordinator.py`; create `tests/test_failover_e2e.py`.
 
 - [ ] **Step 1: scrivi `tests/test_failover_e2e.py`**
 ```python
@@ -115,12 +115,12 @@ import httpx
 import uvicorn
 import websockets
 
-from synapse.net.coordinator import create_coordinator_app
-from synapse.net.node import run_node
-from synapse.net.node_exec import NodeState, handle_request
-from synapse.net.framing import pack, unpack
-from synapse.net.topology import StageSpec
-from synapse.model.generate import reference_generate
+from axyn.net.coordinator import create_coordinator_app
+from axyn.net.node import run_node
+from axyn.net.node_exec import NodeState, handle_request
+from axyn.net.framing import pack, unpack
+from axyn.net.topology import StageSpec
+from axyn.model.generate import reference_generate
 
 
 def _free_port():
@@ -200,9 +200,9 @@ def test_failover_completes_via_redundant_node(full_model):
         server.should_exit = True
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_failover_e2e.py -m slow -v`. Expected: FAIL (`data` non ha `failovers`, oppure l'infer si appende/erra perché manca la logica di failover).
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_failover_e2e.py -m slow -v`. Expected: FAIL (`data` non ha `failovers`, oppure l'infer si appende/erra perché manca la logica di failover).
 
-- [ ] **Step 3: modifica `synapse/net/coordinator.py`**
+- [ ] **Step 3: modifica `axyn/net/coordinator.py`**
 
 (a) Aggiungi una costante e una eccezione vicino all'inizio del modulo (dopo gli import):
 ```python
@@ -290,7 +290,7 @@ Verifica nessuna regressione: `... pytest tests/test_coordinator_e2e.py tests/te
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/coordinator.py tests/test_failover_e2e.py && git commit -m "feat(net): failover nel coordinator (escludi nodo caduto, ri-instrada su ridondante)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test_failover_e2e.py && git commit -m "feat(net): failover nel coordinator (escludi nodo caduto, ri-instrada su ridondante)"
 ```
 
 ---
@@ -307,8 +307,8 @@ Avvia **più nodi che servono lo stesso blocco** per la resilienza: se un nodo c
 
 ```bash
 # blocco 12-24 + head serviti da DUE nodi (B e C): se B cade, il job continua su C
-synapse serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"   # nodo B
-synapse serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"   # nodo C (ridondante)
+axyn serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"   # nodo B
+axyn serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"   # nodo C (ridondante)
 ```
 
 La risposta di `infer` include `"failovers": N` (quanti reinstradamenti sono serviti). Se nessun nodo ridondante copre il blocco caduto, `infer` risponde `NOT_OPERATIONAL`.
@@ -318,11 +318,11 @@ La risposta di `infer` include `"failovers": N` (quanti reinstradamenti sono ser
 
 - [ ] **Step 2: aggiorna `docs/ROADMAP.md`** — sotto "Discovery & Routing", segna il failover (coordinator) come fatto; sotto "Queue & Load Balancing"/Parte 3 nota che store-and-forward durevole + failover per-hop restano da fare. Aggiorna la riga "Ultimo aggiornamento".
 
-- [ ] **Step 3: suite completa** — `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest -q -p no:warnings` → tutti PASS.
+- [ ] **Step 3: suite completa** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q -p no:warnings` → tutti PASS.
 
 - [ ] **Step 4: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add docs/examples/coordinator.md docs/ROADMAP.md && git commit -m "docs: ridondanza e failover (coordinator); ROADMAP Parte 3"
+cd /Users/alberto/Projects/AI/axyn && git add docs/examples/coordinator.md docs/ROADMAP.md && git commit -m "docs: ridondanza e failover (coordinator); ROADMAP Parte 3"
 ```
 
 ---

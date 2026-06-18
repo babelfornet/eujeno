@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`).
 
-**Goal:** Dalla dashboard si configurano **server MCP**; il server `synapse ui` fa da **host MCP** (connette via stdio, scopre i tool, li passa al modello come `tools`, e quando il modello chiama un tool lo **esegue** sul server MCP e rimanda il risultato — loop di tool-calling). Disponibile quando il modello supporta i tool.
+**Goal:** Dalla dashboard si configurano **server MCP**; il server `axyn ui` fa da **host MCP** (connette via stdio, scopre i tool, li passa al modello come `tools`, e quando il modello chiama un tool lo **esegue** sul server MCP e rimanda il risultato — loop di tool-calling). Disponibile quando il modello supporta i tool.
 
-**Architecture:** `synapse ui` host MCP: `McpRegistry` tiene le config dei server MCP e, via l'SDK `mcp` (stdio, connessione per-operazione), espone `list_tools()` (→ formato OpenAI) e `call_tool()`. Un loop puro `run_tool_loop(messages, tools, call_model, call_tool, max_iters)` orchestra: modello → `tool_calls` → esecuzione MCP → `role:"tool"` → modello → … → risposta finale. Nuovi endpoint `/api/mcp/*` e una chat "agent" che usa i tool MCP. UI: tab **MCP**.
+**Architecture:** `axyn ui` host MCP: `McpRegistry` tiene le config dei server MCP e, via l'SDK `mcp` (stdio, connessione per-operazione), espone `list_tools()` (→ formato OpenAI) e `call_tool()`. Un loop puro `run_tool_loop(messages, tools, call_model, call_tool, max_iters)` orchestra: modello → `tool_calls` → esecuzione MCP → `role:"tool"` → modello → … → risposta finale. Nuovi endpoint `/api/mcp/*` e una chat "agent" che usa i tool MCP. UI: tab **MCP**.
 
-**Tech Stack:** Python · SDK `mcp` (stdio client + FastMCP per il server di test) · FastAPI · l'esistente `synapse/ui/*`.
+**Tech Stack:** Python · SDK `mcp` (stdio client + FastMCP per il server di test) · FastAPI · l'esistente `axyn/ui/*`.
 
 **Realtà:** il tool-calling affidabile richiede un modello capace (7B+); con Qwen 0.5B serve a verificare il meccanismo end-to-end. La UI abilita MCP solo quando la rete è operativa (il modello accetta `tools`).
 
@@ -17,10 +17,10 @@
 ## File Structure
 ```
 pyproject.toml                  # MOD: + dipendenza mcp
-synapse/ui/mcp.py               # NUOVO: McpRegistry (config + list_tools + call_tool via stdio)
-synapse/ui/agent.py             # NUOVO: run_tool_loop (orchestrazione pura, testabile)
-synapse/ui/server.py            # MOD: /api/mcp/add|list|remove + chat-agent
-synapse/ui/static/index.html    # MOD: tab MCP + attività tool in chat
+axyn/ui/mcp.py               # NUOVO: McpRegistry (config + list_tools + call_tool via stdio)
+axyn/ui/agent.py             # NUOVO: run_tool_loop (orchestrazione pura, testabile)
+axyn/ui/server.py            # MOD: /api/mcp/add|list|remove + chat-agent
+axyn/ui/static/index.html    # MOD: tab MCP + attività tool in chat
 tests/test_agent_loop.py        # NUOVO: run_tool_loop con fake (veloce)
 tests/test_mcp_registry.py      # NUOVO: integrazione con un piccolo server MCP Python (slow)
 tests/_mcp_echo_server.py       # NUOVO: server MCP di test (un tool "echo")
@@ -31,9 +31,9 @@ docs/examples/frontend.md       # MOD
 
 ## Task 1: dipendenza `mcp` + `McpRegistry`
 
-**Files:** modify `pyproject.toml`; create `synapse/ui/mcp.py`, `tests/_mcp_echo_server.py`, `tests/test_mcp_registry.py`.
+**Files:** modify `pyproject.toml`; create `axyn/ui/mcp.py`, `tests/_mcp_echo_server.py`, `tests/test_mcp_registry.py`.
 
-- [ ] **Step 1: aggiungi `mcp` alle dipendenze** in `pyproject.toml` (`dependencies`): `"mcp>=1.0"`. Installa: `cd /Users/alberto/Projects/AI/synapse && .venv/bin/pip install -e ".[dev]"`. Se non installabile, BLOCKED.
+- [ ] **Step 1: aggiungi `mcp` alle dipendenze** in `pyproject.toml` (`dependencies`): `"mcp>=1.0"`. Installa: `cd /Users/alberto/Projects/AI/axyn && .venv/bin/pip install -e ".[dev]"`. Se non installabile, BLOCKED.
 
 - [ ] **Step 2: crea il server MCP di test `tests/_mcp_echo_server.py`**
 ```python
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 ```python
 import sys, os
 import pytest
-from synapse.ui.mcp import McpRegistry
+from axyn.ui.mcp import McpRegistry
 
 _SERVER = os.path.join(os.path.dirname(__file__), "_mcp_echo_server.py")
 
@@ -76,9 +76,9 @@ def test_list_and_call_tool_via_stdio():
     assert reg.list_servers() == []
 ```
 
-- [ ] **Step 4: run FAIL** — `... pytest tests/test_mcp_registry.py -m slow -v` → ImportError su `synapse.ui.mcp`.
+- [ ] **Step 4: run FAIL** — `... pytest tests/test_mcp_registry.py -m slow -v` → ImportError su `axyn.ui.mcp`.
 
-- [ ] **Step 5: implementa `synapse/ui/mcp.py`** (connessione stdio per-operazione; nomi tool prefissati `server__tool`):
+- [ ] **Step 5: implementa `axyn/ui/mcp.py`** (connessione stdio per-operazione; nomi tool prefissati `server__tool`):
 ```python
 import asyncio
 
@@ -151,19 +151,19 @@ class McpRegistry:
 
 - [ ] **Step 7: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add pyproject.toml synapse/ui/mcp.py tests/_mcp_echo_server.py tests/test_mcp_registry.py && git commit -m "feat(ui): McpRegistry (host MCP stdio: list_tools/call_tool)"
+cd /Users/alberto/Projects/AI/axyn && git add pyproject.toml axyn/ui/mcp.py tests/_mcp_echo_server.py tests/test_mcp_registry.py && git commit -m "feat(ui): McpRegistry (host MCP stdio: list_tools/call_tool)"
 ```
 
 ---
 
 ## Task 2: `run_tool_loop` (orchestrazione pura)
 
-**Files:** create `synapse/ui/agent.py`, `tests/test_agent_loop.py`.
+**Files:** create `axyn/ui/agent.py`, `tests/test_agent_loop.py`.
 
 - [ ] **Step 1: test `tests/test_agent_loop.py`**
 ```python
 import json
-from synapse.ui.agent import run_tool_loop
+from axyn.ui.agent import run_tool_loop
 
 
 def test_loop_executes_tool_then_finishes():
@@ -203,7 +203,7 @@ def test_loop_no_tools_returns_immediately():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_agent_loop.py -v` → ImportError.
 
-- [ ] **Step 3: implementa `synapse/ui/agent.py`**
+- [ ] **Step 3: implementa `axyn/ui/agent.py`**
 ```python
 import json
 
@@ -238,14 +238,14 @@ def run_tool_loop(messages, tools, call_model, call_tool, max_iters=6):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/ui/agent.py tests/test_agent_loop.py && git commit -m "feat(ui): run_tool_loop (orchestrazione tool-calling, testata)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/agent.py tests/test_agent_loop.py && git commit -m "feat(ui): run_tool_loop (orchestrazione tool-calling, testata)"
 ```
 
 ---
 
 ## Task 3: endpoint MCP + chat-agent nel server
 
-**Files:** modify `synapse/ui/server.py`; modify `tests/test_ui_server.py`.
+**Files:** modify `axyn/ui/server.py`; modify `tests/test_ui_server.py`.
 
 - [ ] **Step 1: aggiungi test a `tests/test_ui_server.py`**
 ```python
@@ -262,9 +262,9 @@ def test_mcp_add_list_remove():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_ui_server.py::test_mcp_add_list_remove -v`.
 
-- [ ] **Step 3: modifica `synapse/ui/server.py`**
+- [ ] **Step 3: modifica `axyn/ui/server.py`**
 
-Aggiungi import in cima: `from synapse.ui.mcp import McpRegistry` e `from synapse.ui.agent import run_tool_loop` e `import json`. Dentro `create_ui_app`, dopo `manager = NodeManager()`, aggiungi `mcp = McpRegistry()`. Aggiungi gli endpoint (prima di `return app`):
+Aggiungi import in cima: `from axyn.ui.mcp import McpRegistry` e `from axyn.ui.agent import run_tool_loop` e `import json`. Dentro `create_ui_app`, dopo `manager = NodeManager()`, aggiungi `mcp = McpRegistry()`. Aggiungi gli endpoint (prima di `return app`):
 ```python
     @app.get("/api/mcp/list")
     async def mcp_list():
@@ -334,14 +334,14 @@ Aggiungi `import asyncio` in cima a server.py.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/ui/server.py tests/test_ui_server.py && git commit -m "feat(ui): endpoint MCP (add/list/remove) + chat-agent con tool MCP"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/server.py tests/test_ui_server.py && git commit -m "feat(ui): endpoint MCP (add/list/remove) + chat-agent con tool MCP"
 ```
 
 ---
 
 ## Task 4: tab MCP nel frontend
 
-**Files:** modify `synapse/ui/static/index.html`.
+**Files:** modify `axyn/ui/static/index.html`.
 
 - [ ] **Step 1: estendi l'app** (NON riscriverla) con un tab **MCP** (accanto a Rete/Chat/Gestione), stesso stile:
   - **Server MCP**: form per aggiungere un server (name, command, args separati da spazio) → `POST /api/mcp/add`; lista dei server da `GET /api/mcp/list` con i loro **tool** (name + descrizione) e bottone Rimuovi → `POST /api/mcp/remove`. Polling/refresh dopo ogni azione. Se `list` ritorna `error`, mostralo.
@@ -349,13 +349,13 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/ui/server.py tests/test
   - In **vista Chat**: quando `useMcp` è attivo, mostra un badge "MCP attivo (N tool)"; quando una risposta include `tool_runs`, mostra sotto la bolla quali tool sono stati chiamati (name + risultato breve). La chiamata chat passa già da `/api/chat` (aggiungi `use_mcp: useMcp` al body).
   - Nota nella UI: "richiede un modello che supporti il tool-calling".
 
-- [ ] **Step 2: check strutturale** — `cd /Users/alberto/Projects/AI/synapse && .venv/bin/python -c "h=open('synapse/ui/static/index.html').read(); assert '/api/mcp/add' in h and '/api/mcp/list' in h and 'use_mcp' in h and 'MCP' in h; print('mcp tab ok', len(h))"`
+- [ ] **Step 2: check strutturale** — `cd /Users/alberto/Projects/AI/axyn && .venv/bin/python -c "h=open('axyn/ui/static/index.html').read(); assert '/api/mcp/add' in h and '/api/mcp/list' in h and 'use_mcp' in h and 'MCP' in h; print('mcp tab ok', len(h))"`
 
 - [ ] **Step 3: serve test** — `... pytest tests/test_ui_server.py::test_serves_index_html -v` → PASS.
 
 - [ ] **Step 4: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/ui/static/index.html && git commit -m "feat(ui): tab MCP (config server + tool, toggle in chat)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/static/index.html && git commit -m "feat(ui): tab MCP (config server + tool, toggle in chat)"
 ```
 
 ---
@@ -364,13 +364,13 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/ui/static/index.html &&
 
 **Files:** modify `docs/examples/frontend.md`.
 
-- [ ] **Step 1: aggiorna `docs/examples/frontend.md`** — sezione "Tool MCP (tab MCP)": aggiungi un server MCP (comando stdio, es. un server filesystem/echo), abilita "usa tool MCP" in chat; quando il modello supporta il tool-calling, il `synapse ui` esegue i tool e mostra l'attività. Nota: serve un modello capace (7B+); con 0.5B è dimostrativo. Solo stdio per ora.
+- [ ] **Step 1: aggiorna `docs/examples/frontend.md`** — sezione "Tool MCP (tab MCP)": aggiungi un server MCP (comando stdio, es. un server filesystem/echo), abilita "usa tool MCP" in chat; quando il modello supporta il tool-calling, il `axyn ui` esegue i tool e mostra l'attività. Nota: serve un modello capace (7B+); con 0.5B è dimostrativo. Solo stdio per ora.
 
 - [ ] **Step 2: suite completa** — `... pytest -q -p no:warnings` → verde.
 
 - [ ] **Step 3: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add docs/examples/frontend.md && git commit -m "docs: tool MCP nel frontend (Fase 3)"
+cd /Users/alberto/Projects/AI/axyn && git add docs/examples/frontend.md && git commit -m "docs: tool MCP nel frontend (Fase 3)"
 ```
 
 ---

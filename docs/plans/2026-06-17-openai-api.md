@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Esporre sul coordinator un endpoint **OpenAI-compatibile** (`/v1/chat/completions` + `/v1/models`) così che qualsiasi client/agente OpenAI-compatibile possa interrogare Synapse. Include **chat template** (messages → prompt) e **sampling** (temperature/top_p/repetition_penalty), che risolvono anche i problemi di qualità del greedy.
+**Goal:** Esporre sul coordinator un endpoint **OpenAI-compatibile** (`/v1/chat/completions` + `/v1/models`) così che qualsiasi client/agente OpenAI-compatibile possa interrogare Axyn. Include **chat template** (messages → prompt) e **sampling** (temperature/top_p/repetition_penalty), che risolvono anche i problemi di qualità del greedy.
 
 **Architecture:** Il nodo `head` espone i logits **top-k** (oltre all'argmax, per retro-compatibilità greedy). Il coordinator campiona (helper puro `sample_token`) e guida la generazione con i parametri di decoding; applica il chat template del tokenizer ai `messages`; riusa il loop con failover esistente. Gli endpoint `/v1/*` mappano richiesta/risposta nel formato OpenAI.
 
-**Tech Stack:** Python · FastAPI · torch · transformers (chat template) · l'esistente `synapse/net/{coordinator,node_exec,framing,wire,discovery}.py`.
+**Tech Stack:** Python · FastAPI · torch · transformers (chat template) · l'esistente `axyn/net/{coordinator,node_exec,framing,wire,discovery}.py`.
 
 **Fuori scope (follow-up):** streaming SSE; endpoint Anthropic `/v1/messages` / config LiteLLM per Claude Code; queue & load balancing per molti agenti concorrenti.
 
@@ -15,9 +15,9 @@
 ## File Structure
 
 ```
-synapse/net/sampling.py         # NUOVO: sample_token() (puro, testabile)
-synapse/net/node_exec.py        # MOD: head ritorna anche topk_ids/topk_logits
-synapse/net/coordinator.py      # MOD: refactor generazione + sampling + chat template + /v1 endpoints
+axyn/net/sampling.py         # NUOVO: sample_token() (puro, testabile)
+axyn/net/node_exec.py        # MOD: head ritorna anche topk_ids/topk_logits
+axyn/net/coordinator.py      # MOD: refactor generazione + sampling + chat template + /v1 endpoints
 tests/
   test_sampling.py              # sample_token deterministico (veloce)
   test_openai_e2e.py            # /v1/chat/completions su 2 nodi (slow)
@@ -29,12 +29,12 @@ docs/ROADMAP.md
 
 ## Task 1: `sample_token` + head top-k
 
-**Files:** create `synapse/net/sampling.py`; modify `synapse/net/node_exec.py`; create `tests/test_sampling.py`; (head già coperto da test_node_exec — resta verde).
+**Files:** create `axyn/net/sampling.py`; modify `axyn/net/node_exec.py`; create `tests/test_sampling.py`; (head già coperto da test_node_exec — resta verde).
 
 - [ ] **Step 1: test `tests/test_sampling.py`**
 ```python
 import torch
-from synapse.net.sampling import sample_token
+from axyn.net.sampling import sample_token
 
 
 def test_greedy_returns_argmax_when_temperature_zero():
@@ -64,9 +64,9 @@ def test_repetition_penalty_demotes_generated_tokens():
     assert out == 20
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_sampling.py -v` → ImportError.
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_sampling.py -v` → ImportError.
 
-- [ ] **Step 3: implementa `synapse/net/sampling.py`**
+- [ ] **Step 3: implementa `axyn/net/sampling.py`**
 ```python
 import torch
 
@@ -96,7 +96,7 @@ def sample_token(topk_ids, topk_logits, generated_ids, temperature, top_p,
     return ids[int(si[choice])]
 ```
 
-- [ ] **Step 4: modifica il ramo `head` di `handle_request` in `synapse/net/node_exec.py`**
+- [ ] **Step 4: modifica il ramo `head` di `handle_request` in `axyn/net/node_exec.py`**
 
 Sostituisci il blocco `if op == "head":` con (ritorna anche i top-k, mantenendo `token_id` per retro-compatibilità greedy):
 ```python
@@ -116,23 +116,23 @@ Aggiungi `import torch` in cima a `node_exec.py` se non già presente.
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/sampling.py synapse/net/node_exec.py tests/test_sampling.py && git commit -m "feat(net): sample_token + head espone top-k logits (sampling)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/sampling.py axyn/net/node_exec.py tests/test_sampling.py && git commit -m "feat(net): sample_token + head espone top-k logits (sampling)"
 ```
 
 ---
 
 ## Task 2: coordinator — generazione parametrica + sampling in /infer
 
-**Files:** modify `synapse/net/coordinator.py`; create test in `tests/test_openai_e2e.py` (parte sampling).
+**Files:** modify `axyn/net/coordinator.py`; create test in `tests/test_openai_e2e.py` (parte sampling).
 
 - [ ] **Step 1: aggiungi a `tests/test_openai_e2e.py` un test di sampling deterministico**
 ```python
 import socket, threading, time, asyncio
 import pytest, httpx, uvicorn
-from synapse.net.coordinator import create_coordinator_app
-from synapse.net.node import run_node
-from synapse.net.node_exec import NodeState
-from synapse.net.topology import StageSpec
+from axyn.net.coordinator import create_coordinator_app
+from axyn.net.node import run_node
+from axyn.net.node_exec import NodeState
+from axyn.net.topology import StageSpec
 
 
 def _free_port():
@@ -184,9 +184,9 @@ def test_infer_sampling_seeded_is_reproducible(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_openai_e2e.py::test_infer_sampling_seeded_is_reproducible -m slow -v` → fallisce (sampling non implementato; output potrebbe non essere riproducibile o i parametri ignorati).
 
-- [ ] **Step 3: refactor in `synapse/net/coordinator.py`**
+- [ ] **Step 3: refactor in `axyn/net/coordinator.py`**
 
-Aggiungi in cima al modulo: `import random` e `from synapse.net.sampling import sample_token`.
+Aggiungi in cima al modulo: `import random` e `from axyn.net.sampling import sample_token`.
 
 Sostituisci `_run_generation` con una versione che accetta i parametri di decoding e campiona via il nodo head:
 ```python
@@ -273,14 +273,14 @@ Sostituisci l'endpoint `/infer` con:
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): coordinator con sampling parametrico + failover refactored"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): coordinator con sampling parametrico + failover refactored"
 ```
 
 ---
 
 ## Task 3: endpoint OpenAI `/v1/models` + `/v1/chat/completions`
 
-**Files:** modify `synapse/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
+**Files:** modify `axyn/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
 
 - [ ] **Step 1: aggiungi a `tests/test_openai_e2e.py`**
 ```python
@@ -292,7 +292,7 @@ def test_openai_chat_completions(full_model):
             models = c.get(f"{base}/v1/models").json()
             assert models["object"] == "list" and len(models["data"]) >= 1
             r = c.post(f"{base}/v1/chat/completions", json={
-                "model": "synapse",
+                "model": "axyn",
                 "messages": [{"role": "user", "content": "Di' ciao in una parola"}],
                 "max_tokens": 8,
             })
@@ -307,15 +307,15 @@ def test_openai_chat_completions(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_openai_e2e.py::test_openai_chat_completions -m slow -v` → 404 (endpoint inesistente).
 
-- [ ] **Step 3: aggiungi gli endpoint in `synapse/net/coordinator.py`**
+- [ ] **Step 3: aggiungi gli endpoint in `axyn/net/coordinator.py`**
 
 Aggiungi `import time` in cima. Aggiungi prima di `return app`:
 ```python
     @app.get("/v1/models")
     async def list_models():
         return {"object": "list",
-                "data": [{"id": "synapse", "object": "model", "owned_by": "synapse"},
-                         {"id": model_id, "object": "model", "owned_by": "synapse"}]}
+                "data": [{"id": "axyn", "object": "model", "owned_by": "axyn"},
+                         {"id": model_id, "object": "model", "owned_by": "axyn"}]}
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: Request):
@@ -349,7 +349,7 @@ Aggiungi `import time` in cima. Aggiungi prima di `return app`:
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): endpoint OpenAI /v1/models + /v1/chat/completions (chat template + sampling)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): endpoint OpenAI /v1/models + /v1/chat/completions (chat template + sampling)"
 ```
 
 ---
@@ -360,7 +360,7 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/net/coordinator.py test
 
 - [ ] **Step 1: crea `docs/examples/agents.md`** con:
 ```markdown
-# Collegare agenti AI a Synapse (API OpenAI-compatibile)
+# Collegare agenti AI a Axyn (API OpenAI-compatibile)
 
 Quando il modello è OPERATIVO, il coordinator espone un'API OpenAI-compatibile: punta qualsiasi client/SDK OpenAI a `http://IL_COORDINATOR:9000/v1`.
 
@@ -369,7 +369,7 @@ Quando il modello è OPERATIVO, il coordinator espone un'API OpenAI-compatibile:
 from openai import OpenAI
 client = OpenAI(base_url="http://127.0.0.1:9000/v1", api_key="qualsiasi")
 r = client.chat.completions.create(
-    model="synapse",
+    model="axyn",
     messages=[{"role": "user", "content": "Scrivi un haiku sul mare"}],
     temperature=0.8, top_p=0.9, max_tokens=80,
 )
@@ -379,7 +379,7 @@ print(r.choices[0].message.content)
 ## curl
 ```bash
 curl -s http://127.0.0.1:9000/v1/chat/completions -H 'content-type: application/json' -d '{
-  "model": "synapse",
+  "model": "axyn",
   "messages": [{"role":"user","content":"Ciao!"}],
   "temperature": 0.7, "max_tokens": 64
 }'
@@ -404,7 +404,7 @@ Ogni richiesta è un job sulla rete. Per molti agenti concorrenti conviene aggiu
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add docs/examples/agents.md README.md docs/ROADMAP.md && git commit -m "docs: collegare agenti via API OpenAI; ROADMAP /v1"
+cd /Users/alberto/Projects/AI/axyn && git add docs/examples/agents.md README.md docs/ROADMAP.md && git commit -m "docs: collegare agenti via API OpenAI; ROADMAP /v1"
 ```
 
 ---

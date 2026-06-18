@@ -1,79 +1,79 @@
-# PRD Parte 5 — Sicurezza & Byzantine Fault Tolerance
+# PRD Part 5 — Security & Byzantine Fault Tolerance
 
-> Decisioni di riferimento: [ADR-0001](../decisions/ADR-0001-implementation-forks.md) (Fork D). Visione: [00-vision-architecture.md](../00-vision-architecture.md).
+> Reference decisions: [ADR-0001](../decisions/ADR-0001-implementation-forks.md) (Fork D). Vision: [00-vision-architecture.md](../00-vision-architecture.md).
 >
-> **Stato:** verifica **light implementata** nel PoC; BFT completo, commit-reveal e staking **su carta, rimandati**.
+> **Status:** **light verification implemented** in the PoC; full BFT, commit-reveal and staking **on paper, deferred**.
 
-## 1. Scopo
+## 1. Purpose
 
-Difendere l'integrità del calcolo distribuito contro nodi difettosi o malevoli, gestire i fallimenti parziali della rete, e definire (su carta) il percorso verso una BFT completa. Principio: nel PoC i nodi sono per lo più fidati (li possediamo), quindi la verifica è **probabilistica ed economica**, non sistematica.
+Defend the integrity of distributed computation against faulty or malicious nodes, handle partial network failures, and define (on paper) the path toward full BFT. Principle: in the PoC the nodes are mostly trusted (we own them), so verification is **probabilistic and cheap**, not systematic.
 
-## 2. In scope (PoC) / Fuori scope
+## 2. In scope (PoC) / Out of scope
 
-**In scope (PoC):** recompute ridondante **campionato** (~5-10%) reputation-gated; confronto attivazioni in **fp32 con tolleranza**; gestione fallimenti parziali via store-and-forward (Parte 3); integrità basilare in transito.
+**In scope (PoC):** **sampled** redundant recompute (~5-10%), reputation-gated; activation comparison in **fp32 with tolerance**; partial-failure handling via store-and-forward (Part 3); basic in-transit integrity.
 
-**Fuori scope (deferred):** consenso/quorum sugli output, commit-reveal, slashing economico, sybil resistance economica, attestazioni crittografiche, kernel deterministici.
+**Out of scope (deferred):** consensus/quorum on outputs, commit-reveal, economic slashing, economic sybil resistance, cryptographic attestations, deterministic kernels.
 
-## 3. Verifica campionata (operativa nel PoC)
+## 3. Sampled verification (operational in the PoC)
 
-Riusa **lo stesso primitivo di fan-out** del failover/ridondanza (Parte 3) — un solo code path keyed `(job_id, stage)`.
+Reuses the **same fan-out primitive** as failover/redundancy (Part 3) — a single code path keyed `(job_id, stage)`.
 
 ```mermaid
 flowchart TD
-    S[stage di prefill/stateless] --> SAMP{campiona ~5-10%<br/>biased low-score?}
-    SAMP -- no --> OK[procedi]
-    SAMP -- sì --> R2[fan-out a 2° holder]
-    R2 --> CMP["confronto fp32:<br/>torch.allclose(atol~1e-2, rtol~1e-3)"]
-    CMP -- entro tolleranza --> OK2[ok → reputation +]
-    CMP -- divergenza --> FLAG[flag + re-dispatch + reputation −]
+    S[prefill/stateless stage] --> SAMP{sample ~5-10%<br/>biased low-score?}
+    SAMP -- no --> OK[proceed]
+    SAMP -- yes --> R2[fan-out to a 2nd holder]
+    R2 --> CMP["fp32 comparison:<br/>torch.allclose(atol~1e-2, rtol~1e-3)"]
+    CMP -- within tolerance --> OK2[ok → reputation +]
+    CMP -- divergence --> FLAG[flag + re-dispatch + reputation −]
 ```
 
-**Regole dure (dal team):**
-- **Mai hash-compare.** Il non-determinismo FP tra hardware eterogeneo fa sì che nodi *onesti* producano byte diversi → l'uguaglianza di hash fallisce sempre. Si confrontano tensori promossi a **fp32** con tolleranza empirica.
-- **Solo hop stateless/prefill.** Verificare a metà generazione richiederebbe replay della KV-cache sul 2° holder → si verifica solo ai confini di sessione/prefill.
-- **Campionamento, non sistematico.** Verificare ogni stage = ~2x compute, uccide il vantaggio async.
+**Hard rules (from the team):**
+- **Never hash-compare.** FP non-determinism across heterogeneous hardware means *honest* nodes produce different bytes → hash equality always fails. Tensors promoted to **fp32** are compared with an empirical tolerance.
+- **Stateless/prefill hops only.** Verifying mid-generation would require replaying the KV-cache on the 2nd holder → verification happens only at session/prefill boundaries.
+- **Sampling, not systematic.** Verifying every stage = ~2x compute, kills the async advantage.
 
-## 4. Gestione fallimenti parziali della rete
+## 4. Partial network-failure handling
 
-Lo store-and-forward durevole (Parte 3) **assorbe** partizioni temporanee: il lavoro si accoda (`WAITING_COVERAGE`, outbox con retry/backoff), non si perde. Una partizione split-brain mostra coverage piena su ciascun lato ma nessuno completo (intrinseco all'eventual consistency) — mitigato dal pinning del bootstrap.
+The durable store-and-forward (Part 3) **absorbs** temporary partitions: work queues up (`WAITING_COVERAGE`, outbox with retry/backoff), it is not lost. A split-brain partition shows full coverage on each side but no complete one (intrinsic to eventual consistency) — mitigated by pinning the bootstrap.
 
-## 5. Integrità in transito (PoC, basilare)
+## 5. In-transit integrity (PoC, basic)
 
-- Payload safetensors con campo di lunghezza/checksum per rilevare corruzione di trasporto.
-- **Record DHT firmati:** decisione aperta (ADR-0001 Q6) — economici e forward-compat per reputation/BFT; da decidere se pagarli ora.
+- Safetensors payload with a length/checksum field to detect transport corruption.
+- **Signed DHT records:** open decision (ADR-0001 Q6) — cheap and forward-compatible for reputation/BFT; to be decided whether to pay for them now.
 
-## 6. Modello di minaccia & roadmap BFT (su carta)
+## 6. Threat model & BFT roadmap (on paper)
 
-| Minaccia | PoC | Deferred (full BFT) |
-|----------|-----|---------------------|
-| Nodo restituisce attivazioni spazzatura | recompute campionato + reputation − | quorum N-su-M + slashing |
-| Nodo mente "in piccolo" sotto tolleranza | accettato (tolleranza larga) | kernel deterministici + commit-reveal |
-| Sybil (molte identità) | nessun costo identità (rischio noto) | stake economico / proof-of-work d'ingresso |
-| Free-riding (annuncia, non calcola) | reputation decade su timeout | slashing dello stake |
-| Replay / tampering payload | checksum + (opz.) firme | record firmati obbligatori + nonce |
+| Threat | PoC | Deferred (full BFT) |
+|--------|-----|---------------------|
+| Node returns garbage activations | sampled recompute + reputation − | N-of-M quorum + slashing |
+| Node lies "small" under tolerance | accepted (wide tolerance) | deterministic kernels + commit-reveal |
+| Sybil (many identities) | no identity cost (known risk) | economic stake / proof-of-work on entry |
+| Free-riding (announces, doesn't compute) | reputation decays on timeout | stake slashing |
+| Replay / payload tampering | checksum + (opt.) signatures | mandatory signed records + nonce |
 
-**Commit-reveal:** rimandato e **flaggato potenzialmente non-viabile** finché non si adottano kernel canonici fp32/interi deterministici (precondizione nell'ADR-0001 Fork D).
+**Commit-reveal:** deferred and **flagged as potentially non-viable** until canonical deterministic fp32/integer kernels are adopted (precondition in ADR-0001 Fork D).
 
-## 7. Rischi & mitigazioni (dal team)
+## 7. Risks & mitigations (from the team)
 
-- **Falsi positivi** tra nodi onesti eterogenei (CPU vs GPU, BF16) → confronto in fp32 con tolleranza **misurata** (non assunta) sull'hardware reale.
-- **Tolleranza troppo larga** → un avversario nasconde una piccola bugia (accettato nel PoC; difesa reale rimandata).
-- **Verifica mid-generazione** → vincolata a prefill/confini di sessione.
+- **False positives** among honest heterogeneous nodes (CPU vs GPU, BF16) → fp32 comparison with a tolerance **measured** (not assumed) on the real hardware.
+- **Tolerance too wide** → an adversary hides a small lie (accepted in the PoC; real defense deferred).
+- **Mid-generation verification** → constrained to prefill/session boundaries.
 
-## 8. Criteri di accettazione (PoC)
+## 8. Acceptance criteria (PoC)
 
-1. Un nodo deliberatamente difettoso (output perturbato oltre tolleranza) viene rilevato da un recompute campionato e declassato in reputazione.
-2. Due nodi onesti su hardware diverso **non** generano falsi positivi con le tolleranze scelte.
-3. Una partizione di rete temporanea non causa perdita di job (si accodano e riprendono).
+1. A deliberately faulty node (output perturbed beyond tolerance) is detected by a sampled recompute and downgraded in reputation.
+2. Two honest nodes on different hardware do **not** generate false positives with the chosen tolerances.
+3. A temporary network partition does not cause job loss (jobs queue up and resume).
 
-## 9. Dipendenze
+## 9. Dependencies
 
-- **Parte 1:** determinismo (modulo FP) di `run_block`.
-- **Parte 2:** holder ridondanti da `discover`; record (firma) DHT.
-- **Parte 3:** fan-out/persistenza/re-dispatch condivisi con la verifica.
-- **Parte 4:** la divergenza alimenta la reputazione ed è il futuro trigger di slashing.
+- **Part 1:** the determinism (modulo FP) of `run_block`.
+- **Part 2:** redundant holders from `discover`; DHT record (signature).
+- **Part 3:** fan-out/persistence/re-dispatch shared with verification.
+- **Part 4:** divergence feeds the reputation and is the future slashing trigger.
 
-## 10. Domande aperte
+## 10. Open questions
 
-- Valori empirici atol/rtol sull'hardware reale (ADR-0001 Q4).
-- Firma dei record DHT ora o dopo (ADR-0001 Q6).
+- Empirical atol/rtol values on real hardware (ADR-0001 Q4).
+- Signing of the DHT records now or later (ADR-0001 Q6).

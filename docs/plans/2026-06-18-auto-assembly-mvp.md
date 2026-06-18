@@ -6,17 +6,17 @@
 
 **Architecture:** Tre funzioni pure (capacità, gaps, decisione) + il wiring in `serve --auto`: all'avvio il nodo sonda la RAM, interroga un seed `/registry`, sceglie il range più bisognoso che ci sta, poi carica SOLO quei layer e serve. La capacità viene annunciata (additiva) nel record di gossip. `target` di replica è parametrico (≥2 ⇒ ridondanza a startup). Realizza le slice 1-3 di [ADR-0003](../decisions/ADR-0003-allocazione-capacity-aware.md). Failover-reload a runtime + reward ledger = piano successivo.
 
-**Tech Stack:** Python · Typer · l'esistente `synapse/net/{discovery,server}.py`, `synapse/cli.py`, `model_config_dims`, `parse_stages`, `parse_dtype`. Dipendenza opzionale `psutil` (fallback stdlib).
+**Tech Stack:** Python · Typer · l'esistente `axyn/net/{discovery,server}.py`, `axyn/cli.py`, `model_config_dims`, `parse_stages`, `parse_dtype`. Dipendenza opzionale `psutil` (fallback stdlib).
 
 ---
 
 ## File Structure
 ```
-synapse/net/capacity.py     # NUOVO: fit_layers (estratto da cli.fit) + probe_capacity
-synapse/net/discovery.py    # MOD: coverage_gaps()
-synapse/net/allocator.py    # NUOVO: choose_stages() (decisione pura)
-synapse/net/server.py       # MOD: capacity nel record own_stages
-synapse/cli.py              # MOD: fit usa fit_layers; serve --auto/--ram/--reserve
+axyn/net/capacity.py     # NUOVO: fit_layers (estratto da cli.fit) + probe_capacity
+axyn/net/discovery.py    # MOD: coverage_gaps()
+axyn/net/allocator.py    # NUOVO: choose_stages() (decisione pura)
+axyn/net/server.py       # MOD: capacity nel record own_stages
+axyn/cli.py              # MOD: fit usa fit_layers; serve --auto/--ram/--reserve
 tests/test_capacity.py      # NUOVO
 tests/test_coverage_gaps.py # NUOVO
 tests/test_allocator.py     # NUOVO
@@ -27,11 +27,11 @@ tests/test_serve_auto.py    # NUOVO (unit del path di scelta, senza avviare il s
 
 ## Task 1: `net/capacity.py` — fit_layers (estratto) + probe_capacity
 
-**Files:** Create `synapse/net/capacity.py`, `tests/test_capacity.py`; Modify `synapse/cli.py` (fit usa fit_layers).
+**Files:** Create `axyn/net/capacity.py`, `tests/test_capacity.py`; Modify `axyn/cli.py` (fit usa fit_layers).
 
 - [ ] **Step 1: test `tests/test_capacity.py`**
 ```python
-from synapse.net.capacity import fit_layers, probe_capacity
+from axyn.net.capacity import fit_layers, probe_capacity
 
 DIMS = {"num_layers": 28, "hidden_size": 3584, "num_attention_heads": 28,
         "num_key_value_heads": 4, "intermediate_size": 18944, "vocab_size": 152064}
@@ -58,7 +58,7 @@ def test_probe_capacity_shape():
 
 - [ ] **Step 2: run FAIL** — `.venv/bin/python -m pytest tests/test_capacity.py -v` → ImportError.
 
-- [ ] **Step 3: create `synapse/net/capacity.py`**
+- [ ] **Step 3: create `axyn/net/capacity.py`**
 ```python
 """Stima capacità di un nodo: quanti layer regge data la RAM, e probe risorse."""
 import os
@@ -110,7 +110,7 @@ def probe_capacity() -> dict:
 - [ ] **Step 4: refactor `cli.py::fit`** per usare `fit_layers` (NON cambiare i campi `data` emessi). Sostituisci il blocco di calcolo dentro `fit` (da `bytes_per = torch.finfo(...)` fino al dict `data`) con:
 ```python
     import torch
-    from synapse.net.capacity import fit_layers
+    from axyn.net.capacity import fit_layers
     bytes_per = torch.finfo(_dt).bits // 8
     d = model_config_dims(model_id)
     nl = d["num_layers"]
@@ -138,18 +138,18 @@ def probe_capacity() -> dict:
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/capacity.py synapse/cli.py tests/test_capacity.py && git commit -m "feat(net): capacity.fit_layers + probe_capacity (fit CLI rifattorizzato)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/capacity.py axyn/cli.py tests/test_capacity.py && git commit -m "feat(net): capacity.fit_layers + probe_capacity (fit CLI rifattorizzato)"
 ```
 
 ---
 
 ## Task 2: `discovery.coverage_gaps()`
 
-**Files:** Modify `synapse/net/discovery.py`; Create `tests/test_coverage_gaps.py`.
+**Files:** Modify `axyn/net/discovery.py`; Create `tests/test_coverage_gaps.py`.
 
 - [ ] **Step 1: test `tests/test_coverage_gaps.py`**
 ```python
-from synapse.net.discovery import coverage_gaps
+from axyn.net.discovery import coverage_gaps
 
 A = {"embed": True, "head": False, "decoders": ["0-12"]}
 B = {"embed": False, "head": True, "decoders": ["12-24"]}
@@ -175,7 +175,7 @@ def test_under_replicated_with_target_2():
 
 - [ ] **Step 2: run FAIL** — `.venv/bin/python -m pytest tests/test_coverage_gaps.py -v` → ImportError.
 
-- [ ] **Step 3: append a `synapse/net/discovery.py`**
+- [ ] **Step 3: append a `axyn/net/discovery.py`**
 ```python
 def coverage_gaps(stages_by_url: dict, num_layers: int, target: int = 1) -> dict:
     """Range decoder con replica < target (scoperti o sotto-replicati), più il
@@ -209,18 +209,18 @@ def coverage_gaps(stages_by_url: dict, num_layers: int, target: int = 1) -> dict
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/discovery.py tests/test_coverage_gaps.py && git commit -m "feat(net): coverage_gaps (range scoperti/sotto-replicati)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_coverage_gaps.py && git commit -m "feat(net): coverage_gaps (range scoperti/sotto-replicati)"
 ```
 
 ---
 
 ## Task 3: `net/allocator.py` — choose_stages() (decisione pura)
 
-**Files:** Create `synapse/net/allocator.py`, `tests/test_allocator.py`.
+**Files:** Create `axyn/net/allocator.py`, `tests/test_allocator.py`.
 
 - [ ] **Step 1: test `tests/test_allocator.py`**
 ```python
-from synapse.net.allocator import choose_stages
+from axyn.net.allocator import choose_stages
 
 
 def gaps(decoder_gaps, e=0, h=0, target=1):
@@ -250,7 +250,7 @@ def test_no_gaps_returns_empty():
 
 - [ ] **Step 2: run FAIL** — `.venv/bin/python -m pytest tests/test_allocator.py -v` → ImportError.
 
-- [ ] **Step 3: create `synapse/net/allocator.py`**
+- [ ] **Step 3: create `axyn/net/allocator.py`**
 ```python
 """Decisione di auto-assegnazione: dato il quadro dei buchi (coverage_gaps) e la
 capacità del nodo, sceglie lo stage spec da rivendicare. Funzione pura."""
@@ -279,18 +279,18 @@ def choose_stages(gaps: dict, max_decoder_layers: int, num_layers: int,
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/allocator.py tests/test_allocator.py && git commit -m "feat(net): allocator.choose_stages (decisione di auto-assegnazione)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/allocator.py tests/test_allocator.py && git commit -m "feat(net): allocator.choose_stages (decisione di auto-assegnazione)"
 ```
 
 ---
 
 ## Task 4: `serve --auto` + capacity nel record
 
-**Files:** Modify `synapse/net/server.py` (capacity nel record), `synapse/cli.py` (serve --auto). Create `tests/test_serve_auto.py`.
+**Files:** Modify `axyn/net/server.py` (capacity nel record), `axyn/cli.py` (serve --auto). Create `tests/test_serve_auto.py`.
 
 - [ ] **Step 1: test `tests/test_serve_auto.py`** — testa la funzione pura di pianificazione `plan_auto_stages` (niente server avviato).
 ```python
-from synapse.cli import plan_auto_stages
+from axyn.cli import plan_auto_stages
 
 DIMS = {"num_layers": 24, "hidden_size": 896, "num_attention_heads": 14,
         "num_key_value_heads": 2, "intermediate_size": 4864, "vocab_size": 151936}
@@ -313,14 +313,14 @@ def test_plan_second_node_fills_remaining_gap():
 
 - [ ] **Step 2: run FAIL** — `.venv/bin/python -m pytest tests/test_serve_auto.py -v` → ImportError (`plan_auto_stages`).
 
-- [ ] **Step 3a: in `synapse/cli.py` aggiungi la funzione pura `plan_auto_stages`** (vicino agli altri helper, NON dentro un comando):
+- [ ] **Step 3a: in `axyn/cli.py` aggiungi la funzione pura `plan_auto_stages`** (vicino agli altri helper, NON dentro un comando):
 ```python
 def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
                      stages_by_url: dict, target: int) -> str:
     """Decide lo stage spec da rivendicare combinando capacità (fit) e buchi (gaps)."""
-    from synapse.net.capacity import fit_layers
-    from synapse.net.discovery import coverage_gaps
-    from synapse.net.allocator import choose_stages
+    from axyn.net.capacity import fit_layers
+    from axyn.net.discovery import coverage_gaps
+    from axyn.net.allocator import choose_stages
     nl = dims["num_layers"]
     fit = fit_layers(dims, bytes_per, ram_gb, reserve)
     gaps = coverage_gaps(stages_by_url, nl, target=target)
@@ -329,7 +329,7 @@ def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
     return choose_stages(gaps, fit["max_decoder_layers"], nl, take_embed_head=take_eh)
 ```
 
-- [ ] **Step 3b: in `synapse/cli.py` rendi `--stages` opzionale e aggiungi `--auto/--ram/--reserve` a `serve`.** Cambia la firma di `serve`:
+- [ ] **Step 3b: in `axyn/cli.py` rendi `--stages` opzionale e aggiungi `--auto/--ram/--reserve` a `serve`.** Cambia la firma di `serve`:
   - `stages: str = typer.Option(None, "--stages", ...)` (era `...` obbligatorio).
   - aggiungi:
     ```python
@@ -342,8 +342,8 @@ def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
 ```python
     if auto:
         import torch, httpx
-        from synapse.net.capacity import probe_capacity, fit_layers
-        from synapse.config import parse_dtype as _pdt
+        from axyn.net.capacity import probe_capacity, fit_layers
+        from axyn.config import parse_dtype as _pdt
         _bp = torch.finfo(_pdt(dtype)).bits // 8
         dims = model_config_dims(model_id)
         ram_gb = ram if ram is not None else (probe_capacity().get("ram_free_gb") or 4.0)
@@ -356,26 +356,26 @@ def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
         stages = plan_auto_stages(dims, _bp, ram_gb, reserve, learned, target)
         if not stages:
             _fail("serve", "NO_GAP", "nessun range da coprire (coverage completa o RAM insufficiente)", exit_code=2)
-        typer.echo(f"synapse serve --auto: rivendico stages={stages} (ram={ram_gb}GB, target={target})", err=True)
+        typer.echo(f"axyn serve --auto: rivendico stages={stages} (ram={ram_gb}GB, target={target})", err=True)
     elif stages is None:
         _fail("serve", "USAGE_ERROR", "specifica --stages oppure --auto", exit_code=2)
 ```
   (Il resto di `serve` prosegue invariato: `parse_stages(stages)`, `load_partial_model`, `create_app`. Il path `--coordinator` resta valido anche con `--auto`.)
 
-- [ ] **Step 3c: in `synapse/net/server.py` annuncia la capacità nel record.** Dopo la riga `own_stages = {...}` (riga ~27) aggiungi:
+- [ ] **Step 3c: in `axyn/net/server.py` annuncia la capacità nel record.** Dopo la riga `own_stages = {...}` (riga ~27) aggiungi:
 ```python
-    from synapse.net.capacity import probe_capacity
+    from axyn.net.capacity import probe_capacity
     own_stages["capacity"] = probe_capacity()
 ```
   (È additivo: `build_chain` e `coverage_gaps` leggono solo `embed`/`head`/`decoders`; `capacity` viaggia nel gossip e sarà usato dall'allocatore.)
 
-- [ ] **Step 4: run PASS** — `.venv/bin/python -m pytest tests/test_serve_auto.py -v` → 2 passed. Verifica CLI: `.venv/bin/synapse serve --help | grep -q auto && echo ok`.
+- [ ] **Step 4: run PASS** — `.venv/bin/python -m pytest tests/test_serve_auto.py -v` → 2 passed. Verifica CLI: `.venv/bin/axyn serve --help | grep -q auto && echo ok`.
 
 - [ ] **Step 5: suite completa** — `.venv/bin/python -m pytest -q -p no:warnings` → verde (nessuna regressione; in particolare `serve` con `--stages` esplicito continua a funzionare).
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py synapse/net/server.py tests/test_serve_auto.py && git commit -m "feat(cli): serve --auto (auto-assegnazione layer da capacità + gaps) + capacity nel record"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py axyn/net/server.py tests/test_serve_auto.py && git commit -m "feat(cli): serve --auto (auto-assegnazione layer da capacità + gaps) + capacity nel record"
 ```
 
 ---
@@ -385,7 +385,7 @@ cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py synapse/net/serv
 **Files:** Modify `CLAUDE.md`, `docs/examples/p2p.md`. (Lo fa il controller.)
 
 - [ ] **Step 1:** in `CLAUDE.md` aggiungi una riga alla tabella comandi per `serve --auto` e una nota: "in P2P, avvia i nodi con `--auto --peers <seed>` e si dividono i layer da soli (usa `--target 2` per ridondanza)".
-- [ ] **Step 2:** in `docs/examples/p2p.md` aggiungi una sezione "Auto-assemblaggio" con l'esempio `synapse serve --auto --peers ...`.
+- [ ] **Step 2:** in `docs/examples/p2p.md` aggiungi una sezione "Auto-assemblaggio" con l'esempio `axyn serve --auto --peers ...`.
 - [ ] **Step 3:** commit `docs: serve --auto (auto-assemblaggio P2P)`.
 
 ---

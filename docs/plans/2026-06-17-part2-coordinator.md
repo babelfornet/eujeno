@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Inferenza distribuita che funziona **LAN e internet senza VPN**: i nodi worker si connettono in uscita a un **coordinator** pubblicamente raggiungibile che fa **discovery automatica** (registry dei blocchi) e **instrada** le attivazioni; `synapse infer` è un client sottile.
+**Goal:** Inferenza distribuita che funziona **LAN e internet senza VPN**: i nodi worker si connettono in uscita a un **coordinator** pubblicamente raggiungibile che fa **discovery automatica** (registry dei blocchi) e **instrada** le attivazioni; `axyn infer` è un client sottile.
 
 **Architecture:** Vedi [ADR-0002](../decisions/ADR-0002-connettivita-nat.md). Coordinator-relay di Milestone 0: WebSocket outbound nodo→coordinator (NAT-friendly); il coordinator tiene il registry, calcola la coverage, e guida il loop di generazione relayando ogni hop al nodo giusto. Riusa l'esecuzione a blocchi e il wire safetensors di Parte 1; cambia solo il *trasporto* (WS relay invece di POST diretti).
 
-**Tech Stack:** Python · FastAPI WebSocket (coordinator) · `websockets` lib (client nodo) · httpx (client infer) · safetensors · asyncio · l'esistente `synapse/net/` e `synapse/model/`.
+**Tech Stack:** Python · FastAPI WebSocket (coordinator) · `websockets` lib (client nodo) · httpx (client infer) · safetensors · asyncio · l'esistente `axyn/net/` e `axyn/model/`.
 
 **Decisioni:** framing binario `4-byte len + JSON header + payload safetensors`; correlazione richiesta/risposta via `req_id` + Future; greedy/argmax; il coordinator possiede il tokenizer; coverage = i range decoder annunciati tassellano `[0, num_layers)`.
 
@@ -18,19 +18,19 @@
 
 ```
 pyproject.toml                  # + websockets
-synapse/net/
+axyn/net/
   framing.py                    # pack()/unpack() — header+payload in un frame
   node_exec.py                  # NodeState + handle_request() (esecuzione hop, testabile)
   node.py                       # run_node() — client WS verso il coordinator
   discovery.py                  # build_chain() — topologia+coverage dal registry
   coordinator.py                # create_coordinator_app() — WS /node, /registry, POST /infer
-synapse/cli.py                  # + coordinator ; serve --coordinator ; infer --coordinator
+axyn/cli.py                  # + coordinator ; serve --coordinator ; infer --coordinator
 tests/
   test_framing.py               # round-trip (veloce)
   test_discovery.py             # build_chain (veloce)
   test_node_exec.py             # handle_request greedy == reference (slow)
   test_coordinator_e2e.py       # coordinator + 2 nodi reali, /infer == reference (slow)
-  test_cli_coordinator.py       # `synapse infer --coordinator` end-to-end (slow)
+  test_cli_coordinator.py       # `axyn infer --coordinator` end-to-end (slow)
 docs/
   examples/coordinator.md       # quickstart NAT/internet
 ```
@@ -39,11 +39,11 @@ docs/
 
 ## Task 1: framing (header + payload in un frame)
 
-**Files:** create `synapse/net/framing.py`, `tests/test_framing.py`.
+**Files:** create `axyn/net/framing.py`, `tests/test_framing.py`.
 
 - [ ] **Step 1: test `tests/test_framing.py`**
 ```python
-from synapse.net.framing import pack, unpack
+from axyn.net.framing import pack, unpack
 
 
 def test_roundtrip_header_and_payload():
@@ -60,9 +60,9 @@ def test_roundtrip_empty_payload():
     assert payload2 == b""
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_framing.py -v` → ImportError.
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_framing.py -v` → ImportError.
 
-- [ ] **Step 3: implementa `synapse/net/framing.py`**
+- [ ] **Step 3: implementa `axyn/net/framing.py`**
 ```python
 import json
 import struct
@@ -85,18 +85,18 @@ def unpack(data: bytes):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/framing.py tests/test_framing.py && git commit -m "feat(net): framing header+payload per il relay WebSocket"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/framing.py tests/test_framing.py && git commit -m "feat(net): framing header+payload per il relay WebSocket"
 ```
 
 ---
 
 ## Task 2: discovery `build_chain` (topologia + coverage dal registry)
 
-**Files:** create `synapse/net/discovery.py`, `tests/test_discovery.py`.
+**Files:** create `axyn/net/discovery.py`, `tests/test_discovery.py`.
 
 - [ ] **Step 1: test `tests/test_discovery.py`**
 ```python
-from synapse.net.discovery import build_chain
+from axyn.net.discovery import build_chain
 
 
 def _reg(**nodes):
@@ -128,7 +128,7 @@ def test_build_chain_missing_embed_returns_none():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_discovery.py -v` → ImportError.
 
-- [ ] **Step 3: implementa `synapse/net/discovery.py`**
+- [ ] **Step 3: implementa `axyn/net/discovery.py`**
 ```python
 def build_chain(registry: dict, num_layers: int):
     """Dal registry {conn_id: {'embed','head','decoders':[block_key]}} costruisce
@@ -161,23 +161,23 @@ def build_chain(registry: dict, num_layers: int):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): build_chain (topologia + coverage dal registry del coordinator)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): build_chain (topologia + coverage dal registry del coordinator)"
 ```
 
 ---
 
 ## Task 3: `NodeState` + `handle_request` (esecuzione hop)
 
-**Files:** create `synapse/net/node_exec.py`, `tests/test_node_exec.py`.
+**Files:** create `axyn/net/node_exec.py`, `tests/test_node_exec.py`.
 
 - [ ] **Step 1: test `tests/test_node_exec.py`**
 ```python
 import pytest
 import torch
-from synapse.net.node_exec import NodeState, handle_request
-from synapse.net.wire import encode_tensors, decode_tensors
-from synapse.net.topology import StageSpec
-from synapse.model.generate import reference_generate
+from axyn.net.node_exec import NodeState, handle_request
+from axyn.net.wire import encode_tensors, decode_tensors
+from axyn.net.topology import StageSpec
+from axyn.model.generate import reference_generate
 
 
 @pytest.mark.slow
@@ -207,10 +207,10 @@ def test_handle_request_greedy_matches_reference(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_node_exec.py -m slow -v` → ImportError.
 
-- [ ] **Step 3: implementa `synapse/net/node_exec.py`**
+- [ ] **Step 3: implementa `axyn/net/node_exec.py`**
 ```python
-from synapse.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
-from synapse.net.wire import encode_tensors, decode_tensors
+from axyn.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
+from axyn.net.wire import encode_tensors, decode_tensors
 
 
 class NodeState:
@@ -259,16 +259,16 @@ def handle_request(state: NodeState, header: dict, payload: bytes):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/node_exec.py tests/test_node_exec.py && git commit -m "feat(net): NodeState + handle_request (esecuzione hop per il relay)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/node_exec.py tests/test_node_exec.py && git commit -m "feat(net): NodeState + handle_request (esecuzione hop per il relay)"
 ```
 
 ---
 
 ## Task 4: coordinator + node client + golden distribuito via relay
 
-**Files:** modify `pyproject.toml`; create `synapse/net/coordinator.py`, `synapse/net/node.py`, `tests/test_coordinator_e2e.py`.
+**Files:** modify `pyproject.toml`; create `axyn/net/coordinator.py`, `axyn/net/node.py`, `tests/test_coordinator_e2e.py`.
 
-- [ ] **Step 1: aggiungi `websockets` a `pyproject.toml`** (lista `dependencies`): `"websockets>=12"`. Poi `cd /Users/alberto/Projects/AI/synapse && .venv/bin/pip install -e ".[dev]"`. (Se la rete è giù e `websockets` non è importabile, BLOCKED.)
+- [ ] **Step 1: aggiungi `websockets` a `pyproject.toml`** (lista `dependencies`): `"websockets>=12"`. Poi `cd /Users/alberto/Projects/AI/axyn && .venv/bin/pip install -e ".[dev]"`. (Se la rete è giù e `websockets` non è importabile, BLOCKED.)
 
 - [ ] **Step 2: test `tests/test_coordinator_e2e.py`**
 ```python
@@ -281,11 +281,11 @@ import pytest
 import httpx
 import uvicorn
 
-from synapse.net.coordinator import create_coordinator_app
-from synapse.net.node import run_node
-from synapse.net.node_exec import NodeState
-from synapse.net.topology import StageSpec
-from synapse.model.generate import reference_generate
+from axyn.net.coordinator import create_coordinator_app
+from axyn.net.node import run_node
+from axyn.net.node_exec import NodeState
+from axyn.net.topology import StageSpec
+from axyn.model.generate import reference_generate
 
 
 def _free_port():
@@ -342,16 +342,16 @@ def test_two_nodes_via_coordinator_match_reference(full_model):
 
 - [ ] **Step 3: run FAIL** — `... pytest tests/test_coordinator_e2e.py -m slow -v` → ImportError.
 
-- [ ] **Step 4: implementa `synapse/net/coordinator.py`**
+- [ ] **Step 4: implementa `axyn/net/coordinator.py`**
 ```python
 import asyncio
 
 import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 
-from synapse.net.framing import pack, unpack
-from synapse.net.wire import encode_tensors, decode_tensors
-from synapse.net.discovery import build_chain
+from axyn.net.framing import pack, unpack
+from axyn.net.wire import encode_tensors, decode_tensors
+from axyn.net.discovery import build_chain
 
 
 def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
@@ -435,14 +435,14 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
     return app
 ```
 
-- [ ] **Step 5: implementa `synapse/net/node.py`**
+- [ ] **Step 5: implementa `axyn/net/node.py`**
 ```python
 import asyncio
 
 import websockets
 
-from synapse.net.framing import pack, unpack
-from synapse.net.node_exec import handle_request
+from axyn.net.framing import pack, unpack
+from axyn.net.node_exec import handle_request
 
 
 async def run_node(coordinator_ws_url: str, state):
@@ -462,14 +462,14 @@ async def run_node(coordinator_ws_url: str, state):
 
 - [ ] **Step 7: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add pyproject.toml synapse/net/coordinator.py synapse/net/node.py tests/test_coordinator_e2e.py && git commit -m "feat(net): coordinator-relay + node WS client (golden distribuito via relay)"
+cd /Users/alberto/Projects/AI/axyn && git add pyproject.toml axyn/net/coordinator.py axyn/net/node.py tests/test_coordinator_e2e.py && git commit -m "feat(net): coordinator-relay + node WS client (golden distribuito via relay)"
 ```
 
 ---
 
 ## Task 5: CLI `coordinator` + `serve --coordinator` + `infer --coordinator`
 
-**Files:** modify `synapse/cli.py`; create `tests/test_cli_coordinator.py`.
+**Files:** modify `axyn/cli.py`; create `tests/test_cli_coordinator.py`.
 
 - [ ] **Step 1: test `tests/test_cli_coordinator.py`**
 ```python
@@ -483,12 +483,12 @@ import pytest
 import uvicorn
 
 from typer.testing import CliRunner
-from synapse.cli import app as cli_app
-from synapse.net.coordinator import create_coordinator_app
-from synapse.net.node import run_node
-from synapse.net.node_exec import NodeState
-from synapse.net.topology import StageSpec
-from synapse.model.generate import reference_generate
+from axyn.cli import app as cli_app
+from axyn.net.coordinator import create_coordinator_app
+from axyn.net.node import run_node
+from axyn.net.node_exec import NodeState
+from axyn.net.topology import StageSpec
+from axyn.model.generate import reference_generate
 
 runner = CliRunner()
 
@@ -544,14 +544,14 @@ def test_cli_infer_via_coordinator(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_cli_coordinator.py -m slow -v` → FAIL (manca `--coordinator`).
 
-- [ ] **Step 3: modifica `synapse/cli.py`**
+- [ ] **Step 3: modifica `axyn/cli.py`**
 
-Aggiungi import vicino agli altri `from synapse.net...`:
+Aggiungi import vicino agli altri `from axyn.net...`:
 ```python
-from synapse.net.node_exec import NodeState
-from synapse.net.node import run_node
-from synapse.net.coordinator import create_coordinator_app
-from synapse.model.loader import model_config_dims
+from axyn.net.node_exec import NodeState
+from axyn.net.node import run_node
+from axyn.net.coordinator import create_coordinator_app
+from axyn.model.loader import model_config_dims
 ```
 (se `model_config_dims` è già importato, non duplicarlo.)
 
@@ -572,7 +572,7 @@ def coordinator(
     except Exception as e:
         _fail("coordinator", "MODEL_LOAD_FAILED", str(e))
     coord_app = create_coordinator_app(model_id, num_layers, tokenizer)
-    typer.echo(f"synapse coordinator: model={model_id} layers={num_layers} su http://{host}:{port}", err=True)
+    typer.echo(f"axyn coordinator: model={model_id} layers={num_layers} su http://{host}:{port}", err=True)
     uvicorn.run(coord_app, host=host, port=port, log_level="info")
 ```
 
@@ -601,12 +601,12 @@ def serve(
     if coordinator:
         import asyncio
         state = NodeState(model, spec)
-        typer.echo(f"synapse serve→coordinator {coordinator}: stages={stages} (model={model_id})", err=True)
+        typer.echo(f"axyn serve→coordinator {coordinator}: stages={stages} (model={model_id})", err=True)
         asyncio.run(run_node(coordinator, state))
     else:
         import uvicorn
         fastapi_app = create_app(model, tokenizer, spec)
-        typer.echo(f"synapse serve (diretto): stages={stages} su http://{host}:{port}", err=True)
+        typer.echo(f"axyn serve (diretto): stages={stages} su http://{host}:{port}", err=True)
         uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
 ```
 
@@ -638,7 +638,7 @@ def infer(
         _fail("infer", "USAGE_ERROR", "specificare --coordinator oppure --topology", exit_code=2)
     # ---- modalità topologia statica (Parte 1) ----
     from transformers import AutoTokenizer
-    from synapse.net.orchestrator import distributed_generate
+    from axyn.net.orchestrator import distributed_generate
     try:
         with open(topology) as f:
             topo = load_topology(_json.loads(f.read()))
@@ -657,14 +657,14 @@ def infer(
 ```
 > Nota: questo sostituisce il comando `infer` di Parte 1 mantenendone la modalità `--topology`. Assicurati che gli import duplicati (`AutoTokenizer`, `distributed_generate`) non siano già a livello modulo in modo conflittuale; vanno bene come import locali.
 
-- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_coordinator.py -m slow -v` → PASS. Verifica anche `cd /Users/alberto/Projects/AI/synapse && .venv/bin/synapse --help` elenca `coordinator`.
+- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_coordinator.py -m slow -v` → PASS. Verifica anche `cd /Users/alberto/Projects/AI/axyn && .venv/bin/axyn --help` elenca `coordinator`.
 
 - [ ] **Step 5: assicura che i test di Parte 1 (`tests/test_cli_infer.py`) passino ancora** (modalità `--topology` invariata):
 `... pytest tests/test_cli_infer.py -m slow -v` → PASS.
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py tests/test_cli_coordinator.py && git commit -m "feat(cli): comando coordinator + serve/infer in modalità coordinator (NAT-friendly)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli_coordinator.py && git commit -m "feat(cli): comando coordinator + serve/infer in modalità coordinator (NAT-friendly)"
 ```
 
 ---
@@ -681,16 +681,16 @@ I nodi worker si connettono **in uscita** al coordinator: funzionano dietro NAT 
 
 ```bash
 # 1) Coordinator (su una macchina raggiungibile dagli altri; es. IP pubblico 203.0.113.5)
-synapse coordinator --model Qwen/Qwen2.5-0.5B-Instruct --port 9000
+axyn coordinator --model Qwen/Qwen2.5-0.5B-Instruct --port 9000
 
 # 2) Nodo A (qualsiasi rete, dietro NAT) — embedding + primi 12 layer
-synapse serve --coordinator ws://203.0.113.5:9000/node --stages "embed,decoder:0-12"
+axyn serve --coordinator ws://203.0.113.5:9000/node --stages "embed,decoder:0-12"
 
 # 3) Nodo B (altra rete) — ultimi 12 layer + head
-synapse serve --coordinator ws://203.0.113.5:9000/node --stages "decoder:12-24,head"
+axyn serve --coordinator ws://203.0.113.5:9000/node --stages "decoder:12-24,head"
 
 # 4) Inferenza (client sottile, da qualunque rete)
-synapse --json infer --coordinator http://203.0.113.5:9000 --prompt "La capitale dell'Italia è"
+axyn --json infer --coordinator http://203.0.113.5:9000 --prompt "La capitale dell'Italia è"
 ```
 
 Il coordinator calcola la coverage: finché embed + tutti i range decoder + head non sono coperti, `infer` risponde `NOT_OPERATIONAL`. In LAN, metti il coordinator su un IP locale. Con una VPN, usa l'IP della VPN.
@@ -700,11 +700,11 @@ Il coordinator calcola la coverage: finché embed + tutti i range decoder + head
 
 - [ ] **Step 3: aggiorna `docs/ROADMAP.md`** — sotto "Discovery & Routing" segna discovery automatica via coordinator-relay come fatta (link a [ADR-0002](./decisions/ADR-0002-connettivita-nat.md) e a questo piano), e aggiorna la riga "Ultimo aggiornamento". Nota: failover e libp2p nativo restano da fare.
 
-- [ ] **Step 4: suite completa** — `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest -q -p no:warnings` → tutti PASS.
+- [ ] **Step 4: suite completa** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q -p no:warnings` → tutti PASS.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add docs/examples/coordinator.md README.md docs/ROADMAP.md && git commit -m "docs: quickstart coordinator (LAN/internet senza VPN); ROADMAP discovery"
+cd /Users/alberto/Projects/AI/axyn && git add docs/examples/coordinator.md README.md docs/ROADMAP.md && git commit -m "docs: quickstart coordinator (LAN/internet senza VPN); ROADMAP discovery"
 ```
 
 ---

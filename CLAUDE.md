@@ -1,101 +1,101 @@
-# CLAUDE.md — guida per agenti AI alla CLI `synapse`
+# CLAUDE.md — guide for AI agents to the `axyn` CLI
 
-Questo file insegna a un agente (Claude Code o altro) a **pilotare Synapse dalla CLI**. Synapse è una rete di inferenza LLM decentralizzata: un modello è splittato in blocchi di layer (`embed`, `decoder:lo-hi`, `head`) ospitati da nodi diversi; il modello è **operativo** solo quando i blocchi coprono tutto (`embed` + tutti i range decoder + `head`).
+This file teaches an agent (Claude Code or other) how to **drive Axyn from the CLI**. Axyn is a decentralized LLM inference network: a model is split into blocks of layers (`embed`, `decoder:lo-hi`, `head`) hosted by different nodes; the model is **operational** only when the blocks cover everything (`embed` + all decoder ranges + `head`).
 
-> Modello mentale: "BOINC/SETI@home per i layer di un LLM". Inferenza asincrona store-and-forward, tollerante a latenze alte. Ogni nodo è un peer simmetrico.
+> Mental model: "BOINC/SETI@home for the layers of an LLM". Asynchronous store-and-forward inference, tolerant of high latencies. Every node is a symmetric peer.
 
-## Installazione (dopo `git clone`)
+## Installation (after `git clone`)
 
 ```bash
-./bin/synapse --help            # bootstrap: crea .venv + installa al primo avvio, poi esegue
+./bin/axyn --help            # bootstrap: creates .venv + installs on first run, then executes
 ```
 
-`bin/synapse` è auto-bootstrap: la prima volta crea `.venv` e fa `pip install -e .`, poi inoltra ogni comando. In alternativa, manuale:
+`bin/axyn` is auto-bootstrapping: the first time it creates `.venv` and runs `pip install -e .`, then forwards every command. Alternatively, manually:
 
 ```bash
 python -m venv .venv && . .venv/bin/activate && pip install -e .
-synapse --help
+axyn --help
 ```
 
-## Output AI-native
+## AI-native output
 
-Ogni comando supporta `--json` (flag globale, va **prima** del comando): emette `{"ok": true|false, "command": "...", "data": {...}}` su stdout. Usa sempre `--json` quando consumi l'output a livello di codice. Senza `--json` l'output è human-readable.
+Every command supports `--json` (a global flag, it goes **before** the command): it emits `{"ok": true|false, "command": "...", "data": {...}}` on stdout. Always use `--json` when consuming the output programmatically. Without `--json` the output is human-readable.
 
 ```bash
-synapse --json model --info --model Qwen/Qwen2.5-0.5B-Instruct
+axyn --json model --info --model Qwen/Qwen2.5-0.5B-Instruct
 ```
 
-## Comandi chiave
+## Key commands
 
-| Comando | A cosa serve |
+| Command | What it's for |
 |---|---|
-| `synapse models` | Elenca i modelli/famiglie **compatibili** (Llama/Qwen2) con esempi. |
-| `synapse model --info --model <id>` | Dimensioni del modello (num_layers, hidden, ...) + `architecture` + `compatible`. Usalo per **decidere lo split**. |
-| `synapse fit --model <id> --ram <GB> [--dtype bfloat16]` | Quanti layer regge un nodo con N GB di RAM + **stage spec suggerito** per `--stages`. |
-| `synapse up --model <id> [--dtype bfloat16]` | Bring-up in un comando: avvia coordinator + un nodo che copre tutti i layer. `--dry-run` stampa i comandi senza avviare. |
-| `synapse serve --stages "<spec>" ...` | Avvia un nodo che ospita certi blocchi. `--dtype` per modelli grandi. |
-| `synapse serve --auto --peers <seed>` | **Auto-assegnazione**: il nodo legge i buchi di coverage dal seed + la sua RAM e rivendica da solo un range (`--target 2` per ridondanza, `--ram` per forzare il budget). |
-| `synapse coordinator --port 9000` | Avvia un coordinator (relay per nodi dietro NAT). |
-| `synapse infer --coordinator <url> --prompt "..."` | Inferenza one-shot sulla rete. `--peer <url>` in P2P puro. |
-| `synapse ui --coordinator <url>` | Dashboard locale (stato rete, chat, MCP). |
-| `synapse mcp --add <name> --command <cmd> --args "..."` | Configura server MCP; `synapse infer --mcp` li usa nel loop di tool-calling. |
-| `synapse selfcheck` | Verifica ambiente/modello. |
-| `synapse schema` | Schema macchina-leggibile di tutti i comandi/flag. |
+| `axyn models` | Lists the **compatible** models/families (Llama/Qwen2) with examples. |
+| `axyn model --info --model <id>` | Model dimensions (num_layers, hidden, ...) + `architecture` + `compatible`. Use it to **decide the split**. |
+| `axyn fit --model <id> --ram <GB> [--dtype bfloat16]` | How many layers a node can hold with N GB of RAM + a **suggested stage spec** for `--stages`. |
+| `axyn up --model <id> [--dtype bfloat16]` | One-command bring-up: starts a coordinator + a node that covers all layers. `--dry-run` prints the commands without starting them. |
+| `axyn serve --stages "<spec>" ...` | Starts a node that hosts certain blocks. `--dtype` for large models. |
+| `axyn serve --auto --peers <seed>` | **Self-assignment**: the node reads the coverage gaps from the seed + its own RAM and claims a range by itself (`--target 2` for redundancy, `--ram` to force the budget). |
+| `axyn coordinator --port 9000` | Starts a coordinator (relay for nodes behind NAT). |
+| `axyn infer --coordinator <url> --prompt "..."` | One-shot inference over the network. `--peer <url>` for pure P2P. |
+| `axyn ui --coordinator <url>` | Local dashboard (network status, chat, MCP). |
+| `axyn mcp --add <name> --command <cmd> --args "..."` | Configures MCP servers; `axyn infer --mcp` uses them in the tool-calling loop. |
+| `axyn selfcheck` | Checks the environment/model. |
+| `axyn schema` | Machine-readable schema of all commands/flags. |
 
-## Quali modelli posso usare?
+## Which models can I use?
 
 ```bash
-synapse --json models                                  # lista curata (Llama/Qwen2)
-synapse --json model --info --model <id>               # controlla compatible:true e num_layers
+axyn --json models                                  # curated list (Llama/Qwen2)
+axyn --json model --info --model <id>               # check compatible:true and num_layers
 ```
 
-Compatibili: architetture **decoder-only Llama/Qwen2**. Esempi: `Qwen/Qwen2.5-{0.5B,1.5B,3B,7B,14B,32B,72B}-Instruct`, `meta-llama/Llama-3.2-{1B,3B}-Instruct`, `meta-llama/Llama-3.1-8B-Instruct`.
+Compatible: **decoder-only Llama/Qwen2** architectures. Examples: `Qwen/Qwen2.5-{0.5B,1.5B,3B,7B,14B,32B,72B}-Instruct`, `meta-llama/Llama-3.2-{1B,3B}-Instruct`, `meta-llama/Llama-3.1-8B-Instruct`.
 
-## Decidere lo split (layer ↔ RAM)
+## Deciding the split (layers ↔ RAM)
 
-Ogni nodo carica **solo i layer assegnati** (partial loading): la RAM richiesta è ~proporzionale al numero di layer ospitati, non all'intero modello. Stima rapida della RAM per blocco:
+Each node loads **only the assigned layers** (partial loading): the required RAM is ~proportional to the number of hosted layers, not the whole model. Quick RAM estimate per block:
 
 ```
 bytes_per_param = 4 (float32) | 2 (bfloat16/float16)
 ram_layer ≈ params_per_layer × bytes_per_param
-ram_nodo  ≈ Σ ram_layer dei layer ospitati (+ embed/head se assegnati)
+ram_node  ≈ Σ ram_layer of the hosted layers (+ embed/head if assigned)
 ```
 
-`synapse model --info` dà `num_layers` e `hidden_size` per ricavare `params_per_layer`. Per modelli grandi usa `--dtype bfloat16` (dimezza la RAM) e/o splitta su più nodi. Coverage completa = `embed` + tutti i range `decoder:0-N` contigui + `head`.
+`axyn model --info` gives `num_layers` and `hidden_size` to derive `params_per_layer`. For large models use `--dtype bfloat16` (halves the RAM) and/or split across more nodes. Full coverage = `embed` + all contiguous `decoder:0-N` ranges + `head`.
 
-Scorciatoia: `synapse fit --model <id> --ram 4 --dtype bfloat16` fa il calcolo per te e stampa lo **stage spec consigliato** (es. `decoder:0-7`) e quanti layer reggi. I layer decoder sono ~uguali tra loro; gli outlier di memoria sono `embed`/`head` (matrice `vocab × hidden`).
+Shortcut: `axyn fit --model <id> --ram 4 --dtype bfloat16` does the math for you and prints the **suggested stage spec** (e.g. `decoder:0-7`) and how many layers you can hold. Decoder layers are ~equal to each other; the memory outliers are `embed`/`head` (the `vocab × hidden` matrix).
 
 ```bash
-synapse --json fit --model Qwen/Qwen2.5-7B-Instruct --ram 4 --dtype bfloat16
+axyn --json fit --model Qwen/Qwen2.5-7B-Instruct --ram 4 --dtype bfloat16
 # -> {"max_decoder_layers": 7, "suggested_stages": "decoder:0-7", "ram_per_layer_gb": 0.434, ...}
 ```
 
-## Workflow tipici
+## Typical workflows
 
-**a) Configura il mio nodo per un modello e avvia tutto (single-box):**
+**a) Configure my node for a model and start everything (single-box):**
 ```bash
-synapse models                                         # scegli un modello compatibile
-synapse up --model Qwen/Qwen2.5-7B-Instruct --dtype bfloat16
+axyn models                                         # pick a compatible model
+axyn up --model Qwen/Qwen2.5-7B-Instruct --dtype bfloat16
 ```
 
-**b) Unisciti a una rete esistente con i miei layer:**
+**b) Join an existing network with my layers:**
 ```bash
-synapse serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head" \
+axyn serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head" \
   --model Qwen/Qwen2.5-7B-Instruct --dtype bfloat16
 ```
 
-**c) Interroga il modello distribuito:**
+**c) Query the distributed model:**
 ```bash
-synapse --json infer --coordinator http://IP:9000 --prompt "Spiega la fotosintesi"
+axyn --json infer --coordinator http://IP:9000 --prompt "Explain photosynthesis"
 ```
 
-**d) Avvia il frontend:**
+**d) Start the frontend:**
 ```bash
-synapse ui --coordinator http://IP:9000      # poi apri http://127.0.0.1:8500
+axyn ui --coordinator http://IP:9000      # then open http://127.0.0.1:8500
 ```
 
-## Note operative
-- **Memoria:** un 7B in float32 ≈ 28GB; in bfloat16 ≈ 14GB. Splitta su più nodi o usa `--dtype bfloat16`.
-- **NAT senza VPN:** usa la modalità coordinator (i nodi si connettono in uscita). In LAN/VPN/IP pubblici va bene il P2P puro (`--peer`).
-- **Operatività:** finché la coverage non è completa, `infer` risponde `NOT_OPERATIONAL`. Aggiungi nodi con i range mancanti.
-- **Modelli OpenAI/Anthropic client:** il coordinator espone `/v1/chat/completions` (OpenAI). Per Claude Code metti **LiteLLM** davanti (vedi `docs/examples/agents.md`).
+## Operational notes
+- **Memory:** a 7B in float32 ≈ 28GB; in bfloat16 ≈ 14GB. Split across more nodes or use `--dtype bfloat16`.
+- **NAT without VPN:** use coordinator mode (nodes connect outbound). On LAN/VPN/public IPs, pure P2P (`--peer`) is fine.
+- **Operationality:** until coverage is complete, `infer` responds `NOT_OPERATIONAL`. Add nodes with the missing ranges.
+- **OpenAI/Anthropic client models:** the coordinator exposes `/v1/chat/completions` (OpenAI). For Claude Code, put **LiteLLM** in front (see `docs/examples/agents.md`).

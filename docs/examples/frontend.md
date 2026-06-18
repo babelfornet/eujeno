@@ -1,38 +1,37 @@
-# Frontend di Synapse (`synapse ui`)
+# Axyn frontend (`axyn ui`)
 
-Ogni nodo può lanciare la propria dashboard locale:
+Every node can launch its own local dashboard:
 
 ```bash
-synapse ui --coordinator http://IP_COORDINATOR:9000 --port 8500
-# poi apri http://127.0.0.1:8500
+axyn ui --coordinator http://COORDINATOR_IP:9000 --port 8500
+# then open http://127.0.0.1:8500
 ```
 
-Cosa offre (Fase 1):
-- **Stato della rete**: nodi connessi, assemblaggio del modello sui layer (EMBED → blocchi decoder → HEAD), coverage, memoria, e se il modello è **operativo**. Un grafo mostra i nodi attorno al coordinator.
-- **Chat**: interroga il modello distribuito (attiva solo quando la rete copre tutti i layer). Mostra anche come collegare altri client (CLI / cURL / OpenAI).
+What it offers (Phase 1):
+- **Network status**: connected nodes, how the model is assembled across the layers (EMBED → decoder blocks → HEAD), coverage, memory, and whether the model is **operational**. A graph shows the nodes around the coordinator.
+- **Chat**: query the distributed model (enabled only when the network covers all layers). It also shows how to connect other clients (CLI / cURL / OpenAI).
 
-Il browser parla **solo** col server locale `synapse ui`, che fa da proxy al coordinator (niente problemi di CORS).
+The browser talks **only** to the local `axyn ui` server, which proxies to the coordinator (no CORS issues).
 
-## Creare o aggiungersi a una rete dalla UI (tab "Gestione")
+## Creating or joining a network from the UI ("Management" tab)
 
-Dal tab **Gestione** puoi controllare il nodo locale senza CLI:
-- **Coordinator bersaglio**: cambia l'URL del coordinator a cui la dashboard è collegata.
-- **Crea una rete**: avvia un **coordinator** locale (scegli modello e porta); la dashboard si punta automaticamente su di esso.
-- **Aggiungiti a una rete**: avvia un nodo `serve` locale che si connette a un coordinator coi tuoi **stage** (es. `embed,decoder:0-12`).
-- **Nodo locale**: vedi lo stato dei processi avviati dalla UI (coordinator/worker, pid) e fermali con **Stop**.
+From the **Management** tab you can control the local node without the CLI:
+- **Target coordinator**: change the URL of the coordinator the dashboard is connected to.
+- **Create a network**: start a local **coordinator** (choose model and port); the dashboard points to it automatically.
+- **Join a network**: start a local `serve` node that connects to a coordinator with your **stages** (e.g. `embed,decoder:0-12`).
+- **Local node**: see the status of the processes started from the UI (coordinator/worker, pid) and stop them with **Stop**.
 
-### Modalità P2P (senza coordinator)
+### P2P mode (without a coordinator)
 
-Nel tab Gestione, con "Modalità rete → P2P", puoi creare/aggiungerti a una rete **senza coordinator**: i nodi si scoprono via **gossip** e **ogni nodo è interrogabile** (espone sia `/registry` sia `/v1/chat/completions`). La dashboard e la chat funzionano puntando il "Coordinator bersaglio" all'URL di **un peer qualsiasi**. Richiede che i nodi si raggiungano (LAN/VPN/IP pubblici).
+In the Management tab, with "Network mode → P2P", you can create/join a network **without a coordinator**: the nodes discover each other via **gossip** and **every node is queryable** (it exposes both `/registry` and `/v1/chat/completions`). The dashboard and chat work by pointing the "Target coordinator" at the URL of **any peer**. This requires the nodes to be able to reach each other (LAN/VPN/public IPs).
 
-> Sicurezza: `synapse ui` è in ascolto su `127.0.0.1` e avvia processi sulla **tua** macchina (`python -m synapse coordinator|serve`). Usalo solo in locale/fidato.
+> Security: `axyn ui` listens on `127.0.0.1` and starts processes on **your** machine (`python -m axyn coordinator|serve`). Use it only locally / in a trusted environment.
 
-## Tool MCP (tab "MCP")
+## MCP tools ("MCP" tab)
 
-`synapse ui` fa da **host MCP**: dal tab **MCP** configuri server MCP (stdio) e i loro tool diventano usabili dal modello.
+`axyn ui` acts as an **MCP host**: from the **MCP** tab you configure MCP servers (stdio) and their tools become usable by the model.
 
-- **Aggiungi server MCP**: name + command + args (es. command `npx`, args `@modelcontextprotocol/server-filesystem /percorso`). I tool scoperti compaiono nella lista.
-- **Abilita "usa tool MCP"** (toggle): in chat, le richieste passano i tool al modello; quando il modello chiama un tool, `synapse ui` lo **esegue** sul server MCP e rimanda il risultato (loop di tool-calling). Sotto la risposta vedi quali tool sono stati usati (`🔧 nome → risultato`).
+- **Add MCP server**: name + command + args (e.g. command `npx`, args `@modelcontextprotocol/server-filesystem /path`). The discovered tools appear in the list.
+- **Enable "use MCP tools"** (toggle): in chat, requests pass the tools to the model; when the model calls a tool, `axyn ui` **runs** it on the MCP server and sends back the result (tool-calling loop). Below the response you see which tools were used (`🔧 name → result`).
 
-> Richiede un modello che supporti il **tool-calling**: con Qwen 0.5B è dimostrativo (il meccanismo funziona, ma il modello chiama i tool in modo inaffidabile); con un 7B+ diventa utile. Per ora i server MCP sono solo **stdio**.
-
+> Requires a model that supports **tool calling**: with Qwen 0.5B it's demonstrative (the mechanism works, but the model calls tools unreliably); with a 7B+ it becomes useful. For now, MCP servers are **stdio** only.

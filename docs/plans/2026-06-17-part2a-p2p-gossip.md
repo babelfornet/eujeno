@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Discovery **automatica e decentralizzata** (nessun server centrale): i nodi `synapse serve` si scoprono via **gossip** tra peer e si auto-annunciano; `synapse infer --peer <qualsiasi-nodo>` costruisce la topologia da solo ed esegue sul **transport diretto** di Parte 1.
+**Goal:** Discovery **automatica e decentralizzata** (nessun server centrale): i nodi `axyn serve` si scoprono via **gossip** tra peer e si auto-annunciano; `axyn infer --peer <qualsiasi-nodo>` costruisce la topologia da solo ed esegue sul **transport diretto** di Parte 1.
 
 **Architecture:** [ADR-0002](../decisions/ADR-0002-connettivita-nat.md) Modalità A. Ogni BlockServer tiene un **Registry** (url→stage, con TTL) e un loop di **gossip pull**: refresh della propria entry + fetch del `/registry` dei seed peer + merge + prune. La coverage e la topologia si calcolano dal registry con `build_chain`. Transport attivazioni = HTTP diretto (`distributed_generate` di Parte 1). Funziona dove i nodi sono mutuamente raggiungibili (LAN/VPN/IP pubblici).
 
-**Tech Stack:** Python · FastAPI (lifespan background task) · httpx (async per gossip, sync per infer) · l'esistente `synapse/net/{server,orchestrator,topology}.py`.
+**Tech Stack:** Python · FastAPI (lifespan background task) · httpx (async per gossip, sync per infer) · l'esistente `axyn/net/{server,orchestrator,topology}.py`.
 
 **Fuori scope:** NAT traversal senza VPN (→ Modalità B coordinator, o libp2p futuro); failover/durabilità (Parte 3).
 
@@ -15,9 +15,9 @@
 ## File Structure
 
 ```
-synapse/net/discovery.py        # NUOVO: Registry (gossip state) + build_chain (coverage)
-synapse/net/server.py           # MODIFICA: create_app + Registry, GET /registry, gossip loop (lifespan)
-synapse/cli.py                  # MODIFICA: serve --peers/--advertise ; infer --peer
+axyn/net/discovery.py        # NUOVO: Registry (gossip state) + build_chain (coverage)
+axyn/net/server.py           # MODIFICA: create_app + Registry, GET /registry, gossip loop (lifespan)
+axyn/cli.py                  # MODIFICA: serve --peers/--advertise ; infer --peer
 tests/
   test_discovery.py             # Registry + build_chain (veloce)
   test_gossip_e2e.py            # 2 server reali: il registry converge (slow)
@@ -29,11 +29,11 @@ docs/examples/p2p.md            # NUOVO: quickstart P2P puro
 
 ## Task 1: `Registry` + `build_chain` (logica pura)
 
-**Files:** create `synapse/net/discovery.py`, `tests/test_discovery.py`.
+**Files:** create `axyn/net/discovery.py`, `tests/test_discovery.py`.
 
 - [ ] **Step 1: test `tests/test_discovery.py`**
 ```python
-from synapse.net.discovery import Registry, build_chain
+from axyn.net.discovery import Registry, build_chain
 
 
 def test_build_chain_full_coverage():
@@ -68,9 +68,9 @@ def test_registry_refresh_extends_expiry():
     assert "http://a" in r.stages_by_url(now=200.0)   # rinfrescata a 150 -> scade a 210
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest tests/test_discovery.py -v` → ImportError.
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_discovery.py -v` → ImportError.
 
-- [ ] **Step 3: implementa `synapse/net/discovery.py`**
+- [ ] **Step 3: implementa `axyn/net/discovery.py`**
 ```python
 class Registry:
     """Stato di discovery decentralizzato: url -> {stages, expiry}. TTL relativo:
@@ -121,14 +121,14 @@ def build_chain(stages_by_url: dict, num_layers: int):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): Registry gossip + build_chain (discovery decentralizzata)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): Registry gossip + build_chain (discovery decentralizzata)"
 ```
 
 ---
 
 ## Task 2: gossip nel BlockServer (`/registry` + loop)
 
-**Files:** modify `synapse/net/server.py`; create `tests/test_gossip_e2e.py`.
+**Files:** modify `axyn/net/server.py`; create `tests/test_gossip_e2e.py`.
 
 - [ ] **Step 1: test `tests/test_gossip_e2e.py`**
 ```python
@@ -140,8 +140,8 @@ import pytest
 import httpx
 import uvicorn
 
-from synapse.net.topology import StageSpec
-from synapse.net.server import create_app
+from axyn.net.topology import StageSpec
+from axyn.net.server import create_app
 
 
 def _free_port():
@@ -190,7 +190,7 @@ def test_registry_converges_via_gossip(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_gossip_e2e.py -m slow -v` → TypeError (create_app non accetta i nuovi kwargs).
 
-- [ ] **Step 3: modifica `synapse/net/server.py`**
+- [ ] **Step 3: modifica `axyn/net/server.py`**
 
 Aggiorna gli import in cima:
 ```python
@@ -202,9 +202,9 @@ import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from synapse.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
-from synapse.net.wire import encode_tensors, decode_tensors
-from synapse.net.discovery import Registry
+from axyn.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
+from axyn.net.wire import encode_tensors, decode_tensors
+from axyn.net.discovery import Registry
 ```
 Sostituisci la firma e l'inizio di `create_app` per accettare i parametri di gossip (opzionali: senza di essi il comportamento di Parte 1 è invariato) e registrare se stesso + avviare il loop:
 ```python
@@ -257,14 +257,14 @@ Verifica che i test di Parte 1 (`tests/test_server.py`, `tests/test_orchestrator
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/net/server.py tests/test_gossip_e2e.py && git commit -m "feat(net): gossip discovery nel BlockServer (/registry + loop, retro-compatibile)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/server.py tests/test_gossip_e2e.py && git commit -m "feat(net): gossip discovery nel BlockServer (/registry + loop, retro-compatibile)"
 ```
 
 ---
 
-## Task 3: `synapse serve --peers/--advertise` + `synapse infer --peer`
+## Task 3: `axyn serve --peers/--advertise` + `axyn infer --peer`
 
-**Files:** modify `synapse/cli.py`; create `tests/test_infer_peer.py`.
+**Files:** modify `axyn/cli.py`; create `tests/test_infer_peer.py`.
 
 - [ ] **Step 1: test `tests/test_infer_peer.py`**
 ```python
@@ -277,10 +277,10 @@ import pytest
 import uvicorn
 
 from typer.testing import CliRunner
-from synapse.cli import app as cli_app
-from synapse.net.topology import StageSpec
-from synapse.net.server import create_app
-from synapse.model.generate import reference_generate
+from axyn.cli import app as cli_app
+from axyn.net.topology import StageSpec
+from axyn.net.server import create_app
+from axyn.model.generate import reference_generate
 
 runner = CliRunner()
 
@@ -333,12 +333,12 @@ def test_infer_peer_autodiscovers_and_matches_reference(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_infer_peer.py -m slow -v` → FAIL (manca `--peer`).
 
-- [ ] **Step 3: modifica `synapse/cli.py`**
+- [ ] **Step 3: modifica `axyn/cli.py`**
 
-Aggiungi import vicino agli altri `from synapse.net...`:
+Aggiungi import vicino agli altri `from axyn.net...`:
 ```python
-from synapse.net.discovery import build_chain
-from synapse.net.topology import Topology
+from axyn.net.discovery import build_chain
+from axyn.net.topology import Topology
 ```
 Estendi il comando `serve` con le opzioni di gossip (modalità diretta): aggiungi i parametri e passali a `create_app`. Aggiungi alla firma di `serve` (nel ramo diretto, non-coordinator):
 ```python
@@ -354,7 +354,7 @@ e nel ramo diretto (`else:` di `serve`, quello che fa `create_app` + `uvicorn.ru
         seeds = [p.strip() for p in peers.split(",")] if peers else []
         nl = num_layers if num_layers is not None else model_config_dims(model_id)["num_layers"]
         fastapi_app = create_app(model, tokenizer, spec, node_url=own_url, peers=seeds, num_layers=nl)
-        typer.echo(f"synapse serve (P2P): stages={stages} su http://{host}:{port} advertise={own_url} peers={seeds}", err=True)
+        typer.echo(f"axyn serve (P2P): stages={stages} su http://{host}:{port} advertise={own_url} peers={seeds}", err=True)
         uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
 ```
 (`model_config_dims` è già importato in cli.py.)
@@ -368,7 +368,7 @@ e in cima al corpo di `infer`, dopo `prompt = _read_prompt(prompt)`, prima del r
     if peer:
         import httpx
         from transformers import AutoTokenizer
-        from synapse.net.orchestrator import distributed_generate
+        from axyn.net.orchestrator import distributed_generate
         try:
             reg = httpx.get(f"{peer}/registry", timeout=30.0).json()
         except Exception as e:
@@ -392,7 +392,7 @@ e in cima al corpo di `infer`, dopo `prompt = _read_prompt(prompt)`, prima del r
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add synapse/cli.py tests/test_infer_peer.py && git commit -m "feat(cli): serve --peers/--advertise + infer --peer (P2P puro, auto-discovery)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_infer_peer.py && git commit -m "feat(cli): serve --peers/--advertise + infer --peer (P2P puro, auto-discovery)"
 ```
 
 ---
@@ -409,14 +409,14 @@ Ogni nodo è uguale: si scoprono via gossip (un seed basta) e l'inferenza va dir
 
 ```bash
 # Nodo A — embedding + primi 12 layer (primo nodo, nessun seed)
-synapse serve --stages "embed,decoder:0-12" --port 8001 --advertise http://192.168.1.10:8001
+axyn serve --stages "embed,decoder:0-12" --port 8001 --advertise http://192.168.1.10:8001
 
 # Nodo B — ultimi 12 layer + head, conosce A come seed
-synapse serve --stages "decoder:12-24,head" --port 8001 \
+axyn serve --stages "decoder:12-24,head" --port 8001 \
   --advertise http://192.168.1.11:8001 --peers http://192.168.1.10:8001
 
 # Inferenza: punta a UN nodo qualsiasi; scopre il resto da solo
-synapse --json infer --peer http://192.168.1.10:8001 --prompt "La capitale dell'Italia è"
+axyn --json infer --peer http://192.168.1.10:8001 --prompt "La capitale dell'Italia è"
 ```
 
 Finché la coverage non è completa (embed + tutti i decoder + head), `infer` risponde `NOT_OPERATIONAL`. Aggiungi nodi con range diversi e la rete si compone progressivamente.
@@ -426,11 +426,11 @@ Finché la coverage non è completa (embed + tutti i decoder + head), `infer` ri
 
 - [ ] **Step 3: aggiorna `docs/ROADMAP.md`** — sotto "Discovery & Routing" segna la discovery P2P via gossip come fatta (link a questo piano e ad [ADR-0002](./decisions/ADR-0002-connettivita-nat.md)); aggiorna la riga "Ultimo aggiornamento". Failover e libp2p restano da fare.
 
-- [ ] **Step 4: suite completa** — `/Users/alberto/Projects/AI/synapse/.venv/bin/python -m pytest -q -p no:warnings` → tutti PASS.
+- [ ] **Step 4: suite completa** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q -p no:warnings` → tutti PASS.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/synapse && git add docs/examples/p2p.md README.md docs/ROADMAP.md && git commit -m "docs: quickstart P2P puro; ROADMAP discovery gossip"
+cd /Users/alberto/Projects/AI/axyn && git add docs/examples/p2p.md README.md docs/ROADMAP.md && git commit -m "docs: quickstart P2P puro; ROADMAP discovery gossip"
 ```
 
 ---

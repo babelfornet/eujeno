@@ -1,30 +1,30 @@
-# Synapse — Documentazione
+# Axyn — Documentation
 
-**Synapse** è una rete di inferenza per Large Language Model **completamente decentralizzata e peer-to-peer**: nessun server centrale, ogni nodo è un peer simmetrico che ospita ed esegue uno o più *blocchi* di layer di un modello open-source (scaricato da Hugging Face). Le domande degli utenti vengono instradate come **job durevoli** attraverso la rete di nodi responsabili dei vari blocchi.
+**Axyn** is a **fully decentralized, peer-to-peer** inference network for Large Language Models: no central server, every node is a symmetric peer that hosts and runs one or more *blocks* of layers of an open-source model (downloaded from Hugging Face). User queries are routed as **durable jobs** through the network of nodes responsible for the various blocks.
 
-> **Idea guida:** Synapse non è "Petals in tempo reale". È **"BOINC / SETI@home per i layer di un LLM"** — tollera latenze altissime (ore, giorni, settimane) e tratta l'inferenza come un job asincrono che avanza hop-by-hop in *store-and-forward*.
+> **Guiding idea:** Axyn is not "real-time Petals". It is **"BOINC / SETI@home for the layers of an LLM"** — it tolerates extremely high latencies (hours, days, weeks) and treats inference as an asynchronous job that advances hop-by-hop in *store-and-forward* fashion.
 
-## Mappa dei documenti
+## Document map
 
-| Documento | Contenuto |
+| Document | Contents |
 |-----------|-----------|
-| [ROADMAP.md](./ROADMAP.md) | **Stato del progetto**: passi eseguiti / da eseguire, milestone, backlog. Punto di partenza per capire "a che punto siamo". |
-| [00-vision-architecture.md](./00-vision-architecture.md) | **Parte 0** — Visione, obiettivi, principi, mappa dei componenti, flusso dati. Lo scheletro architetturale approvato. |
-| [decisions/](./decisions/) | **ADR** (Architecture Decision Records): decisioni tecniche motivate (es. quale substrate P2P, quale runtime). |
-| [prd/](./prd/) | **PRD** per ciascun sottosistema (Parti 1–5): Peer Node, Discovery & Routing, Queue & Load Balancing, Incentivi & Reputazione, Sicurezza & BFT. Più la **[CLI `synapse`](./prd/cli.md)** (AI-native), entry-point per tutte le operazioni. |
+| [ROADMAP.md](./ROADMAP.md) | **Project status**: steps done / to do, milestones, backlog. The starting point for understanding "where we are". |
+| [00-vision-architecture.md](./00-vision-architecture.md) | **Part 0** — Vision, goals, principles, component map, data flow. The approved architectural skeleton. |
+| [decisions/](./decisions/) | **ADRs** (Architecture Decision Records): motivated technical decisions (e.g. which P2P substrate, which runtime). |
+| [prd/](./prd/) | **PRDs** for each subsystem (Parts 1–5): Peer Node, Discovery & Routing, Queue & Load Balancing, Incentives & Reputation, Security & BFT. Plus the **[`axyn` CLI](./prd/cli.md)** (AI-native), the entry point for all operations. |
 
-## Come è organizzato il lavoro
+## How the work is organized
 
-Il problema è grande, quindi è **compartimentalizzato** in parti indipendenti. Ogni parte segue il ciclo:
+The problem is large, so it is **compartmentalized** into independent parts. Each part follows the cycle:
 
 ```
-spec (PRD)  →  plan (implementazione)  →  build (codice)  →  verify
+spec (PRD)  →  plan (implementation)  →  build (code)  →  verify
 ```
 
-La **Parte 0** è il documento ombrello che tiene insieme tutto. Le **Parti 1–5** sono i sottosistemi. Le **decisioni trasversali** (stack, librerie) vivono negli ADR.
+**Part 0** is the umbrella document that holds everything together. **Parts 1–5** are the subsystems. **Cross-cutting decisions** (stack, libraries) live in the ADRs.
 
-## Stato sintetico
+## Status at a glance
 
-- **Fase corrente:** Architettura & Design (le PRD vengono scritte prima del codice).
-- **Obiettivo del primo PoC:** inferenza distribuita di un modello **1–3B** su **2–3 nodi reali**, con discovery DHT, queue asincrona e failover. **Token rimandati.**
-- Dettaglio aggiornato sempre in [ROADMAP.md](./ROADMAP.md).
+- **Current phase:** Architecture & Design (the PRDs are written before the code).
+- **First PoC goal:** distributed inference of a **1–3B** model across **2–3 real nodes**, with DHT discovery, asynchronous queue and failover. **Tokens deferred.**
+- Up-to-date detail always in [ROADMAP.md](./ROADMAP.md).

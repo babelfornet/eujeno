@@ -1,20 +1,20 @@
-# PRD Parte 3 — Queue & Load Balancing
+# PRD Part 3 — Queue & Load Balancing
 
-> Decisioni di riferimento: [ADR-0001](../decisions/ADR-0001-implementation-forks.md) (Fork C). Visione: [00-vision-architecture.md](../00-vision-architecture.md).
+> Reference decisions: [ADR-0001](../decisions/ADR-0001-implementation-forks.md) (Fork C). Vision: [00-vision-architecture.md](../00-vision-architecture.md).
 
-## 1. Scopo
+## 1. Purpose
 
-Il cuore del framing **async / store-and-forward**. Trasforma una domanda utente in un **job durevole** che avanza hop-by-hop, sopravvive alla morte di qualunque nodo, e si reindirizza localmente senza rollback globale né coordinatore. È anche dove vive il **load balancing**: richieste diverse si accodano sui blocchi specifici, massimizzando l'utilizzo della rete.
+The heart of the **async / store-and-forward** framing. It turns a user question into a **durable job** that advances hop-by-hop, survives the death of any node, and re-routes locally without a global rollback or a coordinator. It is also where **load balancing** lives: different requests queue up on the specific blocks, maximizing network utilization.
 
-## 2. In scope (PoC) / Fuori scope
+## 2. In scope (PoC) / Out of scope
 
-**In scope:** substrato durevole SQLite(WAL) + blob safetensors; modello a job/stage idempotenti; entry-node orchestrator-driven (Milestone 0); store-and-forward peer-driven (target); `WAITING_COVERAGE`; session affinity della KV-cache; scheduling su holder ridondanti per `load`.
+**In scope:** durable substrate SQLite(WAL) + safetensors blobs; idempotent job/stage model; orchestrator-driven entry-node (Milestone 0); peer-driven store-and-forward (target); `WAITING_COVERAGE`; KV-cache session affinity; scheduling over redundant holders by `load`.
 
-**Fuori scope (deferred):** broker esterni (Temporal/Ray/Redis); checkpoint periodico della KV-cache (v1.1); priorità/fairness avanzata.
+**Out of scope (deferred):** external brokers (Temporal/Ray/Redis); periodic KV-cache checkpointing (v1.1); advanced priority/fairness.
 
-## 3. Substrato durevole (primitivo condiviso #2)
+## 3. Durable substrate (shared primitive #2)
 
-Per-nodo, **SQLite in modalità WAL** (queue crash-safe, zero ops) + blob su disco.
+Per-node, **SQLite in WAL mode** (crash-safe queue, zero ops) + on-disk blobs.
 
 ```sql
 -- job log
@@ -22,79 +22,79 @@ jobs(
   job_id TEXT PK, model_id TEXT, status TEXT,   -- QUEUED|WAITING_COVERAGE|RUNNING|DONE|FAILED
   prompt TEXT, result TEXT, created_at, updated_at
 );
--- stage = un hop nel pipeline; PK = chiave di idempotenza (primitivo #3)
+-- stage = one hop in the pipeline; PK = idempotency key (primitive #3)
 stages(
   job_id TEXT, stage_idx INT, block_lo INT, block_hi INT,
   token_position INT, status TEXT,              -- PENDING|PERSISTED|ACKED|DONE
   activation_ref TEXT, kv_ref TEXT, attempt INT,
   PRIMARY KEY (job_id, stage_idx)
 );
--- outbox = handoff pendenti verso il prossimo holder
+-- outbox = pending handoffs to the next holder
 outbox(
   job_id TEXT, stage_idx INT, next_block TEXT, target_peer TEXT,
   status TEXT, attempts INT,                     -- PENDING|SENT|ACKED
   PRIMARY KEY (job_id, stage_idx)
 );
 ```
-Blob su disco: `{job_id}/{stage_idx}.safetensors` (attivazione). KV-cache persistita per `(job_id, block)`.
+On-disk blobs: `{job_id}/{stage_idx}.safetensors` (activation). KV-cache persisted per `(job_id, block)`.
 
-## 4. Modello a job idempotente (Fork C)
+## 4. Idempotent job model (Fork C)
 
-**Invariante:** ogni hop è **idempotente**, identificato da `(job_id, stage_idx)` (+ `token_position` per la cache). Protocollo: **ACK-after-persist** + dedup in ricezione.
+**Invariant:** each hop is **idempotent**, identified by `(job_id, stage_idx)` (+ `token_position` for the cache). Protocol: **ACK-after-persist** + dedup on receipt.
 
 ```mermaid
 sequenceDiagram
-    participant H as Holder blocco i
+    participant H as Block holder i
     participant Disk as SQLite + blob
-    participant Hn as Holder blocco i+1
-    H->>H: run_block (Parte 1)
-    H->>Disk: PERSISTI attivazione + KV (status PERSISTED)
+    participant Hn as Block holder i+1
+    H->>H: run_block (Part 1)
+    H->>Disk: PERSIST activation + KV (status PERSISTED)
     H->>Hn: POST payload (safetensors)  [outbox PENDING→SENT]
-    Hn->>Disk: dedup su (job_id, stage_idx); persisti
+    Hn->>Disk: dedup on (job_id, stage_idx); persist
     Hn-->>H: ACK
     H->>Disk: outbox ACKED; commit-and-prune
-    Note over H,Hn: holder morto a qualunque punto ⇒ ri-dispaccio dall'attivazione persistita
+    Note over H,Hn: holder dead at any point ⇒ re-dispatch from the persisted activation
 ```
 
 ### Store-and-forward vs Milestone 0
-- **Milestone 0 (orchestrator-driven):** l'entry node guida i hop in un loop lineare, **scrivendo sullo stesso substrato**. Più semplice da debuggare; SPOF per-job accettabile solo come bootstrap.
-- **Target (peer-driven):** ogni nodo fa pull/forward autonomamente. Migrazione = **cancellare il loop centrale**, non riscrivere la persistenza.
+- **Milestone 0 (orchestrator-driven):** the entry node drives the hops in a linear loop, **writing to the same substrate**. Simpler to debug; per-job SPOF acceptable only as a bootstrap.
+- **Target (peer-driven):** each node pulls/forwards autonomously. Migration = **deleting the central loop**, not rewriting the persistence.
 
 ### WAITING_COVERAGE
-Se il prossimo blocco non ha holder vivi (coverage incompleta, Parte 2), l'attivazione **parcheggia durevolmente** (`status=WAITING_COVERAGE`) finché un nodo si auto-assegna il blocco. Le richieste **si accodano, non si perdono**.
+If the next block has no live holders (incomplete coverage, Part 2), the activation **parks durably** (`status=WAITING_COVERAGE`) until a node self-assigns the block. Requests **queue up, they are not lost**.
 
-## 5. Session affinity della KV-cache
+## 5. KV-cache session affinity
 
-La KV-cache resta **con** l'holder che possiede il blocco, keyed `job_id`. Nel loop autoregressivo il messaggio porta **solo** l'hidden state del nuovo token, non l'intera cache. Su morte di un holder mid-generazione: la sua cache è persa → l'holder di backup ricomputa il prefisso (O(seq_len), accettato nel PoC; vedi rischio sotto).
+The KV-cache stays **with** the holder that owns the block, keyed by `job_id`. In the autoregressive loop the message carries **only** the hidden state of the new token, not the whole cache. On the death of a holder mid-generation: its cache is lost → the backup holder recomputes the prefix (O(seq_len), accepted in the PoC; see the risk below).
 
 ## 6. Load balancing
 
-- Il record DHT espone `load` (profondità coda/utilizzo). Il router (Parte 2) preferisce holder a `load` basso e `reputation` alta.
-- Più richieste indipendenti fluiscono in parallelo sui blocchi; un blocco con coda profonda segnala `load` alto → nuovi job preferiscono repliche → utilizzo massimizzato e auto-bilanciato.
-- Self-assignment least-replicated (Parte 2) crea repliche dove servono.
+- The DHT record exposes `load` (queue depth/utilization). The router (Part 2) prefers holders with low `load` and high `reputation`.
+- Multiple independent requests flow in parallel across the blocks; a block with a deep queue signals high `load` → new jobs prefer replicas → utilization is maximized and self-balanced.
+- Least-replicated self-assignment (Part 2) creates replicas where needed.
 
-## 7. Rischi & mitigazioni (dal team)
+## 7. Risks & mitigations (from the team)
 
-- **Dup delivery su ACK-loss** → token doppio. Mitigazione: idempotency key `(job_id, stage_idx, token_position)`, dedup in ricezione.
-- **Attivazione orfana** se un blocco non viene mai coperto. Mitigazione: `WAITING_COVERAGE` + allarme TTL.
-- **Perdita KV-cache** su morte mid-pipeline → recompute O(seq_len). Mitigazione PoC: recompute-from-prompt sul blocco fallito; policy checkpoint v1.1.
-- **Crescita illimitata outbox** → commit-and-prune dopo ACK; limiti di backpressure.
-- **Stato job distribuito poco osservabile** → pubblica stato coarse sul DHT.
+- **Duplicate delivery on ACK-loss** → double token. Mitigation: idempotency key `(job_id, stage_idx, token_position)`, dedup on receipt.
+- **Orphaned activation** if a block is never covered. Mitigation: `WAITING_COVERAGE` + TTL alarm.
+- **KV-cache loss** on mid-pipeline death → O(seq_len) recompute. PoC mitigation: recompute-from-prompt on the failed block; checkpoint policy v1.1.
+- **Unbounded outbox growth** → commit-and-prune after ACK; backpressure limits.
+- **Poorly observable distributed job state** → publish coarse state to the DHT.
 
-## 8. Criteri di accettazione
+## 8. Acceptance criteria
 
-1. Un job attraversa la pipeline e produce la risposta; lo stato è ricostruibile da SQLite.
-2. Crash di un nodo a metà job → ri-dispaccio dall'attivazione persistita → il job completa correttamente (== golden).
-3. Un job con un blocco scoperto entra in `WAITING_COVERAGE` e riprende quando il blocco viene coperto.
-4. Riavvio di un processo → nessun hop perso né doppiamente applicato (idempotenza verificata).
+1. A job traverses the pipeline and produces the answer; the state is reconstructible from SQLite.
+2. A node crash mid-job → re-dispatch from the persisted activation → the job completes correctly (== golden).
+3. A job with an uncovered block enters `WAITING_COVERAGE` and resumes when the block is covered.
+4. Restart of a process → no hop lost or doubly applied (idempotency verified).
 
-## 9. Dipendenze
+## 9. Dependencies
 
-- **Parte 1:** `run_block` come step.
-- **Parte 2:** lookup del prossimo holder, coverage gate, `load` nel record.
-- **Parte 5:** il fan-out di verifica riusa lo stesso primitivo di persistenza/re-dispatch.
+- **Part 1:** `run_block` as a step.
+- **Part 2:** next-holder lookup, coverage gate, `load` in the record.
+- **Part 5:** the verification fan-out reuses the same persistence/re-dispatch primitive.
 
-## 10. Domande aperte
+## 10. Open questions
 
-- Policy failover KV-cache (recompute vs checkpoint) e soglia v1.1 (ADR-0001 Q3).
-- Retention/pruning outbox e backpressure (ADR-0001 Q7).
+- KV-cache failover policy (recompute vs checkpoint) and v1.1 threshold (ADR-0001 Q3).
+- Outbox retention/pruning and backpressure (ADR-0001 Q7).

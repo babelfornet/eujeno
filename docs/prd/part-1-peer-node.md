@@ -1,85 +1,85 @@
-# PRD Parte 1 — Peer Node & Layer Execution
+# PRD Part 1 — Peer Node & Layer Execution
 
-> Decisioni di riferimento: [ADR-0001](../decisions/ADR-0001-implementation-forks.md) (Fork B). Visione: [00-vision-architecture.md](../00-vision-architecture.md).
+> Reference decisions: [ADR-0001](../decisions/ADR-0001-implementation-forks.md) (Fork B). Vision: [00-vision-architecture.md](../00-vision-architecture.md).
 
-## 1. Scopo
+## 1. Purpose
 
-Il **Peer Node** è l'unità eseguibile di Synapse: un processo che (1) scarica un modello da Hugging Face, (2) ne materializza **solo** i blocchi di layer che si è impegnato a servire, (3) espone una funzione pura `run_block(...)` che trasforma hidden states, e (4) gestisce la KV-cache come oggetto serializzabile che possediamo. Tutto il resto (discovery, queue, reputation) sono altri sottosistemi *dello stesso processo* documentati nelle Parti 2-5.
+The **Peer Node** is the executable unit of Axyn: a process that (1) downloads a model from Hugging Face, (2) materializes **only** the layer blocks it has committed to serving, (3) exposes a pure `run_block(...)` function that transforms hidden states, and (4) manages the KV-cache as a serializable object that we own. Everything else (discovery, queue, reputation) are other subsystems *of the same process*, documented in Parts 2-5.
 
-## 2. In scope (PoC) / Fuori scope
+## 2. In scope (PoC) / Out of scope
 
 **In scope:**
-- Download modello HF (`huggingface_hub` / `transformers`).
-- Caricamento parziale: solo i layer `[lo, hi)` assegnati, via `init_empty_weights()` + `load_checkpoint_in_model()`.
-- Esecuzione di un blocco: embedding (primo blocco), slab decoder `[lo, hi)`, final-norm + lm_head (ultimo blocco).
-- KV-cache serializzabile (`DynamicCache`/tuple di tensori) persistita per `(job_id, stage)`.
-- Serializzazione del payload di hop come **safetensors in-memory**.
-- `golden_test`: equivalenza numerica vs `model.generate()` single-process.
+- HF model download (`huggingface_hub` / `transformers`).
+- Partial loading: only the assigned `[lo, hi)` layers, via `init_empty_weights()` + `load_checkpoint_in_model()`.
+- Block execution: embedding (first block), decoder slab `[lo, hi)`, final-norm + lm_head (last block).
+- Serializable KV-cache (`DynamicCache`/tuple of tensors) persisted per `(job_id, stage)`.
+- Serialization of the hop payload as **in-memory safetensors**.
+- `golden_test`: numerical equivalence vs single-process `model.generate()`.
 
-**Fuori scope (deferred):** quantizzazione, tensor-parallelism intra-layer, modelli 70B+, dtype/model id eterogenei tra nodi (in v1 sono **fissi**).
+**Out of scope (deferred):** quantization, intra-layer tensor-parallelism, 70B+ models, heterogeneous dtype/model id across nodes (in v1 they are **fixed**).
 
-## 3. Concetti & contratto
+## 3. Concepts & contract
 
-### Blocco
-Un **blocco** = insieme contiguo di layer `model.model.layers[lo:hi]`. Tre tipi:
+### Block
+A **block** = a contiguous set of layers `model.model.layers[lo:hi]`. Three types:
 - `EMBED` — token embedding (+ rotary setup): `input_ids → h`
-- `DECODER[lo:hi]` — slab di layer transformer: `h → h`
+- `DECODER[lo:hi]` — transformer layer slab: `h → h`
 - `HEAD` — final norm + lm_head: `h → logits`
 
-### Funzione centrale `run_block`
+### Central function `run_block`
 
 ```python
 def run_block(
-    hidden_states: Tensor,        # [batch, seq, hidden]  (o input_ids per EMBED)
+    hidden_states: Tensor,        # [batch, seq, hidden]  (or input_ids for EMBED)
     attention_mask: Tensor,
     position_ids: Tensor,
     cache_position: Tensor,
-    past_kv: DynamicCache | None, # KV-cache locale per questo (job_id, blocco)
+    past_kv: DynamicCache | None, # local KV-cache for this (job_id, block)
 ) -> tuple[Tensor, DynamicCache]: # (hidden_states_out, new_kv)
     ...
 ```
 
-**Invariante chiave:** un hop è una **funzione pura** di `(attivazione in ingresso + KV-cache del job)`. Questo è ciò che rende un hop durevole, ripetibile e re-dispatchabile (è il fondamento delle Parti 3 e 5).
+**Key invariant:** a hop is a **pure function** of `(input activation + job KV-cache)`. This is what makes a hop durable, repeatable, and re-dispatchable (it is the foundation of Parts 3 and 5).
 
-### Payload di hop (sul filo)
+### Hop payload (on the wire)
 ```
 {
   job_id, hop, token_position,
   hidden_states, attention_mask, position_ids, cache_position
-}   # serializzato come safetensors bytes in-memory
+}   # serialized as in-memory safetensors bytes
 ```
-La KV-cache **non** viaggia: resta locale all'holder del blocco (session affinity, vedi Parte 3).
+The KV-cache does **not** travel: it stays local to the block holder (session affinity, see Part 3).
 
-## 4. Flusso di caricamento
+## 4. Loading flow
 
 ```mermaid
 flowchart TD
-    A[Avvio nodo: model_id, blocchi assegnati] --> B[hf download config + index safetensors]
-    B --> C["init_empty_weights(): costruisci scheletro modello (meta device)"]
-    C --> D["load_checkpoint_in_model(): materializza SOLO layers[lo:hi]<br/>(+ embed se primo, +head se ultimo)"]
-    D --> E[Registra blocchi nel DHT — Parte 2]
-    E --> F[Pronto a servire run_block]
+    A[Node startup: model_id, assigned blocks] --> B[hf download config + safetensors index]
+    B --> C["init_empty_weights(): build model skeleton (meta device)"]
+    C --> D["load_checkpoint_in_model(): materialize ONLY layers[lo:hi]<br/>(+ embed if first, +head if last)"]
+    D --> E[Register blocks in the DHT — Part 2]
+    E --> F[Ready to serve run_block]
 ```
 
-## 5. Rischi & mitigazioni (dal team)
+## 5. Risks & mitigations (from the team)
 
-- **Off-by-one in `position_ids`/`cache_position`** dopo un hop ripreso → token spazzatura silenziosi. → `golden_test` obbligatorio, ri-eseguito a ogni step.
-- **Drift di dtype/device** della cache. → dtype fisso in v1; cache sempre promossa/normalizzata su un device noto.
-- **Differenze di accesso ai layer** tra architetture. → astrazione `block_accessor` per famiglia (Llama/Qwen) con test per modello.
+- **Off-by-one in `position_ids`/`cache_position`** after a resumed hop → silent garbage tokens. → mandatory `golden_test`, re-run at every step.
+- **dtype/device drift** of the cache. → fixed dtype in v1; cache always promoted/normalized to a known device.
+- **Layer-access differences** across architectures. → `block_accessor` abstraction per family (Llama/Qwen) with per-model tests.
 
-## 6. Criteri di accettazione
+## 6. Acceptance criteria
 
-1. Un nodo carica solo i suoi layer e l'uso di RAM è ~proporzionale ai layer assegnati (non al modello intero, embed/head a parte).
-2. `golden_test`: la concatenazione di `run_block` su tutti i blocchi in-process produce logits `torch.allclose` con `model.generate()` (atol/rtol da fissare) per ≥2 architetture (Qwen2.5-0.5B, Llama 3.2 1B).
-3. KV-cache serializzata → deserializzata fa round-trip senza perdita; una generazione ripresa da cache persistita == generazione continua.
+1. A node loads only its own layers and RAM usage is ~proportional to the assigned layers (not to the whole model, embed/head aside).
+2. `golden_test`: chaining `run_block` over all blocks in-process produces logits that are `torch.allclose` with `model.generate()` (atol/rtol to be fixed) for ≥2 architectures (Qwen2.5-0.5B, Llama 3.2 1B).
+3. A serialized → deserialized KV-cache round-trips losslessly; a generation resumed from a persisted cache == a continuous generation.
 
-## 7. Dipendenze
+## 7. Dependencies
 
-- **Parte 2** consuma: granularità dei blocchi e annuncio nel DHT.
-- **Parte 3** consuma: `run_block` come step idempotente; possiede la persistenza della cache keyed `(job_id, stage)`.
-- **Parte 5** consuma: il determinismo (modulo FP) di `run_block` per il recompute ridondante.
+- **Part 2** consumes: block granularity and the DHT announcement.
+- **Part 3** consumes: `run_block` as an idempotent step; owns the cache persistence keyed `(job_id, stage)`.
+- **Part 5** consumes: the determinism (modulo FP) of `run_block` for redundant recompute.
 
-## 8. Domande aperte
+## 8. Open questions
 
-- Granularità: embedding e lm_head come blocchi standalone o co-locati col primo/ultimo slab? (vedi ADR-0001 Q5)
-- Versione `transformers` da pinnare per la `Cache` API (ADR-0001 Q2).
+- Granularity: embedding and lm_head as standalone blocks or co-located with the first/last slab? (see ADR-0001 Q5)
+- The `transformers` version to pin for the `Cache` API (ADR-0001 Q2).

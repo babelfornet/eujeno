@@ -19,7 +19,7 @@
 
 ```
 pyproject.toml                 # progetto + dipendenze pinnate + config pytest
-synapse/
+axyn/
   __init__.py
   config.py                    # DEFAULT_MODEL_ID, DTYPE, DEVICE
   model/
@@ -49,14 +49,14 @@ Responsabilità per file (una sola per file): `loader` carica · `masking` costr
 
 **Files:**
 - Create: `pyproject.toml`
-- Create: `synapse/__init__.py`, `synapse/model/__init__.py`
-- Create: `synapse/config.py`
+- Create: `axyn/__init__.py`, `axyn/model/__init__.py`
+- Create: `axyn/config.py`
 
 - [ ] **Step 1: Crea `pyproject.toml`**
 
 ```toml
 [project]
-name = "synapse"
+name = "axyn"
 version = "0.0.1"
 description = "Decentralized peer-to-peer LLM inference network"
 requires-python = ">=3.11"
@@ -76,15 +76,15 @@ markers = ["slow: scarica/esegue il modello (lento)"]
 addopts = "-q"
 
 [tool.setuptools.packages.find]
-include = ["synapse*"]
+include = ["axyn*"]
 ```
 
 - [ ] **Step 2: Crea i package init e `config.py`**
 
-`synapse/__init__.py`: file vuoto.
-`synapse/model/__init__.py`: file vuoto.
+`axyn/__init__.py`: file vuoto.
+`axyn/model/__init__.py`: file vuoto.
 
-`synapse/config.py`:
+`axyn/config.py`:
 ```python
 import torch
 
@@ -104,8 +104,8 @@ Expected: installazione completata senza errori; `python -c "import transformers
 - [ ] **Step 4: Commit**
 
 ```bash
-git add pyproject.toml synapse/__init__.py synapse/model/__init__.py synapse/config.py
-git commit -m "chore: scaffolding pacchetto synapse + dipendenze pinnate"
+git add pyproject.toml axyn/__init__.py axyn/model/__init__.py axyn/config.py
+git commit -m "chore: scaffolding pacchetto axyn + dipendenze pinnate"
 ```
 
 ---
@@ -113,7 +113,7 @@ git commit -m "chore: scaffolding pacchetto synapse + dipendenze pinnate"
 ## Task 1: Model loader
 
 **Files:**
-- Create: `synapse/model/loader.py`
+- Create: `axyn/model/loader.py`
 - Test: `tests/conftest.py`, `tests/test_loader.py`
 
 - [ ] **Step 1: Scrivi il test che fallisce**
@@ -122,8 +122,8 @@ git commit -m "chore: scaffolding pacchetto synapse + dipendenze pinnate"
 ```python
 import pytest
 import torch
-from synapse.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
-from synapse.model.loader import load_full_model
+from axyn.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
+from axyn.model.loader import load_full_model
 
 @pytest.fixture(scope="session")
 def full_model():
@@ -136,7 +136,7 @@ def full_model():
 `tests/test_loader.py`:
 ```python
 import pytest
-from synapse.model.loader import model_dims
+from axyn.model.loader import model_dims
 
 @pytest.mark.slow
 def test_loads_with_expected_dims(full_model):
@@ -150,7 +150,7 @@ def test_loads_with_expected_dims(full_model):
 - [ ] **Step 2: Esegui il test per vederlo fallire**
 
 Run: `pytest tests/test_loader.py -m slow -v`
-Expected: FAIL con `ModuleNotFoundError`/`ImportError` su `synapse.model.loader`.
+Expected: FAIL con `ModuleNotFoundError`/`ImportError` su `axyn.model.loader`.
 
 - [ ] **Step 3: Implementa `loader.py`**
 
@@ -186,7 +186,7 @@ Expected: PASS (la prima esecuzione scarica ~1GB del modello).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add synapse/model/loader.py tests/conftest.py tests/test_loader.py
+git add axyn/model/loader.py tests/conftest.py tests/test_loader.py
 git commit -m "feat(model): loader del modello completo + introspezione dimensioni"
 ```
 
@@ -195,7 +195,7 @@ git commit -m "feat(model): loader del modello completo + introspezione dimensio
 ## Task 2: Causal mask builder
 
 **Files:**
-- Create: `synapse/model/masking.py`
+- Create: `axyn/model/masking.py`
 - Test: `tests/test_masking.py`
 
 - [ ] **Step 1: Scrivi il test che fallisce**
@@ -203,7 +203,7 @@ git commit -m "feat(model): loader del modello completo + introspezione dimensio
 `tests/test_masking.py`:
 ```python
 import torch
-from synapse.model.masking import build_causal_mask
+from axyn.model.masking import build_causal_mask
 
 
 def test_prefill_mask_is_lower_triangular():
@@ -229,7 +229,7 @@ def test_decode_step_attends_to_all_past():
 - [ ] **Step 2: Esegui il test per vederlo fallire**
 
 Run: `pytest tests/test_masking.py -v`
-Expected: FAIL con `ImportError` su `synapse.model.masking`.
+Expected: FAIL con `ImportError` su `axyn.model.masking`.
 
 - [ ] **Step 3: Implementa `masking.py`**
 
@@ -257,7 +257,7 @@ Expected: PASS (2 test).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add synapse/model/masking.py tests/test_masking.py
+git add axyn/model/masking.py tests/test_masking.py
 git commit -m "feat(model): builder maschera causale per esecuzione blocchi"
 ```
 
@@ -266,7 +266,7 @@ git commit -m "feat(model): builder maschera causale per esecuzione blocchi"
 ## Task 3: KV-cache serialization (primitivo condiviso #2/3)
 
 **Files:**
-- Create: `synapse/model/cache.py`
+- Create: `axyn/model/cache.py`
 - Test: `tests/test_cache.py`
 
 - [ ] **Step 1: Scrivi il test che fallisce**
@@ -275,7 +275,7 @@ git commit -m "feat(model): builder maschera causale per esecuzione blocchi"
 ```python
 import torch
 from transformers import DynamicCache
-from synapse.model.cache import cache_to_bytes, cache_from_bytes
+from axyn.model.cache import cache_to_bytes, cache_from_bytes
 
 
 def _make_cache(num_layers, seq=4, heads=2, head_dim=8):
@@ -306,7 +306,7 @@ def test_cache_roundtrip_preserves_seq_length():
 - [ ] **Step 2: Esegui il test per vederlo fallire**
 
 Run: `pytest tests/test_cache.py -v`
-Expected: FAIL con `ImportError` su `synapse.model.cache`.
+Expected: FAIL con `ImportError` su `axyn.model.cache`.
 
 - [ ] **Step 3: Implementa `cache.py`**
 
@@ -342,7 +342,7 @@ Expected: PASS (2 test).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add synapse/model/cache.py tests/test_cache.py
+git add axyn/model/cache.py tests/test_cache.py
 git commit -m "feat(model): serializzazione KV-cache via safetensors (round-trip)"
 ```
 
@@ -351,7 +351,7 @@ git commit -m "feat(model): serializzazione KV-cache via safetensors (round-trip
 ## Task 4: Hop payload serialization (primitivo condiviso #1 sul filo)
 
 **Files:**
-- Create: `synapse/model/payload.py`
+- Create: `axyn/model/payload.py`
 - Test: `tests/test_payload.py`
 
 - [ ] **Step 1: Scrivi il test che fallisce**
@@ -359,7 +359,7 @@ git commit -m "feat(model): serializzazione KV-cache via safetensors (round-trip
 `tests/test_payload.py`:
 ```python
 import torch
-from synapse.model.payload import HopPayload
+from axyn.model.payload import HopPayload
 
 
 def test_payload_roundtrip():
@@ -385,7 +385,7 @@ def test_payload_roundtrip():
 - [ ] **Step 2: Esegui il test per vederlo fallire**
 
 Run: `pytest tests/test_payload.py -v`
-Expected: FAIL con `ImportError` su `synapse.model.payload`.
+Expected: FAIL con `ImportError` su `axyn.model.payload`.
 
 - [ ] **Step 3: Implementa `payload.py`**
 
@@ -445,7 +445,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add synapse/model/payload.py tests/test_payload.py
+git add axyn/model/payload.py tests/test_payload.py
 git commit -m "feat(model): serializzazione HopPayload via safetensors (round-trip)"
 ```
 
@@ -454,7 +454,7 @@ git commit -m "feat(model): serializzazione HopPayload via safetensors (round-tr
 ## Task 5: BlockRunner + split_into_blocks
 
 **Files:**
-- Create: `synapse/model/blocks.py`
+- Create: `axyn/model/blocks.py`
 - Test: `tests/test_blocks.py`
 
 > **Nota di design:** `split_into_blocks` **muta** `layer.self_attn.layer_idx` rimappandolo a indici locali (0-based per blocco), così ogni blocco usa una `DynamicCache` locale per i soli suoi layer (forward-compatibile col modello distribuito). Per questo i test e il golden test (Task 6) catturano sempre il riferimento dal modello intero **prima** di chiamare `split_into_blocks`.
@@ -465,7 +465,7 @@ git commit -m "feat(model): serializzazione HopPayload via safetensors (round-tr
 ```python
 import pytest
 import torch
-from synapse.model.blocks import split_into_blocks
+from axyn.model.blocks import split_into_blocks
 
 
 @pytest.mark.slow
@@ -499,7 +499,7 @@ def test_decoder_blocks_cover_all_layers(full_model):
 - [ ] **Step 2: Esegui il test per vederlo fallire**
 
 Run: `pytest tests/test_blocks.py -m slow -v`
-Expected: FAIL con `ImportError` su `synapse.model.blocks`.
+Expected: FAIL con `ImportError` su `axyn.model.blocks`.
 
 - [ ] **Step 3: Implementa `blocks.py`**
 
@@ -589,7 +589,7 @@ Expected: PASS (3 test).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add synapse/model/blocks.py tests/test_blocks.py
+git add axyn/model/blocks.py tests/test_blocks.py
 git commit -m "feat(model): BlockRunner (EMBED/DECODER/HEAD) + split_into_blocks"
 ```
 
@@ -598,7 +598,7 @@ git commit -m "feat(model): BlockRunner (EMBED/DECODER/HEAD) + split_into_blocks
 ## Task 6: Golden test — equivalenza pipeline distribuita vs modello intero
 
 **Files:**
-- Create: `synapse/model/generate.py`
+- Create: `axyn/model/generate.py`
 - Test: `tests/test_golden.py`
 
 - [ ] **Step 1: Scrivi il test che fallisce**
@@ -607,8 +607,8 @@ git commit -m "feat(model): BlockRunner (EMBED/DECODER/HEAD) + split_into_blocks
 ```python
 import pytest
 import torch
-from synapse.model.generate import reference_generate, pipeline_generate
-from synapse.model.blocks import split_into_blocks
+from axyn.model.generate import reference_generate, pipeline_generate
+from axyn.model.blocks import split_into_blocks
 
 
 @pytest.mark.slow
@@ -629,7 +629,7 @@ def test_pipeline_matches_reference_generation(full_model):
 - [ ] **Step 2: Esegui il test per vederlo fallire**
 
 Run: `pytest tests/test_golden.py -m slow -v`
-Expected: FAIL con `ImportError` su `synapse.model.generate`.
+Expected: FAIL con `ImportError` su `axyn.model.generate`.
 
 - [ ] **Step 3: Implementa `generate.py`**
 
@@ -686,7 +686,7 @@ Expected: PASS. Se fallisce con token divergenti, è il mismatch di firma del de
 - [ ] **Step 5: Commit**
 
 ```bash
-git add synapse/model/generate.py tests/test_golden.py
+git add axyn/model/generate.py tests/test_golden.py
 git commit -m "feat(model): golden test equivalenza pipeline distribuita vs modello intero"
 ```
 
@@ -697,7 +697,7 @@ git commit -m "feat(model): golden test equivalenza pipeline distribuita vs mode
 > De-risca direttamente il **rischio #1** dell'ADR ("correttezza KV-cache tra hop e restart/failover"): a metà generazione serializziamo le cache per-blocco su byte e le ricarichiamo (simulando handoff/restart di un holder), poi continuiamo e pretendiamo la **stessa** sequenza.
 
 **Files:**
-- Modify: `synapse/model/blocks.py` (aggiungi get/set della cache)
+- Modify: `axyn/model/blocks.py` (aggiungi get/set della cache)
 - Test: `tests/test_resilience.py`
 
 - [ ] **Step 1: Scrivi il test che fallisce**
@@ -706,9 +706,9 @@ git commit -m "feat(model): golden test equivalenza pipeline distribuita vs mode
 ```python
 import pytest
 import torch
-from synapse.model.generate import reference_generate
-from synapse.model.blocks import split_into_blocks
-from synapse.model.cache import cache_to_bytes, cache_from_bytes
+from axyn.model.generate import reference_generate
+from axyn.model.blocks import split_into_blocks
+from axyn.model.cache import cache_to_bytes, cache_from_bytes
 
 
 @pytest.mark.slow
@@ -762,7 +762,7 @@ Expected: PASS — la generazione è identica anche dopo il round-trip su byte d
 - [ ] **Step 5: Commit**
 
 ```bash
-git add synapse/model/blocks.py tests/test_resilience.py
+git add axyn/model/blocks.py tests/test_resilience.py
 git commit -m "test(model): KV-cache sopravvive a serializzazione mid-generazione"
 ```
 

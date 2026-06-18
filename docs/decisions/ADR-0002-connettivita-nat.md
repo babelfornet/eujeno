@@ -1,66 +1,66 @@
-# ADR-0002 — Connettività cross-NAT: coordinator-relay (Milestone 0)
+# ADR-0002 — Cross-NAT connectivity: coordinator-relay (Milestone 0)
 
-- **Stato:** Accettato
-- **Data:** 2026-06-17
-- **Contesto:** [ADR-0001](./ADR-0001-implementation-forks.md) (Fork A discovery), [PRD Parte 2](../prd/part-2-discovery-routing.md). Estende il transport di [Parte 1 networking](../plans/2026-06-17-part1-networking.md).
+- **Status:** Accepted
+- **Date:** 2026-06-17
+- **Context:** [ADR-0001](./ADR-0001-implementation-forks.md) (Fork A discovery), [PRD Part 2](../prd/part-2-discovery-routing.md). Extends the transport of [Part 1 networking](../plans/2026-06-17-part1-networking.md).
 
-## Contesto e requisito
+## Context and requirement
 
-La Parte 2 deve fornire **discovery automatica** (niente più file di topologia statici). Requisito utente esplicito: il sistema **deve funzionare sia in intranet (LAN) sia su internet**, **senza obbligare all'uso di una VPN** (chi vuole può comunque configurarla).
+Part 2 must provide **automatic discovery** (no more static topology files). Explicit user requirement: the system **must work both on an intranet (LAN) and over the internet**, **without forcing the use of a VPN** (those who want one can still configure it).
 
-## Forze
+## Forces
 
-1. **Il NAT rompe il transport, non solo la discovery.** I block-server HTTP di Parte 1 sono raggiungibili solo se hanno un IP:porta pubblico (o port-forwarding). Due macchine entrambe dietro NAT non si raggiungono direttamente.
-2. **NAT traversal senza VPN richiede infrastruttura pubblicamente raggiungibile.** Non esiste modo di connettere due peer entrambi dietro NAT senza *almeno un* punto pubblico che faccia da rendezvous/relay. Anche i sistemi P2P "puri" (libp2p, BitTorrent) usano bootstrap e **relay** quando l'hole-punching fallisce.
-3. **libp2p nativo (hole-punching + relay) è la soluzione decentralizzata completa ma pesante/rischiosa** (daemon p2pd, relay, cross-arch — vedi ADR-0001 Fork A e Q1). Non è una prova rapida.
-4. **Le connessioni in uscita attraversano sempre il NAT.** Un worker dietro NAT può sempre aprire una connessione *outbound* verso un endpoint pubblico.
+1. **NAT breaks the transport, not just discovery.** The Part 1 HTTP block-servers are only reachable if they have a public IP:port (or port-forwarding). Two machines both behind NAT cannot reach each other directly.
+2. **NAT traversal without a VPN requires publicly reachable infrastructure.** There is no way to connect two peers both behind NAT without *at least one* public point acting as rendezvous/relay. Even "pure" P2P systems (libp2p, BitTorrent) use bootstrap and **relay** when hole-punching fails.
+3. **Native libp2p (hole-punching + relay) is the complete decentralized solution but heavy/risky** (p2pd daemon, relay, cross-arch — see ADR-0001 Fork A and Q1). It is not a quick proof.
+4. **Outbound connections always traverse the NAT.** A worker behind NAT can always open an *outbound* connection to a public endpoint.
 
-## Decisione — due modalità selezionabili
+## Decision — two selectable modes
 
-Synapse supporta **due modalità di connettività**, scelte dall'utente; il coordinator è **opt-in**, mai obbligatorio.
+Axyn supports **two connectivity modes**, chosen by the user; the coordinator is **opt-in**, never mandatory.
 
-### Modalità A — P2P puro (decentralizzato, default)
+### Mode A — pure P2P (decentralized, default)
 
-**Nessun server centrale.** Ogni nodo è un `synapse serve` simmetrico che:
-- esegue una **discovery automatica via gossip**: conosce uno o più *seed peer*, scambia periodicamente il proprio registry (chi-serve-quale-blocco) con i vicini, con TTL/refresh per la liveness; un nuovo nodo impara l'intera rete transitivamente da un seed;
-- riceve attivazioni via **transport diretto nodo-a-nodo** (HTTP di Parte 1).
+**No central server.** Each node is a symmetric `axyn serve` that:
+- performs **automatic gossip-based discovery**: it knows one or more *seed peers*, periodically exchanges its own registry (who-serves-which-block) with neighbors, with TTL/refresh for liveness; a new node learns the whole network transitively from a seed;
+- receives activations via **direct node-to-node transport** (Part 1 HTTP).
 
-`synapse infer --peer <qualsiasi-nodo>` interroga un peer, riceve il registry gossipato, costruisce la topologia da solo (coverage gate) ed esegue. **Funziona dove i nodi sono mutuamente raggiungibili** (LAN, VPN, o IP pubblici/port-forwarding). Per il P2P puro **anche dietro NAT senza VPN** serve un transport con NAT traversal (**libp2p nativo**: hole-punching + relay tra peer) — è il percorso futuro, dietro la stessa interfaccia.
+`axyn infer --peer <any-node>` queries a peer, receives the gossiped registry, builds the topology itself (coverage gate), and runs. **It works where nodes are mutually reachable** (LAN, VPN, or public IPs/port-forwarding). For pure P2P **even behind NAT without a VPN** a transport with NAT traversal is needed (**native libp2p**: hole-punching + relay between peers) — that is the future path, behind the same interface.
 
-### Modalità B — coordinator-relay (opt-in, per internet-senza-VPN subito)
+### Mode B — coordinator-relay (opt-in, for internet-without-VPN right now)
 
-Un **coordinator-relay** leggero come livello di connettività di Milestone 0:
+A lightweight **coordinator-relay** as the Milestone 0 connectivity layer:
 
-- Un processo **`synapse coordinator`** pubblicamente raggiungibile (su internet: una macchina con IP pubblico o un VPS, o un solo port-forward; su LAN: un nodo qualsiasi).
-- Ogni **`synapse serve`** apre una **connessione WebSocket in uscita** verso il coordinator, **annuncia i propri stage** (embed / decoder:lo-hi / head) e poi serve le richieste di hop relayate. Outbound ⇒ funziona dietro qualsiasi NAT, **senza port-forwarding sui worker**.
-- Il coordinator mantiene il **registry** (quale nodo serve quale blocco), calcola la **coverage**, e **instrada** ogni hop di attivazione verso il nodo giusto sulla sua connessione WS, guidando il loop di generazione (orchestrator Milestone 0 spostato nel coordinator).
-- **`synapse infer`** diventa un client sottile: invia `{prompt, max_new_tokens}` al coordinator e riceve `{text, tokens}`.
+- A publicly reachable **`axyn coordinator`** process (on the internet: a machine with a public IP or a VPS, or a single port-forward; on a LAN: any node).
+- Each **`axyn serve`** opens an **outbound WebSocket connection** to the coordinator, **announces its stages** (embed / decoder:lo-hi / head), and then serves relayed hop requests. Outbound ⇒ works behind any NAT, **with no port-forwarding on the workers**.
+- The coordinator maintains the **registry** (which node serves which block), computes **coverage**, and **routes** each activation hop to the right node over its WS connection, driving the generation loop (the Milestone 0 orchestrator moved into the coordinator).
+- **`axyn infer`** becomes a thin client: it sends `{prompt, max_new_tokens}` to the coordinator and receives `{text, tokens}`.
 
-Connettività richiesta: **solo il coordinator** deve essere raggiungibile; worker ed entry hanno bisogno **solo di connettività in uscita** → funziona LAN e internet senza VPN. Con una VPN, anche il coordinator può stare su IP privato.
+Required connectivity: **only the coordinator** must be reachable; workers and the entry need **only outbound connectivity** → works on a LAN and over the internet without a VPN. With a VPN, even the coordinator can sit on a private IP.
 
-## Conseguenze
+## Consequences
 
 **Positive:**
-- Funziona su intranet **e** internet senza VPN né port-forwarding sui worker (requisito soddisfatto).
-- Discovery automatica reale: i nodi si auto-annunciano; l'entry non scrive topologie.
-- Riusa l'esecuzione a blocchi e il wire safetensors già fatti; cambia solo *come* i messaggi raggiungono i nodi (WS relay invece di POST diretti).
-- Affidabile e veloce da costruire rispetto a libp2p.
+- Works on an intranet **and** over the internet without a VPN or port-forwarding on the workers (requirement met).
+- Real automatic discovery: nodes self-announce; the entry writes no topologies.
+- Reuses the block execution and the safetensors wire already built; only *how* messages reach the nodes changes (WS relay instead of direct POSTs).
+- Reliable and fast to build compared to libp2p.
 
-**Negative / debito (consapevole):**
-- **Introduce un punto centrale** (il coordinator instrada tutto il traffico): deviazione dalla tesi "completamente decentralizzato senza server centrale". È **Milestone 0**, esplicitamente da superare.
-- Il coordinator è un collo di bottiglia e un SPOF per le sessioni attive (mitigato in futuro: più coordinator / federazione, poi libp2p).
+**Negative / debt (knowing):**
+- **Introduces a central point** (the coordinator routes all traffic): a deviation from the "fully decentralized, no central server" thesis. It is **Milestone 0**, explicitly meant to be superseded.
+- The coordinator is a bottleneck and an SPOF for active sessions (mitigated in the future: multiple coordinators / federation, then libp2p).
 
-**Percorso di de-centralizzazione (futuro):** transport nativo **libp2p** dove ogni nodo con IP pubblico può fare da relay e si tenta l'hole-punching prima del relay; il coordinator diventa opzionale. Resta dietro un'interfaccia di transport/discovery così che lo swap non riscriva l'esecuzione.
+**Decentralization path (future):** native **libp2p** transport where every node with a public IP can act as a relay and hole-punching is attempted before relaying; the coordinator becomes optional. It stays behind a transport/discovery interface so that the swap does not rewrite execution.
 
-**Modalità conservate:** il transport HTTP diretto + topologia statica di Parte 1 resta valido per uso **pura-LAN/VPN** senza coordinator (più decentralizzato quando la rete lo permette).
+**Preserved modes:** the direct HTTP transport + static topology of Part 1 remains valid for **pure-LAN/VPN** use without a coordinator (more decentralized when the network permits).
 
-## Alternative scartate (per questo slice)
+## Rejected alternatives (for this slice)
 
-| Alternativa | Perché no (ora) |
+| Alternative | Why not (now) |
 |-------------|------------------|
-| **VPN + gossip HTTP** | Ottimo ma **richiede** la VPN; l'utente non vuole obbligarla. Resta disponibile come modalità (Parte 1 HTTP diretto su IP della VPN). |
-| **libp2p/hivemind nativo** | Soluzione decentralizzata completa ma pesante/rischiosa; non una prova rapida. È il percorso futuro. |
-| **Solo rendezvous + hole-punching (no relay)** | L'hole-punching fallisce dietro NAT simmetrici; senza relay di fallback non è affidabile. |
+| **VPN + HTTP gossip** | Excellent but **requires** the VPN; the user does not want to force it. It remains available as a mode (Part 1 direct HTTP over the VPN IP). |
+| **Native libp2p/hivemind** | Complete decentralized solution but heavy/risky; not a quick proof. It is the future path. |
+| **Rendezvous + hole-punching only (no relay)** | Hole-punching fails behind symmetric NATs; without a relay fallback it is not reliable. |
 
-## Riferimenti
-- [ADR-0001](./ADR-0001-implementation-forks.md) Fork A + Q1 (LAN vs NAT) · [PRD Parte 2](../prd/part-2-discovery-routing.md)
+## References
+- [ADR-0001](./ADR-0001-implementation-forks.md) Fork A + Q1 (LAN vs NAT) · [PRD Part 2](../prd/part-2-discovery-routing.md)
