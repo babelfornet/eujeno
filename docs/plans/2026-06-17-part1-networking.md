@@ -2,68 +2,68 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Eseguire la pipeline di inferenza splittata **attraverso più processi/macchine via HTTP**, riproducendo esattamente la generazione del modello intero, lanciabile dalla CLI `axyn` (`serve` + `infer`) su 2-3 nodi.
+**Goal:** Run the split inference pipeline **across multiple processes/machines via HTTP**, exactly reproducing the generation of the whole model, launchable from the `axyn` CLI (`serve` + `infer`) on 2-3 nodes.
 
-**Architecture:** Milestone 0 dell'[ADR-0001](../decisions/ADR-0001-implementation-forks.md): un **orchestrator** (entry node) guida la generazione autoregressiva chiamando dei **BlockServer** (FastAPI) via HTTP; le attivazioni viaggiano come **safetensors bytes**. Ogni BlockServer ospita uno o più *stage* (`embed`, `decoder:lo-hi`, `head`), mantiene la **KV-cache per-job in memoria**, ed espone endpoint stateless per embed/head e stateful per decode. La topologia (quale URL serve quale stage) è un **file JSON statico** in questo slice; la discovery DHT che auto-organizza i nodi arriva in Parte 2.
+**Architecture:** Milestone 0 of [ADR-0001](../decisions/ADR-0001-implementation-forks.md): an **orchestrator** (entry node) drives autoregressive generation by calling **BlockServers** (FastAPI) via HTTP; activations travel as **safetensors bytes**. Each BlockServer hosts one or more *stages* (`embed`, `decoder:lo-hi`, `head`), keeps the **per-job KV-cache in memory**, and exposes stateless endpoints for embed/head and stateful ones for decode. The topology (which URL serves which stage) is a **static JSON file** in this slice; the DHT discovery that self-organizes the nodes comes in Part 2.
 
-**Tech Stack:** Python · FastAPI + uvicorn (server) · httpx (client) · safetensors (wire) · l'esistente `axyn/model/` (loader, blocks, generate) · pytest.
+**Tech Stack:** Python · FastAPI + uvicorn (server) · httpx (client) · safetensors (wire) · the existing `axyn/model/` (loader, blocks, generate) · pytest.
 
-**Decisioni di questo slice:**
-- **Caricamento:** ogni nodo carica il modello intero ma serve solo i suoi stage (semplice e corretto per il modello piccolo del PoC). Partial-loading reale = ottimizzazione successiva.
-- **Sampling:** greedy (argmax). Il nodo `head` ritorna direttamente il `token_id` (risparmia banda vs ritornare i logits).
-- **Determinismo:** fp32/CPU come la foundation, così il distribuito == `reference_generate`.
+**Decisions in this slice:**
+- **Loading:** each node loads the whole model but serves only its stages (simple and correct for the small PoC model). Real partial-loading = a later optimization.
+- **Sampling:** greedy (argmax). The `head` node returns the `token_id` directly (saves bandwidth vs returning the logits).
+- **Determinism:** fp32/CPU like the foundation, so distributed == `reference_generate`.
 
-**Fuori scope (prossimi slice):** discovery/DHT (Parte 2), store-and-forward durevole + failover (Parte 3), partial-loading reale, batching/concorrenza, autenticazione.
+**Out of scope (upcoming slices):** discovery/DHT (Part 2), durable store-and-forward + failover (Part 3), real partial-loading, batching/concurrency, authentication.
 
 ---
 
 ## File Structure
 
 ```
-pyproject.toml                  # MODIFICA: + fastapi, uvicorn, httpx
+pyproject.toml                  # MODIFY: + fastapi, uvicorn, httpx
 axyn/
-  model/blocks.py               # MODIFICA: + prepare_decoder_block()
+  model/blocks.py               # MODIFY: + prepare_decoder_block()
   net/
-    __init__.py                 # NUOVO (vuoto)
-    wire.py                     # NUOVO: encode_tensors/decode_tensors (safetensors)
-    topology.py                 # NUOVO: parse_stages (serve) + Topology/load_topology (infer)
-    server.py                   # NUOVO: create_app() FastAPI + stato per-job
-    orchestrator.py             # NUOVO: distributed_generate() + run_server_in_thread()
-  cli.py                        # MODIFICA: + comandi serve, infer
+    __init__.py                 # NEW (empty)
+    wire.py                     # NEW: encode_tensors/decode_tensors (safetensors)
+    topology.py                 # NEW: parse_stages (serve) + Topology/load_topology (infer)
+    server.py                   # NEW: create_app() FastAPI + per-job state
+    orchestrator.py             # NEW: distributed_generate() + run_server_in_thread()
+  cli.py                        # MODIFY: + serve, infer commands
 tests/
-  test_wire.py                  # round-trip (veloce)
-  test_topology.py              # parsing (veloce)
+  test_wire.py                  # round-trip (fast)
+  test_topology.py              # parsing (fast)
   test_prepare_block.py         # prepare_decoder_block (slow)
-  test_server.py                # un app con tutti gli stage via TestClient (slow)
-  test_orchestrator.py          # 2 server in thread, distribuito == reference (slow)
-  test_cli_infer.py             # `axyn infer` contro 2 server (slow)
+  test_server.py                # one app with all stages via TestClient (slow)
+  test_orchestrator.py          # 2 servers in thread, distributed == reference (slow)
+  test_cli_infer.py             # `axyn infer` against 2 servers (slow)
 docs/
-  examples/topology.localhost.json   # NUOVO: topologia di esempio
+  examples/topology.localhost.json   # NEW: example topology
 ```
 
 ---
 
-## Task 1: dipendenze + `net` package + wire
+## Task 1: dependencies + `net` package + wire
 
 **Files:** modify `pyproject.toml`; create `axyn/net/__init__.py`, `axyn/net/wire.py`, `tests/test_wire.py`.
 
-- [ ] **Step 1: aggiungi dipendenze in `pyproject.toml`**
+- [ ] **Step 1: add dependencies in `pyproject.toml`**
 
-Nella lista `[project] dependencies` aggiungi:
+In the `[project] dependencies` list add:
 ```toml
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "httpx>=0.27",
 ```
-Poi reinstalla:
+Then reinstall:
 ```bash
 cd /Users/alberto/Projects/AI/axyn && .venv/bin/pip install -e ".[dev]"
 ```
-(Se la rete è bloccata e i pacchetti non sono installabili, riporta BLOCKED.)
+(If the network is blocked and the packages cannot be installed, report BLOCKED.)
 
-- [ ] **Step 2: crea `axyn/net/__init__.py`** (file vuoto).
+- [ ] **Step 2: create `axyn/net/__init__.py`** (empty file).
 
-- [ ] **Step 3: scrivi il test `tests/test_wire.py`**
+- [ ] **Step 3: write the test `tests/test_wire.py`**
 
 ```python
 import torch
@@ -81,28 +81,28 @@ def test_roundtrip_preserves_tensors_and_dtype():
     assert torch.equal(back["hidden_states"], tensors["hidden_states"])
 ```
 
-- [ ] **Step 4: esegui per vederlo fallire**
+- [ ] **Step 4: run it to see it fail**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_wire.py -v`
-Expected: ImportError su `axyn.net.wire`.
+Expected: ImportError on `axyn.net.wire`.
 
-- [ ] **Step 5: implementa `axyn/net/wire.py`**
+- [ ] **Step 5: implement `axyn/net/wire.py`**
 
 ```python
 import safetensors.torch
 
 
 def encode_tensors(tensors: dict) -> bytes:
-    """Serializza un dict nome->Tensor in bytes safetensors (per il body HTTP)."""
+    """Serialize a name->Tensor dict into safetensors bytes (for the HTTP body)."""
     return safetensors.torch.save({k: v.contiguous() for k, v in tensors.items()})
 
 
 def decode_tensors(data: bytes) -> dict:
-    """Deserializza bytes safetensors in un dict nome->Tensor."""
+    """Deserialize safetensors bytes into a name->Tensor dict."""
     return safetensors.torch.load(data)
 ```
 
-- [ ] **Step 6: esegui per vederlo passare**
+- [ ] **Step 6: run it to see it pass**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_wire.py -v`
 Expected: 1 passed.
@@ -110,7 +110,7 @@ Expected: 1 passed.
 - [ ] **Step 7: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add pyproject.toml axyn/net/__init__.py axyn/net/wire.py tests/test_wire.py && git commit -m "feat(net): dipendenze HTTP + wire safetensors per le attivazioni"
+cd /Users/alberto/Projects/AI/axyn && git add pyproject.toml axyn/net/__init__.py axyn/net/wire.py tests/test_wire.py && git commit -m "feat(net): HTTP dependencies + safetensors wire for activations"
 ```
 
 ---
@@ -119,7 +119,7 @@ cd /Users/alberto/Projects/AI/axyn && git add pyproject.toml axyn/net/__init__.p
 
 **Files:** create `axyn/net/topology.py`, `tests/test_topology.py`.
 
-- [ ] **Step 1: scrivi `tests/test_topology.py`**
+- [ ] **Step 1: write `tests/test_topology.py`**
 
 ```python
 import pytest
@@ -158,12 +158,12 @@ def test_load_topology_resolves_stages():
     assert set(topo.all_urls()) == {"http://a:1", "http://b:2"}
 ```
 
-- [ ] **Step 2: esegui per vederlo fallire**
+- [ ] **Step 2: run it to see it fail**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_topology.py -v`
-Expected: ImportError su `axyn.net.topology`.
+Expected: ImportError on `axyn.net.topology`.
 
-- [ ] **Step 3: implementa `axyn/net/topology.py`**
+- [ ] **Step 3: implement `axyn/net/topology.py`**
 
 ```python
 from dataclasses import dataclass, field
@@ -171,14 +171,14 @@ from dataclasses import dataclass, field
 
 @dataclass
 class StageSpec:
-    """Quali stage serve un nodo (per `axyn serve`)."""
+    """Which stages a node serves (for `axyn serve`)."""
     embed: bool = False
     head: bool = False
     decoders: list = field(default_factory=list)   # list[tuple[int, int]]
 
 
 def parse_stages(spec: str) -> StageSpec:
-    """Parsa una stringa tipo 'embed,decoder:0-12,head' in uno StageSpec."""
+    """Parse a string like 'embed,decoder:0-12,head' into a StageSpec."""
     out = StageSpec()
     for raw in spec.split(","):
         token = raw.strip()
@@ -194,15 +194,15 @@ def parse_stages(spec: str) -> StageSpec:
                 lo, hi = rng.split("-")
                 out.decoders.append((int(lo), int(hi)))
             except ValueError:
-                raise ValueError(f"range decoder non valido: {token!r} (atteso decoder:LO-HI)")
+                raise ValueError(f"invalid decoder range: {token!r} (expected decoder:LO-HI)")
         else:
-            raise ValueError(f"stage non riconosciuto: {token!r}")
+            raise ValueError(f"unrecognized stage: {token!r}")
     return out
 
 
 @dataclass
 class Topology:
-    """Mappa stage->URL per l'inferenza distribuita (per `axyn infer`)."""
+    """stage->URL map for distributed inference (for `axyn infer`)."""
     model: str
     embed: str
     head: str
@@ -217,12 +217,12 @@ class Topology:
 
 
 def load_topology(data: dict) -> Topology:
-    """Costruisce una Topology da un dict (es. caricato da JSON)."""
+    """Build a Topology from a dict (e.g. loaded from JSON)."""
     decoders = [(d["block"], d["url"]) for d in data["decoders"]]
     return Topology(model=data["model"], embed=data["embed"], head=data["head"], decoders=decoders)
 ```
 
-- [ ] **Step 4: esegui per vederlo passare**
+- [ ] **Step 4: run it to see it pass**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_topology.py -v`
 Expected: 4 passed.
@@ -230,18 +230,18 @@ Expected: 4 passed.
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/topology.py tests/test_topology.py && git commit -m "feat(net): parsing stage + modello Topology per inferenza distribuita"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/topology.py tests/test_topology.py && git commit -m "feat(net): stage parsing + Topology model for distributed inference"
 ```
 
 ---
 
-## Task 3: `prepare_decoder_block` (layer condivisi, cache per-job)
+## Task 3: `prepare_decoder_block` (shared layers, per-job cache)
 
-> Il server condivide i moduli dei layer tra i job ma tiene una KV-cache separata per job. Serve quindi un modo per preparare i layer (slice + remap `layer_idx` a indici locali) UNA volta, e creare poi una `DecoderBlock` per-job (con la sua cache) sopra quei layer.
+> The server shares the layer modules across jobs but keeps a separate KV-cache per job. We therefore need a way to prepare the layers (slice + remap `layer_idx` to local indices) ONCE, and then create a per-job `DecoderBlock` (with its own cache) on top of those layers.
 
 **Files:** modify `axyn/model/blocks.py`; create `tests/test_prepare_block.py`.
 
-- [ ] **Step 1: scrivi `tests/test_prepare_block.py`**
+- [ ] **Step 1: write `tests/test_prepare_block.py`**
 
 ```python
 import pytest
@@ -254,30 +254,30 @@ def test_prepare_returns_local_indexed_layers(full_model):
     model, _ = full_model
     layers, rotary = prepare_decoder_block(model, 0, 12)
     assert len(layers) == 12
-    assert [layer.self_attn.layer_idx for layer in layers] == list(range(12))   # indici locali 0..11
-    # una DecoderBlock costruita sopra ci gira senza errori
+    assert [layer.self_attn.layer_idx for layer in layers] == list(range(12))   # local indices 0..11
+    # a DecoderBlock built on top runs without errors
     block = DecoderBlock(layers, rotary)
     h = torch.randn(1, 3, model.config.hidden_size, dtype=torch.float32)
     out = block.run_block(h, torch.arange(3))
     assert out.shape == h.shape
 ```
 
-- [ ] **Step 2: esegui per vederlo fallire**
+- [ ] **Step 2: run it to see it fail**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_prepare_block.py -m slow -v`
-Expected: ImportError/AttributeError su `prepare_decoder_block`.
+Expected: ImportError/AttributeError on `prepare_decoder_block`.
 
-- [ ] **Step 3: implementa in `axyn/model/blocks.py`**
+- [ ] **Step 3: implement in `axyn/model/blocks.py`**
 
-Aggiungi in fondo al file:
+Add at the end of the file:
 ```python
 def prepare_decoder_block(model, lo: int, hi: int):
-    """Prepara i layer decoder [lo, hi) per essere serviti: li affetta e rimappa
-    layer_idx a indici locali 0-based (UNA volta). Ritorna (layers, rotary_emb).
-    Costruisci una DecoderBlock(layers, rotary_emb) PER JOB per avere cache separate.
+    """Prepare the decoder layers [lo, hi) to be served: slice them and remap
+    layer_idx to local 0-based indices (ONCE). Returns (layers, rotary_emb).
+    Build a DecoderBlock(layers, rotary_emb) PER JOB to get separate caches.
 
-    ATTENZIONE: muta layer.self_attn.layer_idx come split_into_blocks. Cattura
-    eventuali riferimenti al modello intero PRIMA di chiamare questa funzione."""
+    WARNING: mutates layer.self_attn.layer_idx like split_into_blocks. Capture
+    any references to the whole model BEFORE calling this function."""
     inner = model.model
     layers = inner.layers[lo:hi]
     for local_idx, layer in enumerate(layers):
@@ -285,7 +285,7 @@ def prepare_decoder_block(model, lo: int, hi: int):
     return layers, inner.rotary_emb
 ```
 
-- [ ] **Step 4: esegui per vederlo passare**
+- [ ] **Step 4: run it to see it pass**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_prepare_block.py -m slow -v`
 Expected: PASS.
@@ -293,7 +293,7 @@ Expected: PASS.
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/model/blocks.py tests/test_prepare_block.py && git commit -m "feat(model): prepare_decoder_block (layer condivisi, cache DecoderBlock per-job)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/model/blocks.py tests/test_prepare_block.py && git commit -m "feat(model): prepare_decoder_block (shared layers, per-job DecoderBlock cache)"
 ```
 
 ---
@@ -302,7 +302,7 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/model/blocks.py tests/test_pr
 
 **Files:** create `axyn/net/server.py`, `tests/test_server.py`.
 
-- [ ] **Step 1: scrivi `tests/test_server.py`**
+- [ ] **Step 1: write `tests/test_server.py`**
 
 ```python
 import pytest
@@ -317,14 +317,14 @@ from axyn.model.generate import reference_generate
 @pytest.mark.slow
 def test_single_node_serving_all_stages_matches_reference(full_model):
     model, tokenizer = full_model
-    ids = tokenizer("La capitale dell'Italia è", return_tensors="pt").input_ids
-    reference = reference_generate(model, ids, max_new_tokens=6)   # PRIMA di create_app (remap)
+    ids = tokenizer("The capital of Italy is", return_tensors="pt").input_ids
+    reference = reference_generate(model, ids, max_new_tokens=6)   # BEFORE create_app (remap)
 
     app = create_app(model, tokenizer, StageSpec(embed=True, head=True, decoders=[(0, 24)]))
     client = TestClient(app)
     assert client.get("/health").json()["ok"] is True
 
-    # loop greedy via HTTP (un solo nodo che serve tutti gli stage)
+    # greedy loop via HTTP (a single node serving all stages)
     L = ids.shape[1]
     cache_position = torch.arange(L)
     cur_ids = ids
@@ -344,12 +344,12 @@ def test_single_node_serving_all_stages_matches_reference(full_model):
     assert generated == reference
 ```
 
-- [ ] **Step 2: esegui per vederlo fallire**
+- [ ] **Step 2: run it to see it fail**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_server.py -m slow -v`
-Expected: ImportError su `axyn.net.server`.
+Expected: ImportError on `axyn.net.server`.
 
-- [ ] **Step 3: implementa `axyn/net/server.py`**
+- [ ] **Step 3: implement `axyn/net/server.py`**
 
 ```python
 from fastapi import FastAPI, Request, Response
@@ -362,13 +362,13 @@ _OCTET = "application/octet-stream"
 
 
 def create_app(model, tokenizer, stages):
-    """Crea l'app FastAPI di un BlockServer che serve gli `stages` dati, sopra un
-    `model` GIA' caricato (condiviso tra i job in questo processo)."""
+    """Create the FastAPI app of a BlockServer that serves the given `stages`, on top of an
+    ALREADY-loaded `model` (shared across jobs in this process)."""
     app = FastAPI()
     embed_block = EmbedBlock(model.model.embed_tokens) if stages.embed else None
     head_block = HeadBlock(model.model.norm, model.lm_head) if stages.head else None
     prepared = {f"{lo}-{hi}": prepare_decoder_block(model, lo, hi) for (lo, hi) in stages.decoders}
-    jobs = {}   # job_id -> {block_key: DecoderBlock}  (KV-cache per-job)
+    jobs = {}   # job_id -> {block_key: DecoderBlock}  (per-job KV-cache)
 
     @app.get("/health")
     async def health():
@@ -382,7 +382,7 @@ def create_app(model, tokenizer, stages):
     @app.post("/embed")
     async def embed(job_id: str, request: Request):
         if embed_block is None:
-            return JSONResponse({"error": "questo nodo non serve lo stage embed"}, status_code=400)
+            return JSONResponse({"error": "this node does not serve the embed stage"}, status_code=400)
         t = decode_tensors(await request.body())
         h = embed_block.run_block(t["input_ids"])
         return Response(encode_tensors({"hidden_states": h}), media_type=_OCTET)
@@ -390,13 +390,13 @@ def create_app(model, tokenizer, stages):
     @app.post("/decode/{block_key}")
     async def decode(block_key: str, job_id: str, request: Request):
         if block_key not in prepared:
-            return JSONResponse({"error": f"blocco {block_key} non servito"}, status_code=400)
+            return JSONResponse({"error": f"block {block_key} not served"}, status_code=400)
         t = decode_tensors(await request.body())
         job = jobs.setdefault(job_id, {})
         block = job.get(block_key)
         if block is None:
             layers, rotary = prepared[block_key]
-            block = DecoderBlock(layers, rotary)   # cache propria per (job, blocco)
+            block = DecoderBlock(layers, rotary)   # own cache per (job, block)
             job[block_key] = block
         h = block.run_block(t["hidden_states"], t["cache_position"])
         return Response(encode_tensors({"hidden_states": h}), media_type=_OCTET)
@@ -404,7 +404,7 @@ def create_app(model, tokenizer, stages):
     @app.post("/head")
     async def head(job_id: str, request: Request):
         if head_block is None:
-            return JSONResponse({"error": "questo nodo non serve lo stage head"}, status_code=400)
+            return JSONResponse({"error": "this node does not serve the head stage"}, status_code=400)
         t = decode_tensors(await request.body())
         logits = head_block.run_block(t["hidden_states"])
         token_id = int(logits[:, -1, :].argmax(-1).item())
@@ -418,24 +418,24 @@ def create_app(model, tokenizer, stages):
     return app
 ```
 
-- [ ] **Step 4: esegui per vederlo passare**
+- [ ] **Step 4: run it to see it pass**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_server.py -m slow -v`
-Expected: PASS (i token generati via HTTP coincidono col riferimento).
+Expected: PASS (the tokens generated via HTTP match the reference).
 
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/server.py tests/test_server.py && git commit -m "feat(net): BlockServer FastAPI (embed/decode/head, KV-cache per-job)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/server.py tests/test_server.py && git commit -m "feat(net): FastAPI BlockServer (embed/decode/head, per-job KV-cache)"
 ```
 
 ---
 
-## Task 5: orchestrator + golden distribuito su 2 nodi
+## Task 5: orchestrator + distributed golden on 2 nodes
 
 **Files:** create `axyn/net/orchestrator.py`, `tests/test_orchestrator.py`.
 
-- [ ] **Step 1: scrivi `tests/test_orchestrator.py`**
+- [ ] **Step 1: write `tests/test_orchestrator.py`**
 
 ```python
 import socket
@@ -465,19 +465,19 @@ def _serve(app, port):
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
-    for _ in range(200):           # attende lo startup (max ~10s)
+    for _ in range(200):           # wait for startup (max ~10s)
         if server.started:
             break
         time.sleep(0.05)
-    assert server.started, "il server uvicorn non è partito"
+    assert server.started, "the uvicorn server did not start"
     return server
 
 
 @pytest.mark.slow
 def test_two_node_distributed_matches_reference(full_model):
     model, tokenizer = full_model
-    ids = tokenizer("La capitale dell'Italia è", return_tensors="pt").input_ids
-    reference = reference_generate(model, ids, max_new_tokens=6)   # PRIMA dei create_app
+    ids = tokenizer("The capital of Italy is", return_tensors="pt").input_ids
+    reference = reference_generate(model, ids, max_new_tokens=6)   # BEFORE the create_app calls
 
     p1, p2 = _free_port(), _free_port()
     app1 = create_app(model, tokenizer, StageSpec(embed=True, decoders=[(0, 12)]))
@@ -491,7 +491,7 @@ def test_two_node_distributed_matches_reference(full_model):
             decoders=[("0-12", f"http://127.0.0.1:{p1}"), ("12-24", f"http://127.0.0.1:{p2}")],
         )
         with httpx.Client(timeout=60.0) as client:
-            result = distributed_generate(topo, "La capitale dell'Italia è", 6, client, tokenizer)
+            result = distributed_generate(topo, "The capital of Italy is", 6, client, tokenizer)
         assert result["tokens"] == reference
         assert isinstance(result["text"], str) and result["text"]
     finally:
@@ -499,12 +499,12 @@ def test_two_node_distributed_matches_reference(full_model):
         s2.should_exit = True
 ```
 
-- [ ] **Step 2: esegui per vederlo fallire**
+- [ ] **Step 2: run it to see it fail**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_orchestrator.py -m slow -v`
-Expected: ImportError su `axyn.net.orchestrator`.
+Expected: ImportError on `axyn.net.orchestrator`.
 
-- [ ] **Step 3: implementa `axyn/net/orchestrator.py`**
+- [ ] **Step 3: implement `axyn/net/orchestrator.py`**
 
 ```python
 import torch
@@ -514,8 +514,8 @@ from axyn.net.wire import encode_tensors, decode_tensors
 
 def distributed_generate(topology, prompt: str, max_new_tokens: int, client, tokenizer,
                          job_id: str = "job") -> dict:
-    """Entry node (Milestone 0): guida la generazione greedy autoregressiva chiamando
-    i BlockServer della topologia via HTTP. Ritorna {'text', 'tokens'}."""
+    """Entry node (Milestone 0): drives autoregressive greedy generation by calling
+    the topology's BlockServers via HTTP. Returns {'text', 'tokens'}."""
     ids = tokenizer(prompt, return_tensors="pt").input_ids
     seq_len = ids.shape[1]
     cache_position = torch.arange(seq_len)
@@ -543,7 +543,7 @@ def distributed_generate(topology, prompt: str, max_new_tokens: int, client, tok
             cur_ids = torch.tensor([[token_id]])
             cache_position = torch.tensor([seq_len + step])
     finally:
-        for url in topology.all_urls():       # libera la KV-cache per-job sui nodi
+        for url in topology.all_urls():       # free the per-job KV-cache on the nodes
             try:
                 client.delete(f"{url}/job/{job_id}")
             except Exception:
@@ -552,24 +552,24 @@ def distributed_generate(topology, prompt: str, max_new_tokens: int, client, tok
     return {"text": tokenizer.decode(tokens), "tokens": tokens}
 ```
 
-- [ ] **Step 4: esegui per vederlo passare**
+- [ ] **Step 4: run it to see it pass**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_orchestrator.py -m slow -v`
-Expected: PASS — l'inferenza distribuita su 2 nodi reali (uvicorn) coincide col riferimento.
+Expected: PASS — distributed inference on 2 real nodes (uvicorn) matches the reference.
 
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/orchestrator.py tests/test_orchestrator.py && git commit -m "feat(net): orchestrator distribuito (golden su 2 nodi reali)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/orchestrator.py tests/test_orchestrator.py && git commit -m "feat(net): distributed orchestrator (golden on 2 real nodes)"
 ```
 
 ---
 
-## Task 6: comandi CLI `serve` e `infer`
+## Task 6: CLI commands `serve` and `infer`
 
 **Files:** modify `axyn/cli.py`; create `tests/test_cli_infer.py`.
 
-- [ ] **Step 1: scrivi `tests/test_cli_infer.py`**
+- [ ] **Step 1: write `tests/test_cli_infer.py`**
 
 ```python
 import json
@@ -608,7 +608,7 @@ def _serve(app, port):
 @pytest.mark.slow
 def test_cli_infer_against_two_nodes(full_model, tmp_path):
     model, tokenizer = full_model
-    ids = tokenizer("La capitale dell'Italia è", return_tensors="pt").input_ids
+    ids = tokenizer("The capital of Italy is", return_tensors="pt").input_ids
     reference = reference_generate(model, ids, max_new_tokens=6)
 
     p1, p2 = _free_port(), _free_port()
@@ -626,7 +626,7 @@ def test_cli_infer_against_two_nodes(full_model, tmp_path):
         topo_file.write_text(json.dumps(topo))
 
         result = runner.invoke(cli_app, ["--json", "infer", "--topology", str(topo_file),
-                                         "--prompt", "La capitale dell'Italia è", "--max-new-tokens", "6"])
+                                         "--prompt", "The capital of Italy is", "--max-new-tokens", "6"])
         assert result.exit_code == 0, result.stdout
         payload = json.loads(result.stdout)
         assert payload["ok"] is True
@@ -636,32 +636,32 @@ def test_cli_infer_against_two_nodes(full_model, tmp_path):
         s2.should_exit = True
 ```
 
-- [ ] **Step 2: esegui per vederlo fallire**
+- [ ] **Step 2: run it to see it fail**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli_infer.py -m slow -v`
-Expected: FAIL (comando `infer` inesistente).
+Expected: FAIL (`infer` command does not exist).
 
-- [ ] **Step 3: implementa in `axyn/cli.py`**
+- [ ] **Step 3: implement in `axyn/cli.py`**
 
-Aggiungi gli import vicino agli altri `from axyn...`:
+Add the imports near the other `from axyn...` ones:
 ```python
-import json as _json2   # (se _json già esiste come json, riusa _json; NON ridefinire)
+import json as _json2   # (if _json already exists as json, reuse _json; do NOT redefine)
 from axyn.net.topology import parse_stages, load_topology
 from axyn.net.server import create_app
 from axyn.net.orchestrator import distributed_generate
 ```
-> Nota: il modulo `cli.py` importa già `json` come `_json`. Per leggere il file topologia usa `_json.loads(...)`. NON aggiungere un secondo import di json; rimuovi la riga `import json as _json2` se hai già `_json`.
+> Note: the `cli.py` module already imports `json` as `_json`. To read the topology file use `_json.loads(...)`. Do NOT add a second json import; remove the `import json as _json2` line if you already have `_json`.
 
-Aggiungi i due comandi (dopo `selfcheck`, prima di `schema`):
+Add the two commands (after `selfcheck`, before `schema`):
 ```python
 @app.command()
 def serve(
-    stages: str = typer.Option(..., "--stages", help="Stage serviti, es. 'embed,decoder:0-12'"),
-    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="ID del modello Hugging Face"),
-    host: str = typer.Option("0.0.0.0", "--host", help="Host di ascolto"),
-    port: int = typer.Option(8001, "--port", help="Porta di ascolto"),
+    stages: str = typer.Option(..., "--stages", help="Served stages, e.g. 'embed,decoder:0-12'"),
+    model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="Hugging Face model ID"),
+    host: str = typer.Option("0.0.0.0", "--host", help="Listen host"),
+    port: int = typer.Option(8001, "--port", help="Listen port"),
 ):
-    """Avvia un BlockServer che ospita gli stage indicati (processo a lunga durata)."""
+    """Start a BlockServer that hosts the given stages (long-running process)."""
     import uvicorn
     try:
         spec = parse_stages(stages)
@@ -673,17 +673,17 @@ def serve(
     except Exception as e:
         _fail("serve", "MODEL_LOAD_FAILED", str(e))
     fastapi_app = create_app(model, tokenizer, spec)
-    typer.echo(f"axyn serve: stages={stages} su http://{host}:{port}  (model={model_id})", err=True)
+    typer.echo(f"axyn serve: stages={stages} on http://{host}:{port}  (model={model_id})", err=True)
     uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
 
 
 @app.command()
 def infer(
-    topology: str = typer.Option(..., "--topology", help="Path al file JSON di topologia"),
-    prompt: str = typer.Option(..., "--prompt", help="Prompt ('-' legge da stdin)"),
-    max_new_tokens: int = typer.Option(8, "--max-new-tokens", help="Numero di token da generare"),
+    topology: str = typer.Option(..., "--topology", help="Path to the topology JSON file"),
+    prompt: str = typer.Option(..., "--prompt", help="Prompt ('-' reads from stdin)"),
+    max_new_tokens: int = typer.Option(8, "--max-new-tokens", help="Number of tokens to generate"),
 ):
-    """Esegue inferenza distribuita su una topologia di BlockServer."""
+    """Run distributed inference over a topology of BlockServers."""
     import httpx
     from transformers import AutoTokenizer
 
@@ -692,7 +692,7 @@ def infer(
         with open(topology) as f:
             topo = load_topology(_json.loads(f.read()))
     except Exception as e:
-        _fail("infer", "USAGE_ERROR", f"topologia non leggibile: {e}", exit_code=2)
+        _fail("infer", "USAGE_ERROR", f"topology not readable: {e}", exit_code=2)
     try:
         tokenizer = AutoTokenizer.from_pretrained(topo.model)
     except Exception as e:
@@ -706,7 +706,7 @@ def infer(
     _emit_ok("infer", data, human=result["text"])
 ```
 
-- [ ] **Step 4: esegui per vederlo passare**
+- [ ] **Step 4: run it to see it pass**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli_infer.py -m slow -v`
 Expected: PASS.
@@ -714,16 +714,16 @@ Expected: PASS.
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli_infer.py && git commit -m "feat(cli): comandi serve (BlockServer) e infer (inferenza distribuita)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli_infer.py && git commit -m "feat(cli): serve (BlockServer) and infer (distributed inference) commands"
 ```
 
 ---
 
-## Task 7: esempio topologia + quickstart multi-nodo + suite
+## Task 7: example topology + multi-node quickstart + suite
 
 **Files:** create `docs/examples/topology.localhost.json`; modify `README.md`, `docs/ROADMAP.md`.
 
-- [ ] **Step 1: crea `docs/examples/topology.localhost.json`**
+- [ ] **Step 1: create `docs/examples/topology.localhost.json`**
 
 ```json
 {
@@ -737,75 +737,75 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli_infer.p
 }
 ```
 
-- [ ] **Step 2: aggiungi una sezione "Quickstart multi-nodo" a `README.md`**
+- [ ] **Step 2: add a "Multi-node quickstart" section to `README.md`**
 
-Inserisci prima della sezione "## Documentazione":
+Insert it before the "## Documentation" section:
 ```markdown
-## Quickstart multi-nodo (PoC)
+## Multi-node quickstart (PoC)
 
-Inferenza distribuita di un modello su 2 nodi (qui in localhost; su LAN sostituisci gli IP nel file topologia).
+Distributed inference of a model across 2 nodes (here on localhost; on a LAN replace the IPs in the topology file).
 
 ```bash
 pip install -e .
 
-# Nodo A (serve embedding + primi 12 layer)
+# Node A (serves the embedding + first 12 layers)
 axyn serve --stages "embed,decoder:0-12" --port 8001
 
-# Nodo B (serve gli ultimi 12 layer + la testa) — altro terminale/macchina
+# Node B (serves the last 12 layers + the head) — another terminal/machine
 axyn serve --stages "decoder:12-24,head" --port 8002
 
-# Entry: esegue l'inferenza attraverso i due nodi
-axyn --json infer --topology docs/examples/topology.localhost.json --prompt "La capitale dell'Italia è"
+# Entry: runs inference across the two nodes
+axyn --json infer --topology docs/examples/topology.localhost.json --prompt "The capital of Italy is"
 ```
 
-Su 3 macchine: avvia un `axyn serve` per nodo con range di layer diversi, copia `topology.localhost.json` mettendo gli **IP:porta reali** di ogni nodo, e lancia `axyn infer` puntando a quel file. Tutte le macchine devono raggiungersi sulla rete (LAN/VPN) e avranno scaricato il modello da Hugging Face al primo avvio.
+On 3 machines: start one `axyn serve` per node with different layer ranges, copy `topology.localhost.json` filling in the **real IP:port** of each node, and run `axyn infer` pointing at that file. All machines must be able to reach each other over the network (LAN/VPN) and will have downloaded the model from Hugging Face on first start.
 ```
 
-- [ ] **Step 3: aggiorna `docs/ROADMAP.md`**
+- [ ] **Step 3: update `docs/ROADMAP.md`**
 
-Sotto "Peer Node" nella Fase 1, spunta il transport di rete:
+Under "Peer Node" in Phase 1, check off the network transport:
 ```markdown
-  - [x] Transport di rete (FastAPI + safetensors) + orchestrator distribuito (Milestone 0) — comandi `serve`/`infer`, golden distribuito su 2 nodi
+  - [x] Network transport (FastAPI + safetensors) + distributed orchestrator (Milestone 0) — `serve`/`infer` commands, distributed golden on 2 nodes
 ```
-e aggiorna la riga "Ultimo aggiornamento" con la data e una nota.
+and update the "Last updated" line with the date and a note.
 
-- [ ] **Step 4: esegui l'INTERA suite**
+- [ ] **Step 4: run the ENTIRE suite**
 
 Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q`
-Expected: tutti i test PASS (foundation + CLI + net).
+Expected: all tests PASS (foundation + CLI + net).
 
-- [ ] **Step 5: smoke test manuale a 2 nodi (localhost)**
+- [ ] **Step 5: manual 2-node smoke test (localhost)**
 
 ```bash
 cd /Users/alberto/Projects/AI/axyn
 .venv/bin/axyn serve --stages "embed,decoder:0-12" --port 8001 &
 .venv/bin/axyn serve --stages "decoder:12-24,head" --port 8002 &
-sleep 60   # attende il caricamento del modello su entrambi
-.venv/bin/axyn --json infer --topology docs/examples/topology.localhost.json --prompt "La capitale dell'Italia è" --max-new-tokens 8
+sleep 60   # wait for the model to load on both
+.venv/bin/axyn --json infer --topology docs/examples/topology.localhost.json --prompt "The capital of Italy is" --max-new-tokens 8
 kill %1 %2
 ```
-Expected: envelope JSON con `data.text` plausibile (es. menziona Roma).
+Expected: JSON envelope with a plausible `data.text` (e.g. mentions Roma).
 
 - [ ] **Step 6: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add docs/examples/topology.localhost.json README.md docs/ROADMAP.md && git commit -m "docs: quickstart multi-nodo + topologia di esempio; ROADMAP transport di rete"
+cd /Users/alberto/Projects/AI/axyn && git add docs/examples/topology.localhost.json README.md docs/ROADMAP.md && git commit -m "docs: multi-node quickstart + example topology; ROADMAP network transport"
 ```
 
 ---
 
-## Self-Review (eseguito dall'autore del piano)
+## Self-Review (performed by the plan author)
 
-**Spec coverage (PRD Parte 1 §transport + ADR Milestone 0):**
-- Transport HTTP attivazioni safetensors → Task 1 (wire) + Task 4 (server) ✓
-- Esecuzione per-stage (embed/decoder/head) con KV-cache per-job → Task 3 (prepare) + Task 4 (server) ✓
+**Spec coverage (PRD Part 1 §transport + ADR Milestone 0):**
+- HTTP transport of safetensors activations → Task 1 (wire) + Task 4 (server) ✓
+- Per-stage execution (embed/decoder/head) with per-job KV-cache → Task 3 (prepare) + Task 4 (server) ✓
 - Orchestrator-driven entry node (Milestone 0) → Task 5 ✓
-- Golden distribuito (== modello intero) → Task 4 (single-node) + Task 5 (2 nodi) ✓
-- CLI `serve`/`infer` (parole singole) → Task 6 ✓
-- Topologia statica → Task 2 + Task 7 (esempio) ✓
-- Quickstart eseguibile su più nodi → Task 7 ✓
+- Distributed golden (== whole model) → Task 4 (single-node) + Task 5 (2 nodes) ✓
+- CLI `serve`/`infer` (single words) → Task 6 ✓
+- Static topology → Task 2 + Task 7 (example) ✓
+- Quickstart runnable across multiple nodes → Task 7 ✓
 
-**Placeholder scan:** nessun TODO/TBD; codice completo. (Unica nota: in Task 6 l'import `json as _json2` è esplicitamente da NON usare — istruzione di riusare `_json` già presente in cli.py.)
+**Placeholder scan:** no TODO/TBD; code complete. (Only note: in Task 6 the `json as _json2` import is explicitly NOT to be used — the instruction is to reuse `_json`, already present in cli.py.)
 
-**Type consistency:** `parse_stages -> StageSpec(embed,head,decoders)`, `Topology(model,embed,head,decoders).all_urls()`, `create_app(model, tokenizer, stages)`, `distributed_generate(topology, prompt, max_new_tokens, client, tokenizer, job_id)`, `prepare_decoder_block(model, lo, hi) -> (layers, rotary)` usati coerentemente tra i task. Il riferimento (`reference_generate`) è sempre catturato PRIMA di `create_app`/`prepare_decoder_block` (che mutano `layer_idx`), come da foundation.
+**Type consistency:** `parse_stages -> StageSpec(embed,head,decoders)`, `Topology(model,embed,head,decoders).all_urls()`, `create_app(model, tokenizer, stages)`, `distributed_generate(topology, prompt, max_new_tokens, client, tokenizer, job_id)`, `prepare_decoder_block(model, lo, hi) -> (layers, rotary)` used consistently across the tasks. The reference (`reference_generate`) is always captured BEFORE `create_app`/`prepare_decoder_block` (which mutate `layer_idx`), as per the foundation.
 ```

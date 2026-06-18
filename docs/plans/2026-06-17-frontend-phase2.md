@@ -1,24 +1,24 @@
-# Frontend Fase 2 — crea / aggiungi rete dal frontend — Implementation Plan
+# Frontend Phase 2 — create / join a network from the frontend — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`).
 
-**Goal:** Dalla dashboard `axyn ui`, un nodo può **creare una rete** (avvia un coordinator locale) o **aggiungersi a una rete** (avvia un `serve --coordinator` coi propri stage), e gestire/fermare il processo locale — il tutto senza CLI.
+**Goal:** From the `axyn ui` dashboard, a node can **create a network** (start a local coordinator) or **join a network** (start a `serve --coordinator` with its own stages), and manage/stop the local process — all without the CLI.
 
-**Architecture:** Il server `axyn ui` gestisce sottoprocessi tramite un `NodeManager` (Popen di `python -m axyn coordinator|serve …`). Nuovi endpoint `/api/network/create`, `/api/network/join`, `/api/node/status`, `/api/node/stop`. Il bersaglio `coordinator_url` del proxy diventa **mutabile** (`POST /api/config`): creando/aggiungendosi, la UI punta alla rete giusta. Il frontend aggiunge un pannello "Gestione rete".
+**Architecture:** The `axyn ui` server manages subprocesses via a `NodeManager` (Popen of `python -m axyn coordinator|serve …`). New endpoints `/api/network/create`, `/api/network/join`, `/api/node/status`, `/api/node/stop`. The proxy's `coordinator_url` target becomes **mutable** (`POST /api/config`): on create/join, the UI points to the right network. The frontend adds a "Network management" panel.
 
-**Tech Stack:** Python · subprocess · FastAPI · l'esistente `axyn/ui/*` e la CLI `axyn`. Sicurezza: la UI è in ascolto su `127.0.0.1`; i comandi sono costruiti come liste (no shell), input passato come argomenti.
+**Tech Stack:** Python · subprocess · FastAPI · the existing `axyn/ui/*` and the `axyn` CLI. Security: the UI listens on `127.0.0.1`; commands are built as lists (no shell), input passed as arguments.
 
-**Fuori scope (Fase 3):** config + esecuzione tool MCP.
+**Out of scope (Phase 3):** MCP tool config + execution.
 
 ---
 
 ## File Structure
 ```
-axyn/__main__.py             # NUOVO: abilita `python -m axyn`
-axyn/ui/manager.py           # NUOVO: NodeManager (spawn/status/stop)
-axyn/ui/server.py            # MOD: coordinator_url mutabile + endpoint create/join/status/stop
-axyn/ui/static/index.html    # MOD: pannello "Gestione rete" (crea/aggiungi/stato/stop)
-tests/test_ui_manager.py        # NUOVO: NodeManager (spawn proc banale)
+axyn/__main__.py             # NEW: enables `python -m axyn`
+axyn/ui/manager.py           # NEW: NodeManager (spawn/status/stop)
+axyn/ui/server.py            # MOD: mutable coordinator_url + create/join/status/stop endpoints
+axyn/ui/static/index.html    # MOD: "Network management" panel (create/join/status/stop)
+tests/test_ui_manager.py        # NEW: NodeManager (spawn trivial proc)
 tests/test_ui_server.py         # MOD: POST /api/config + /api/node/status
 docs/examples/frontend.md       # MOD
 ```
@@ -38,7 +38,7 @@ from axyn.ui.manager import NodeManager
 def test_start_status_stop():
     mgr = NodeManager()
     assert mgr.status() == {}
-    # processo banale di lunga durata, niente modello
+    # trivial long-running process, no model
     mgr.start("worker", [sys.executable, "-c", "import time; time.sleep(30)"], {"stages": "decoder:0-8"})
     st = mgr.status()
     assert st["worker"]["running"] is True
@@ -61,20 +61,20 @@ def test_start_replaces_previous():
 
 - [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_ui_manager.py -v` → ImportError.
 
-- [ ] **Step 3: crea `axyn/__main__.py`**
+- [ ] **Step 3: create `axyn/__main__.py`**
 ```python
 from axyn.cli import app
 
 app()
 ```
 
-- [ ] **Step 4: crea `axyn/ui/manager.py`**
+- [ ] **Step 4: create `axyn/ui/manager.py`**
 ```python
 import subprocess
 
 
 class NodeManager:
-    """Gestisce i processi locali avviati dalla UI (coordinator e/o worker)."""
+    """Manages the local processes started by the UI (coordinator and/or worker)."""
     def __init__(self):
         self._procs = {}   # role -> {"popen": Popen, "info": dict}
 
@@ -104,27 +104,27 @@ class NodeManager:
             self.stop(role)
 ```
 
-- [ ] **Step 5: run PASS** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_ui_manager.py -v` → 2 passed. Verifica anche l'entry: `.venv/bin/python -m axyn --help | head -1`.
+- [ ] **Step 5: run PASS** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_ui_manager.py -v` → 2 passed. Also verify the entry point: `.venv/bin/python -m axyn --help | head -1`.
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/__main__.py axyn/ui/manager.py tests/test_ui_manager.py && git commit -m "feat(ui): NodeManager (spawn/status/stop processi) + entry python -m axyn"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/__main__.py axyn/ui/manager.py tests/test_ui_manager.py && git commit -m "feat(ui): NodeManager (spawn/status/stop processes) + python -m axyn entry point"
 ```
 
 ---
 
-## Task 2: endpoint create/join/status/stop + coordinator_url mutabile
+## Task 2: create/join/status/stop endpoints + mutable coordinator_url
 
 **Files:** modify `axyn/ui/server.py`; modify `tests/test_ui_server.py`.
 
-- [ ] **Step 1: aggiungi test a `tests/test_ui_server.py`**
+- [ ] **Step 1: add tests to `tests/test_ui_server.py`**
 ```python
 def test_config_can_be_updated():
     app = create_ui_app("http://example:9000")
     c = TestClient(app)
-    r = c.post("/api/config", json={"coordinator_url": "http://nuovo:9100"})
+    r = c.post("/api/config", json={"coordinator_url": "http://new:9100"})
     assert r.status_code == 200
-    assert c.get("/api/config").json()["coordinator_url"] == "http://nuovo:9100"
+    assert c.get("/api/config").json()["coordinator_url"] == "http://new:9100"
 
 
 def test_node_status_empty_initially():
@@ -135,9 +135,9 @@ def test_node_status_empty_initially():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_ui_server.py::test_config_can_be_updated tests/test_ui_server.py::test_node_status_empty_initially -v`.
 
-- [ ] **Step 3: modifica `axyn/ui/server.py`**
+- [ ] **Step 3: modify `axyn/ui/server.py`**
 
-Rendi `coordinator_url` mutabile e aggiungi gli endpoint. Sostituisci l'inizio di `create_ui_app` (fino alla def di `_index_html`) e aggiungi i nuovi endpoint:
+Make `coordinator_url` mutable and add the endpoints. Replace the start of `create_ui_app` (up to the def of `_index_html`) and add the new endpoints:
 ```python
 import os
 import sys
@@ -152,8 +152,8 @@ _STATIC = os.path.join(os.path.dirname(__file__), "static")
 
 
 def create_ui_app(coordinator_url: str) -> FastAPI:
-    """Server di controllo locale: serve il frontend, fa da proxy al coordinator,
-    e gestisce i processi locali (crea/aggiungi rete)."""
+    """Local control server: serves the frontend, proxies to the coordinator,
+    and manages the local processes (create/join network)."""
     app = FastAPI()
     state = {"coordinator_url": coordinator_url.rstrip("/")}
     manager = NodeManager()
@@ -161,9 +161,9 @@ def create_ui_app(coordinator_url: str) -> FastAPI:
     def _coord() -> str:
         return state["coordinator_url"]
 ```
-(Sostituisci ogni uso di `coord` negli endpoint esistenti con `_coord()`: in `/api/registry` usa `f"{_coord()}/registry"`, in `/api/chat` usa `f"{_coord()}/v1/chat/completions"`.)
+(Replace every use of `coord` in the existing endpoints with `_coord()`: in `/api/registry` use `f"{_coord()}/registry"`, in `/api/chat` use `f"{_coord()}/v1/chat/completions"`.)
 
-Aggiorna `/api/config` per supportare GET e POST, e aggiungi gli endpoint di gestione (prima di `return app`):
+Update `/api/config` to support GET and POST, and add the management endpoints (before `return app`):
 ```python
     @app.get("/api/config")
     async def get_config():
@@ -199,7 +199,7 @@ Aggiorna `/api/config` per supportare GET e POST, e aggiungi gli endpoint di ges
         stages = body.get("stages", "")
         model = body.get("model", "Qwen/Qwen2.5-0.5B-Instruct")
         if not stages:
-            return JSONResponse({"error": "stages obbligatori (es. 'embed,decoder:0-12')"}, status_code=400)
+            return JSONResponse({"error": "stages required (e.g. 'embed,decoder:0-12')"}, status_code=400)
         cmd = [sys.executable, "-m", "axyn", "serve", "--coordinator", ws, "--stages", stages, "--model", model]
         manager.start("worker", cmd, {"role": "worker", "stages": stages, "coordinator": coord_url, "model": model})
         state["coordinator_url"] = coord_url
@@ -215,38 +215,38 @@ Aggiorna `/api/config` per supportare GET e POST, e aggiungi gli endpoint di ges
             manager.stop_all()
         return {"ok": True, "status": manager.status()}
 ```
-Lascia invariati `/`, `/api/registry`, `/api/chat` (a parte l'uso di `_coord()`).
+Leave `/`, `/api/registry`, `/api/chat` unchanged (apart from the use of `_coord()`).
 
-- [ ] **Step 4: run PASS** — `... pytest tests/test_ui_server.py -v` (fast) e `-m slow -v` (proxy) → tutti PASS.
+- [ ] **Step 4: run PASS** — `... pytest tests/test_ui_server.py -v` (fast) and `-m slow -v` (proxy) → all PASS.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/server.py tests/test_ui_server.py && git commit -m "feat(ui): endpoint create/join/status/stop + coordinator_url mutabile"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/server.py tests/test_ui_server.py && git commit -m "feat(ui): create/join/status/stop endpoints + mutable coordinator_url"
 ```
 
 ---
 
-## Task 3: pannello "Gestione rete" nel frontend
+## Task 3: "Network management" panel in the frontend
 
 **Files:** modify `axyn/ui/static/index.html`.
 
-> Aggiungi all'app esistente (NON riscriverla) un pannello/modale **"Gestione rete"** raggiungibile dalla vista Rete (es. un terzo tab "Gestione" o un pulsante in header). Mantieni lo stile esistente (dark, IBM Plex, teal/ambra).
+> Add to the existing app (do NOT rewrite it) a **"Network management"** panel/modal reachable from the Network view (e.g. a third "Management" tab or a header button). Keep the existing style (dark, IBM Plex, teal/amber).
 
-- [ ] **Step 1: estendi `axyn/ui/static/index.html`** con:
-  - **Bersaglio coordinator**: campo editabile con l'URL corrente (da `GET /api/config`); "Applica" → `POST /api/config {coordinator_url}` e poi riprende il polling sul nuovo bersaglio.
-  - **Crea una rete**: form (model id, default `Qwen/Qwen2.5-0.5B-Instruct`; porta, default 9000) → bottone "Crea" → `POST /api/network/create`; al successo aggiorna il bersaglio e mostra lo stato.
-  - **Aggiungiti a una rete**: form (coordinator URL http, default = bersaglio corrente; stage es. `embed,decoder:0-12`) → bottone "Aggiungiti" → `POST /api/network/join`; al successo aggiorna il bersaglio.
-  - **Nodo locale**: mostra `GET /api/node/status` (coordinator e/o worker: running, pid, dettagli) con bottoni **Stop** (`POST /api/node/stop {role}`). Polling dello status ogni 2s.
-  - Suggerimento utile: dopo "Crea", proponi i comandi/azioni per aggiungere embed/decoder/head (puoi riusare il blocco "MANCANO" della vista Rete che già calcola i pezzi mancanti).
-  - Gestisci errori (400/500) mostrando il messaggio.
+- [ ] **Step 1: extend `axyn/ui/static/index.html`** with:
+  - **Coordinator target**: editable field with the current URL (from `GET /api/config`); "Apply" → `POST /api/config {coordinator_url}` and then resume polling on the new target.
+  - **Create a network**: form (model id, default `Qwen/Qwen2.5-0.5B-Instruct`; port, default 9000) → "Create" button → `POST /api/network/create`; on success, update the target and show the status.
+  - **Join a network**: form (coordinator http URL, default = current target; stages e.g. `embed,decoder:0-12`) → "Join" button → `POST /api/network/join`; on success, update the target.
+  - **Local node**: show `GET /api/node/status` (coordinator and/or worker: running, pid, details) with **Stop** buttons (`POST /api/node/stop {role}`). Poll the status every 2s.
+  - Useful tip: after "Create", suggest the commands/actions to add embed/decoder/head (you can reuse the "MISSING" block of the Network view that already computes the missing pieces).
+  - Handle errors (400/500) by showing the message.
 
-- [ ] **Step 2: check strutturale** — `cd /Users/alberto/Projects/AI/axyn && .venv/bin/python -c "h=open('axyn/ui/static/index.html').read(); assert '/api/network/create' in h and '/api/network/join' in h and '/api/node/status' in h and '/api/config' in h; print('gestione rete ok', len(h))"`
+- [ ] **Step 2: structural check** — `cd /Users/alberto/Projects/AI/axyn && .venv/bin/python -c "h=open('axyn/ui/static/index.html').read(); assert '/api/network/create' in h and '/api/network/join' in h and '/api/node/status' in h and '/api/config' in h; print('network management ok', len(h))"`
 
-- [ ] **Step 3: il server serve ancora l'index** — `... pytest tests/test_ui_server.py::test_serves_index_html -v` → PASS.
+- [ ] **Step 3: the server still serves the index** — `... pytest tests/test_ui_server.py::test_serves_index_html -v` → PASS.
 
 - [ ] **Step 4: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/static/index.html && git commit -m "feat(ui): pannello Gestione rete (crea/aggiungi/stato/stop)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/static/index.html && git commit -m "feat(ui): Network management panel (create/join/status/stop)"
 ```
 
 ---
@@ -255,22 +255,22 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/static/index.html && git c
 
 **Files:** modify `docs/examples/frontend.md`.
 
-- [ ] **Step 1: aggiorna `docs/examples/frontend.md`** — aggiungi una sezione "Crea o aggiungi una rete dalla UI": dal pannello *Gestione rete* puoi creare una rete (avvia un coordinator locale), aggiungerti a una rete esistente coi tuoi stage, cambiare il coordinator bersaglio, e fermare il nodo locale. Nota di sicurezza: la UI è locale (`127.0.0.1`) e avvia processi sulla tua macchina.
+- [ ] **Step 1: update `docs/examples/frontend.md`** — add a "Create or join a network from the UI" section: from the *Network management* panel you can create a network (start a local coordinator), join an existing network with your stages, change the target coordinator, and stop the local node. Security note: the UI is local (`127.0.0.1`) and starts processes on your machine.
 
-- [ ] **Step 2: suite completa** — `... pytest -q -p no:warnings` → verde.
+- [ ] **Step 2: full suite** — `... pytest -q -p no:warnings` → green.
 
 - [ ] **Step 3: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add docs/examples/frontend.md && git commit -m "docs: gestione rete (crea/aggiungi) dal frontend"
+cd /Users/alberto/Projects/AI/axyn && git add docs/examples/frontend.md && git commit -m "docs: network management (create/join) from the frontend"
 ```
 
 ---
 
 ## Self-Review
 
-**Coverage (#1 crea/aggiungi rete):** NodeManager spawn/stop (Task 1) ✓; entry `python -m axyn` (Task 1) ✓; endpoint create/join/status/stop + bersaglio mutabile (Task 2) ✓; pannello UI Gestione rete (Task 3) ✓; docs (Task 4) ✓. MCP = Fase 3.
+**Coverage (#1 create/join network):** NodeManager spawn/stop (Task 1) ✓; `python -m axyn` entry point (Task 1) ✓; create/join/status/stop endpoints + mutable target (Task 2) ✓; UI Network management panel (Task 3) ✓; docs (Task 4) ✓. MCP = Phase 3.
 
-**Placeholder scan:** server/manager con codice completo; il pannello frontend è un'estensione specificata in dettaglio (artefatto visivo) con check strutturale.
+**Placeholder scan:** server/manager with complete code; the frontend panel is an extension specified in detail (visual artifact) with a structural check.
 
-**Type consistency:** `NodeManager.start(role, cmd:list, info:dict)/status()->dict/stop(role)/stop_all()`; endpoint `/api/network/create`,`/api/network/join`,`/api/node/status`,`/api/node/stop`,`/api/config` (GET+POST); il frontend consuma esattamente questi. I comandi spawnati usano `python -m axyn <subcommand>` (entry in `__main__.py`).
+**Type consistency:** `NodeManager.start(role, cmd:list, info:dict)/status()->dict/stop(role)/stop_all()`; endpoints `/api/network/create`,`/api/network/join`,`/api/node/status`,`/api/node/stop`,`/api/config` (GET+POST); the frontend consumes exactly these. The spawned commands use `python -m axyn <subcommand>` (entry point in `__main__.py`).
 ```

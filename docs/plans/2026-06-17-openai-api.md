@@ -1,27 +1,27 @@
-# API OpenAI-compatibile sul coordinator — Implementation Plan
+# OpenAI-compatible API on the coordinator — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Esporre sul coordinator un endpoint **OpenAI-compatibile** (`/v1/chat/completions` + `/v1/models`) così che qualsiasi client/agente OpenAI-compatibile possa interrogare Axyn. Include **chat template** (messages → prompt) e **sampling** (temperature/top_p/repetition_penalty), che risolvono anche i problemi di qualità del greedy.
+**Goal:** Expose an **OpenAI-compatible** endpoint on the coordinator (`/v1/chat/completions` + `/v1/models`) so that any OpenAI-compatible client/agent can query Axyn. Includes a **chat template** (messages → prompt) and **sampling** (temperature/top_p/repetition_penalty), which also fix the quality issues of greedy decoding.
 
-**Architecture:** Il nodo `head` espone i logits **top-k** (oltre all'argmax, per retro-compatibilità greedy). Il coordinator campiona (helper puro `sample_token`) e guida la generazione con i parametri di decoding; applica il chat template del tokenizer ai `messages`; riusa il loop con failover esistente. Gli endpoint `/v1/*` mappano richiesta/risposta nel formato OpenAI.
+**Architecture:** The `head` node exposes the **top-k** logits (in addition to the argmax, for greedy backward compatibility). The coordinator samples (pure helper `sample_token`) and drives generation with the decoding parameters; it applies the tokenizer's chat template to the `messages`; it reuses the existing failover loop. The `/v1/*` endpoints map request/response to the OpenAI format.
 
-**Tech Stack:** Python · FastAPI · torch · transformers (chat template) · l'esistente `axyn/net/{coordinator,node_exec,framing,wire,discovery}.py`.
+**Tech Stack:** Python · FastAPI · torch · transformers (chat template) · the existing `axyn/net/{coordinator,node_exec,framing,wire,discovery}.py`.
 
-**Fuori scope (follow-up):** streaming SSE; endpoint Anthropic `/v1/messages` / config LiteLLM per Claude Code; queue & load balancing per molti agenti concorrenti.
+**Out of scope (follow-up):** SSE streaming; Anthropic `/v1/messages` endpoint / LiteLLM config for Claude Code; queue & load balancing for many concurrent agents.
 
 ---
 
 ## File Structure
 
 ```
-axyn/net/sampling.py         # NUOVO: sample_token() (puro, testabile)
-axyn/net/node_exec.py        # MOD: head ritorna anche topk_ids/topk_logits
-axyn/net/coordinator.py      # MOD: refactor generazione + sampling + chat template + /v1 endpoints
+axyn/net/sampling.py         # NEW: sample_token() (pure, testable)
+axyn/net/node_exec.py        # MOD: head also returns topk_ids/topk_logits
+axyn/net/coordinator.py      # MOD: generation refactor + sampling + chat template + /v1 endpoints
 tests/
-  test_sampling.py              # sample_token deterministico (veloce)
-  test_openai_e2e.py            # /v1/chat/completions su 2 nodi (slow)
-docs/examples/agents.md         # NUOVO: collegare client OpenAI / Claude Code
+  test_sampling.py              # deterministic sample_token (fast)
+  test_openai_e2e.py            # /v1/chat/completions over 2 nodes (slow)
+docs/examples/agents.md         # NEW: connecting OpenAI clients / Claude Code
 docs/ROADMAP.md
 ```
 
@@ -29,7 +29,7 @@ docs/ROADMAP.md
 
 ## Task 1: `sample_token` + head top-k
 
-**Files:** create `axyn/net/sampling.py`; modify `axyn/net/node_exec.py`; create `tests/test_sampling.py`; (head già coperto da test_node_exec — resta verde).
+**Files:** create `axyn/net/sampling.py`; modify `axyn/net/node_exec.py`; create `tests/test_sampling.py`; (head already covered by test_node_exec — stays green).
 
 - [ ] **Step 1: test `tests/test_sampling.py`**
 ```python
@@ -42,7 +42,7 @@ def test_greedy_returns_argmax_when_temperature_zero():
     logits = [1.0, 5.0, 2.0]
     out = sample_token(ids, logits, generated_ids=[], temperature=0.0,
                        top_p=1.0, repetition_penalty=1.0, generator=None)
-    assert out == 20   # logit massimo
+    assert out == 20   # maximum logit
 
 
 def test_sampling_is_deterministic_with_seed():
@@ -58,7 +58,7 @@ def test_sampling_is_deterministic_with_seed():
 def test_repetition_penalty_demotes_generated_tokens():
     ids = [10, 20]
     logits = [5.0, 1.0]
-    # con forte penalty sul token 10 (gia' generato), 20 deve diventare l'argmax greedy
+    # with a strong penalty on token 10 (already generated), 20 must become the greedy argmax
     out = sample_token(ids, logits, generated_ids=[10], temperature=0.0,
                        top_p=1.0, repetition_penalty=10.0, generator=None)
     assert out == 20
@@ -66,16 +66,16 @@ def test_repetition_penalty_demotes_generated_tokens():
 
 - [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_sampling.py -v` → ImportError.
 
-- [ ] **Step 3: implementa `axyn/net/sampling.py`**
+- [ ] **Step 3: implement `axyn/net/sampling.py`**
 ```python
 import torch
 
 
 def sample_token(topk_ids, topk_logits, generated_ids, temperature, top_p,
                  repetition_penalty, generator) -> int:
-    """Sceglie il prossimo token dai candidati top-k del nodo head.
-    temperature<=0 -> greedy (argmax). Altrimenti: repetition penalty, temperature,
-    nucleo top_p, campionamento multinomiale (deterministico se `generator` ha un seed)."""
+    """Pick the next token from the head node's top-k candidates.
+    temperature<=0 -> greedy (argmax). Otherwise: repetition penalty, temperature,
+    top_p nucleus, multinomial sampling (deterministic if `generator` has a seed)."""
     logits = torch.tensor(topk_logits, dtype=torch.float32)
     ids = list(topk_ids)
     if repetition_penalty and repetition_penalty != 1.0 and generated_ids:
@@ -96,9 +96,9 @@ def sample_token(topk_ids, topk_logits, generated_ids, temperature, top_p,
     return ids[int(si[choice])]
 ```
 
-- [ ] **Step 4: modifica il ramo `head` di `handle_request` in `axyn/net/node_exec.py`**
+- [ ] **Step 4: modify the `head` branch of `handle_request` in `axyn/net/node_exec.py`**
 
-Sostituisci il blocco `if op == "head":` con (ritorna anche i top-k, mantenendo `token_id` per retro-compatibilità greedy):
+Replace the `if op == "head":` block with the following (it also returns the top-k, keeping `token_id` for greedy backward compatibility):
 ```python
     if op == "head":
         t = decode_tensors(payload)
@@ -110,22 +110,22 @@ Sostituisci il blocco `if op == "head":` con (ritorna anche i top-k, mantenendo 
         return {"ok": True, "token_id": ids[0],
                 "topk_ids": ids, "topk_logits": vals.tolist()}, b""
 ```
-Aggiungi `import torch` in cima a `node_exec.py` se non già presente.
+Add `import torch` at the top of `node_exec.py` if not already present.
 
-- [ ] **Step 5: run PASS** — `... pytest tests/test_sampling.py tests/test_node_exec.py -m "slow or not slow" -v`. Expected: sampling 3 passed; test_node_exec ancora verde (token_id invariato).
+- [ ] **Step 5: run PASS** — `... pytest tests/test_sampling.py tests/test_node_exec.py -m "slow or not slow" -v`. Expected: sampling 3 passed; test_node_exec still green (token_id unchanged).
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/sampling.py axyn/net/node_exec.py tests/test_sampling.py && git commit -m "feat(net): sample_token + head espone top-k logits (sampling)"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/sampling.py axyn/net/node_exec.py tests/test_sampling.py && git commit -m "feat(net): sample_token + head exposes top-k logits (sampling)"
 ```
 
 ---
 
-## Task 2: coordinator — generazione parametrica + sampling in /infer
+## Task 2: coordinator — parametric generation + sampling in /infer
 
-**Files:** modify `axyn/net/coordinator.py`; create test in `tests/test_openai_e2e.py` (parte sampling).
+**Files:** modify `axyn/net/coordinator.py`; create test in `tests/test_openai_e2e.py` (sampling part).
 
-- [ ] **Step 1: aggiungi a `tests/test_openai_e2e.py` un test di sampling deterministico**
+- [ ] **Step 1: add a deterministic sampling test to `tests/test_openai_e2e.py`**
 ```python
 import socket, threading, time, asyncio
 import pytest, httpx, uvicorn
@@ -173,22 +173,22 @@ def test_infer_sampling_seeded_is_reproducible(full_model):
     srv, base = _two_node_coordinator(full_model)
     try:
         with httpx.Client(timeout=60.0) as c:
-            body = {"prompt": "Ciao", "max_new_tokens": 6, "temperature": 0.8, "top_p": 0.9, "seed": 42}
+            body = {"prompt": "Hi", "max_new_tokens": 6, "temperature": 0.8, "top_p": 0.9, "seed": 42}
             a = c.post(f"{base}/infer", json=body).json()
             b = c.post(f"{base}/infer", json=body).json()
         assert a["ok"] and b["ok"]
-        assert a["tokens"] == b["tokens"]      # stesso seed -> stesso output
+        assert a["tokens"] == b["tokens"]      # same seed -> same output
     finally:
         srv.should_exit = True
 ```
 
-- [ ] **Step 2: run FAIL** — `... pytest tests/test_openai_e2e.py::test_infer_sampling_seeded_is_reproducible -m slow -v` → fallisce (sampling non implementato; output potrebbe non essere riproducibile o i parametri ignorati).
+- [ ] **Step 2: run FAIL** — `... pytest tests/test_openai_e2e.py::test_infer_sampling_seeded_is_reproducible -m slow -v` → fails (sampling not implemented; the output may not be reproducible or the parameters are ignored).
 
 - [ ] **Step 3: refactor in `axyn/net/coordinator.py`**
 
-Aggiungi in cima al modulo: `import random` e `from axyn.net.sampling import sample_token`.
+Add at the top of the module: `import random` and `from axyn.net.sampling import sample_token`.
 
-Sostituisci `_run_generation` con una versione che accetta i parametri di decoding e campiona via il nodo head:
+Replace `_run_generation` with a version that accepts the decoding parameters and samples via the head node:
 ```python
     async def _run_generation(chain, prompt, max_new, sampling, job_id):
         embed_c, decoders, head_c = chain
@@ -234,7 +234,7 @@ Sostituisci `_run_generation` con una versione che accetta i parametri di decodi
         return tokens, seq_len
 ```
 
-Estrai il loop di failover in una funzione riusabile e fai usare entrambe a /infer (aggiungi sopra l'endpoint /infer):
+Extract the failover loop into a reusable function and have /infer use both (add it above the /infer endpoint):
 ```python
     async def _generate_with_failover(prompt, max_new, sampling):
         excluded = set()
@@ -243,17 +243,17 @@ Estrai il loop di failover in una funzione riusabile e fai usare entrambe a /inf
             stages = {cid: c["stages"] for cid, c in conns.items() if cid not in excluded}
             chain = build_chain(stages, num_layers)
             if chain is None:
-                return None, {"error": "modello non operativo: coverage incompleta", "excluded": sorted(excluded)}
+                return None, {"error": "model not operational: incomplete coverage", "excluded": sorted(excluded)}
             try:
                 tokens, prompt_len = await _run_generation(chain, prompt, max_new, sampling, _next_id("job"))
                 return {"tokens": tokens, "prompt_len": prompt_len, "failovers": attempt}, None
             except _NodeFailure as e:
                 excluded.add(e.conn_id)
                 last_failed = e.conn_id
-        return None, {"error": f"troppi failover (ultimo nodo fallito: {last_failed})"}
+        return None, {"error": f"too many failovers (last failed node: {last_failed})"}
 ```
 
-Sostituisci l'endpoint `/infer` con:
+Replace the `/infer` endpoint with:
 ```python
     @app.post("/infer")
     async def infer(request: Request):
@@ -269,11 +269,11 @@ Sostituisci l'endpoint `/infer` con:
                 "failovers": result["failovers"]}
 ```
 
-- [ ] **Step 4: run PASS** — `... pytest tests/test_openai_e2e.py::test_infer_sampling_seeded_is_reproducible -m slow -v` (sampling riproducibile). Poi NESSUNA REGRESSIONE sul greedy/failover: `... pytest tests/test_coordinator_e2e.py tests/test_cli_coordinator.py tests/test_failover_e2e.py -m slow -v` → PASS (il greedy resta default: temperature non passata → token_id).
+- [ ] **Step 4: run PASS** — `... pytest tests/test_openai_e2e.py::test_infer_sampling_seeded_is_reproducible -m slow -v` (reproducible sampling). Then NO REGRESSION on greedy/failover: `... pytest tests/test_coordinator_e2e.py tests/test_cli_coordinator.py tests/test_failover_e2e.py -m slow -v` → PASS (greedy stays the default: temperature not passed → token_id).
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): coordinator con sampling parametrico + failover refactored"
+cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): coordinator with parametric sampling + refactored failover"
 ```
 
 ---
@@ -282,7 +282,7 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test
 
 **Files:** modify `axyn/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
 
-- [ ] **Step 1: aggiungi a `tests/test_openai_e2e.py`**
+- [ ] **Step 1: add to `tests/test_openai_e2e.py`**
 ```python
 @pytest.mark.slow
 def test_openai_chat_completions(full_model):
@@ -293,7 +293,7 @@ def test_openai_chat_completions(full_model):
             assert models["object"] == "list" and len(models["data"]) >= 1
             r = c.post(f"{base}/v1/chat/completions", json={
                 "model": "axyn",
-                "messages": [{"role": "user", "content": "Di' ciao in una parola"}],
+                "messages": [{"role": "user", "content": "Say hello in one word"}],
                 "max_tokens": 8,
             })
             body = r.json()
@@ -305,11 +305,11 @@ def test_openai_chat_completions(full_model):
         srv.should_exit = True
 ```
 
-- [ ] **Step 2: run FAIL** — `... pytest tests/test_openai_e2e.py::test_openai_chat_completions -m slow -v` → 404 (endpoint inesistente).
+- [ ] **Step 2: run FAIL** — `... pytest tests/test_openai_e2e.py::test_openai_chat_completions -m slow -v` → 404 (endpoint does not exist).
 
-- [ ] **Step 3: aggiungi gli endpoint in `axyn/net/coordinator.py`**
+- [ ] **Step 3: add the endpoints in `axyn/net/coordinator.py`**
 
-Aggiungi `import time` in cima. Aggiungi prima di `return app`:
+Add `import time` at the top. Add before `return app`:
 ```python
     @app.get("/v1/models")
     async def list_models():
@@ -343,9 +343,9 @@ Aggiungi `import time` in cima. Aggiungi prima di `return app`:
                       "total_tokens": result["prompt_len"] + len(result["tokens"])},
         }
 ```
-(`JSONResponse` è già importato in coordinator.py? Se non lo è, aggiungi `from fastapi.responses import JSONResponse`.)
+(Is `JSONResponse` already imported in coordinator.py? If not, add `from fastapi.responses import JSONResponse`.)
 
-- [ ] **Step 4: run PASS** — `... pytest tests/test_openai_e2e.py -m slow -v` → tutti i test OpenAI passano. Nessuna regressione: `... pytest -q -p no:warnings` → tutto verde.
+- [ ] **Step 4: run PASS** — `... pytest tests/test_openai_e2e.py -m slow -v` → all OpenAI tests pass. No regression: `... pytest -q -p no:warnings` → all green.
 
 - [ ] **Step 5: commit**
 ```bash
@@ -354,23 +354,23 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test
 
 ---
 
-## Task 4: docs "collegare agenti" + ROADMAP
+## Task 4: docs "connecting agents" + ROADMAP
 
 **Files:** create `docs/examples/agents.md`; modify `README.md`, `docs/ROADMAP.md`.
 
-- [ ] **Step 1: crea `docs/examples/agents.md`** con:
+- [ ] **Step 1: create `docs/examples/agents.md`** with:
 ```markdown
-# Collegare agenti AI a Axyn (API OpenAI-compatibile)
+# Connecting AI agents to Axyn (OpenAI-compatible API)
 
-Quando il modello è OPERATIVO, il coordinator espone un'API OpenAI-compatibile: punta qualsiasi client/SDK OpenAI a `http://IL_COORDINATOR:9000/v1`.
+When the model is OPERATIONAL, the coordinator exposes an OpenAI-compatible API: point any OpenAI client/SDK to `http://THE_COORDINATOR:9000/v1`.
 
-## SDK OpenAI (Python)
+## OpenAI SDK (Python)
 ```python
 from openai import OpenAI
-client = OpenAI(base_url="http://127.0.0.1:9000/v1", api_key="qualsiasi")
+client = OpenAI(base_url="http://127.0.0.1:9000/v1", api_key="anything")
 r = client.chat.completions.create(
     model="axyn",
-    messages=[{"role": "user", "content": "Scrivi un haiku sul mare"}],
+    messages=[{"role": "user", "content": "Write a haiku about the sea"}],
     temperature=0.8, top_p=0.9, max_tokens=80,
 )
 print(r.choices[0].message.content)
@@ -380,40 +380,40 @@ print(r.choices[0].message.content)
 ```bash
 curl -s http://127.0.0.1:9000/v1/chat/completions -H 'content-type: application/json' -d '{
   "model": "axyn",
-  "messages": [{"role":"user","content":"Ciao!"}],
+  "messages": [{"role":"user","content":"Hi!"}],
   "temperature": 0.7, "max_tokens": 64
 }'
 ```
 
-## Claude Code e client Anthropic
-Claude Code parla l'API Anthropic, non OpenAI. Mettici davanti **LiteLLM** come gateway (traduce Anthropic↔OpenAI) puntandolo a `http://IL_COORDINATOR:9000/v1`, poi:
+## Claude Code and Anthropic clients
+Claude Code speaks the Anthropic API, not OpenAI. Put **LiteLLM** in front of it as a gateway (it translates Anthropic↔OpenAI) pointing it to `http://THE_COORDINATOR:9000/v1`, then:
 ```bash
 ANTHROPIC_BASE_URL=http://LITELLM:4000 claude
 ```
-(Lo streaming SSE e un endpoint Anthropic nativo `/v1/messages` sono i prossimi passi.)
+(SSE streaming and a native Anthropic `/v1/messages` endpoint are the next steps.)
 
-## Tanti agenti
-Ogni richiesta è un job sulla rete. Per molti agenti concorrenti conviene aggiungere coda + repliche dei blocchi (Parte 3) e, per qualità, splittare un modello più grande su più nodi.
+## Many agents
+Every request is a job on the network. For many concurrent agents it is worth adding a queue + block replicas (Part 3) and, for quality, splitting a larger model across more nodes.
 ```
 
-- [ ] **Step 2:** in `README.md`, nella sezione Quickstart, aggiungi una riga che linka `docs/examples/agents.md` ("Collegare agenti AI via API OpenAI").
+- [ ] **Step 2:** in `README.md`, in the Quickstart section, add a line linking `docs/examples/agents.md` ("Connecting AI agents via the OpenAI API").
 
-- [ ] **Step 3:** in `docs/ROADMAP.md`, aggiungi sotto Fase 1 una voce `[x]` "API OpenAI-compatibile (`/v1/chat/completions`, chat template + sampling)" con link a questo piano; nota che streaming SSE e Anthropic/LiteLLM restano da fare. Aggiorna "Ultimo aggiornamento".
+- [ ] **Step 3:** in `docs/ROADMAP.md`, add under Phase 1 an `[x]` entry "OpenAI-compatible API (`/v1/chat/completions`, chat template + sampling)" with a link to this plan; note that SSE streaming and Anthropic/LiteLLM are still to do. Update "Last updated".
 
-- [ ] **Step 4: suite completa** — `... pytest -q -p no:warnings` → tutto verde.
+- [ ] **Step 4: full suite** — `... pytest -q -p no:warnings` → all green.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add docs/examples/agents.md README.md docs/ROADMAP.md && git commit -m "docs: collegare agenti via API OpenAI; ROADMAP /v1"
+cd /Users/alberto/Projects/AI/axyn && git add docs/examples/agents.md README.md docs/ROADMAP.md && git commit -m "docs: connecting agents via the OpenAI API; ROADMAP /v1"
 ```
 
 ---
 
 ## Self-Review
 
-**Coverage:** sampling (Task 1) ✓; chat template (Task 3, apply_chat_template) ✓; /v1/models + /v1/chat/completions formato OpenAI con usage (Task 3) ✓; greedy/failover invariati di default (Task 2, temperature non passata → token_id) ✓; docs per OpenAI SDK/curl/Claude Code (Task 4) ✓. Streaming SSE + Anthropic/LiteLLM esplicitamente follow-up.
+**Coverage:** sampling (Task 1) ✓; chat template (Task 3, apply_chat_template) ✓; /v1/models + /v1/chat/completions OpenAI format with usage (Task 3) ✓; greedy/failover unchanged by default (Task 2, temperature not passed → token_id) ✓; docs for OpenAI SDK/curl/Claude Code (Task 4) ✓. SSE streaming + Anthropic/LiteLLM explicitly follow-up.
 
-**Placeholder scan:** nessun TODO; codice completo.
+**Placeholder scan:** no TODO; code complete.
 
-**Type consistency:** `sample_token(topk_ids, topk_logits, generated_ids, temperature, top_p, repetition_penalty, generator)->int`; head ritorna `token_id`+`topk_ids`+`topk_logits`; `_run_generation(chain, prompt, max_new, sampling, job_id)->(tokens, prompt_len)`; `_generate_with_failover(prompt, max_new, sampling)->(result|None, err|None)`; usati coerentemente in /infer e /v1/chat/completions.
+**Type consistency:** `sample_token(topk_ids, topk_logits, generated_ids, temperature, top_p, repetition_penalty, generator)->int`; head returns `token_id`+`topk_ids`+`topk_logits`; `_run_generation(chain, prompt, max_new, sampling, job_id)->(tokens, prompt_len)`; `_generate_with_failover(prompt, max_new, sampling)->(result|None, err|None)`; used consistently in /infer and /v1/chat/completions.
 ```
