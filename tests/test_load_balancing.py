@@ -36,3 +36,32 @@ def test_load_tie_is_deterministic_insertion_order():
 def test_incomplete_coverage_still_none_with_load():
     s = {"a": _s(embed=True, decoders=["0-12"]), "b": _s(head=True)}   # 12-24 missing
     assert build_chain(s, 24, load={"a": 0, "b": 0}) is None
+
+
+def test_prefers_higher_reputation_head():
+    s = {"a": _s(embed=True, decoders=["0-24"]), "b": _s(head=True), "c": _s(head=True)}
+    assert build_chain(s, 24, reputation={"b": 0.0, "c": 5.0})[2] == "c"
+    assert build_chain(s, 24, reputation={"b": 5.0, "c": 0.0})[2] == "b"
+
+
+def test_reputation_is_primary_over_load():
+    s = {"a": _s(embed=True, decoders=["0-24"]), "b": _s(head=True), "c": _s(head=True)}
+    # c has higher reputation; it wins even though it is more loaded
+    assert build_chain(s, 24, load={"b": 0, "c": 9}, reputation={"b": 0.0, "c": 5.0})[2] == "c"
+
+
+def test_equal_reputation_falls_back_to_load():
+    s = {"a": _s(embed=True, decoders=["0-24"]), "b": _s(head=True), "c": _s(head=True)}
+    assert build_chain(s, 24, load={"b": 3, "c": 0}, reputation={"b": 1.0, "c": 1.0})[2] == "c"
+
+
+def test_reputation_none_matches_load_only_path():
+    s = {"a": _s(embed=True, decoders=["0-24"]), "b": _s(head=True), "c": _s(head=True)}
+    a = build_chain(s, 24, load={"b": 3, "c": 0})
+    b = build_chain(s, 24, load={"b": 3, "c": 0}, reputation=None)
+    assert a == b
+
+
+def test_prefers_higher_reputation_decoder_replica():
+    s = {"a": _s(embed=True), "b": _s(decoders=["0-24"]), "c": _s(decoders=["0-24"]), "d": _s(head=True)}
+    assert build_chain(s, 24, reputation={"b": 0.0, "c": 9.0})[1] == [("0-24", "c")]
