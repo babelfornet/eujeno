@@ -20,6 +20,7 @@ from eujeno.net.jobstore import JobStore
 log = logging.getLogger("eujeno.coordinator")
 
 MAX_FAILOVERS = 5
+COVERAGE_POLL_INTERVAL = 0.5
 
 
 class _NodeFailure(Exception):
@@ -28,7 +29,7 @@ class _NodeFailure(Exception):
         self.conn_id = conn_id
 
 
-def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=None):
+def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=None, coverage_timeout=120.0):
     """Coordinator-relay: nodes connect via WS and announce their stages; POST /infer
     drives generation by relaying each hop to the right node. Jobs are persisted to a
     durable SQLite job log (db_path=None -> in-memory, used by tests)."""
@@ -149,15 +150,33 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
                 pass
         return tokens, seq_len, finish_reason
 
+    async def _await_coverage(excluded, job_id):
+        """Return a complete chain (excluding dead nodes) once available, parking the
+        job durably as WAITING_COVERAGE while it waits; return None on timeout."""
+        start = time.monotonic()
+        marked = False
+        while True:
+            stages = {cid: c["stages"] for cid, c in conns.items() if cid not in excluded}
+            chain = build_chain(stages, num_layers)
+            if chain is not None:
+                if marked:
+                    _store_safe(store.set_status, job_id, "RUNNING")
+                return chain
+            if not marked:
+                _store_safe(store.set_status, job_id, "WAITING_COVERAGE")
+                marked = True
+            if time.monotonic() - start >= coverage_timeout:
+                return None
+            await asyncio.sleep(COVERAGE_POLL_INTERVAL)
+
     async def _generate_with_failover(prompt, max_new, sampling, job_id):
         excluded = set()
         last_failed = None
         resume_tokens = []
         for attempt in range(MAX_FAILOVERS + 1):
-            stages = {cid: c["stages"] for cid, c in conns.items() if cid not in excluded}
-            chain = build_chain(stages, num_layers)
+            chain = await _await_coverage(excluded, job_id)
             if chain is None:
-                return None, {"error": "model not operational: incomplete coverage", "excluded": sorted(excluded)}
+                return None, {"error": "coverage timeout: model not operational", "excluded": sorted(excluded)}
             try:
                 tokens, prompt_len, finish_reason = await _run_generation(
                     chain, prompt, max_new, sampling, _next_id("job"),
