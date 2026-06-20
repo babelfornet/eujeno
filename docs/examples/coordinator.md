@@ -6,16 +6,16 @@ Mode B of [ADR-0002](../decisions/ADR-0002-nat-connectivity.md). Worker nodes co
 pip install -e .
 
 # 1) Coordinator — on a machine reachable by the others (e.g. public IP 203.0.113.5)
-axyn coordinator --model Qwen/Qwen2.5-0.5B-Instruct --port 9000
+eujeno coordinator --model Qwen/Qwen2.5-0.5B-Instruct --port 9000
 
 # 2) Node A (any network, behind NAT) — embedding + first 12 layers
-axyn serve --coordinator ws://203.0.113.5:9000/node --stages "embed,decoder:0-12"
+eujeno serve --coordinator ws://203.0.113.5:9000/node --stages "embed,decoder:0-12"
 
 # 3) Node B (different network, behind NAT) — last 12 layers + head
-axyn serve --coordinator ws://203.0.113.5:9000/node --stages "decoder:12-24,head"
+eujeno serve --coordinator ws://203.0.113.5:9000/node --stages "decoder:12-24,head"
 
 # 4) Inference — thin client, from any network
-axyn --json infer --coordinator http://203.0.113.5:9000 --prompt "The capital of Italy is"
+eujeno --json infer --coordinator http://203.0.113.5:9000 --prompt "The capital of Italy is"
 ```
 
 - Nodes using `--coordinator` do **not** expose inbound ports: they open an outbound WebSocket to the coordinator. Nothing to configure on the workers' router.
@@ -28,8 +28,8 @@ Start **multiple nodes serving the same block** for resilience: if a node goes d
 
 ```bash
 # block 12-24 + head served by TWO nodes (B and C): if B goes down, the job continues on C
-axyn serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"   # node B
-axyn serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"   # node C (redundant)
+eujeno serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"   # node B
+eujeno serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"   # node C (redundant)
 ```
 
 The `infer` response includes `"failovers": N` (how many reroutes were served). If no redundant node covers the block that went down, `infer` responds `NOT_OPERATIONAL`.

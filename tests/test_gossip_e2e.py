@@ -6,8 +6,8 @@ import pytest
 import httpx
 import uvicorn
 
-from axyn.net.topology import StageSpec
-from axyn.net.server import create_app
+from eujeno.net.topology import StageSpec
+from eujeno.net.server import create_app
 
 
 def _free_port():

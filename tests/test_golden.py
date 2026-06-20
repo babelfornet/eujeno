@@ -1,7 +1,7 @@
 import pytest
 import torch
-from axyn.model.generate import reference_generate, pipeline_generate
-from axyn.model.blocks import split_into_blocks
+from eujeno.model.generate import reference_generate, pipeline_generate
+from eujeno.model.blocks import split_into_blocks
 
 
 @pytest.mark.slow

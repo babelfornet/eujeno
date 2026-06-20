@@ -6,14 +6,14 @@ Every node is the same: they discover each other via **gossip** (one seed is eno
 pip install -e .
 
 # Node A — embedding + first 12 layers (first node, no seed)
-axyn serve --stages "embed,decoder:0-12" --port 8001 --advertise http://192.168.1.10:8001
+eujeno serve --stages "embed,decoder:0-12" --port 8001 --advertise http://192.168.1.10:8001
 
 # Node B — last 12 layers + head; knows A as a seed
-axyn serve --stages "decoder:12-24,head" --port 8001 \
+eujeno serve --stages "decoder:12-24,head" --port 8001 \
   --advertise http://192.168.1.11:8001 --peers http://192.168.1.10:8001
 
 # Inference: point at ANY single node; it discovers the rest on its own
-axyn --json infer --peer http://192.168.1.10:8001 --prompt "The capital of Italy is"
+eujeno --json infer --peer http://192.168.1.10:8001 --prompt "The capital of Italy is"
 ```
 
 - `--advertise` is the URL the node uses to announce itself to the others (it must be reachable by the other nodes, not `0.0.0.0`).
@@ -26,9 +26,9 @@ Instead of assigning stages by hand, each node can **claim** a range by reading 
 
 ```bash
 # Node A (small): start it first, it takes a block that fits in its RAM
-axyn serve --auto --port 8001 --advertise http://192.168.1.10:8001
+eujeno serve --auto --port 8001 --advertise http://192.168.1.10:8001
 # Node B (large): knows A as a seed and covers the COMPLEMENT (embed + rest + head)
-axyn serve --auto --port 8001 --advertise http://192.168.1.11:8001 --peers http://192.168.1.10:8001
+eujeno serve --auto --port 8001 --advertise http://192.168.1.11:8001 --peers http://192.168.1.10:8001
 ```
 
 Options: `--ram <GB>` forces the memory budget (default: detected free RAM); `--reserve` the fraction kept for activations/KV-cache (default 0.2); `--target 2` aims for **≥2 nodes per range** (redundancy). The node announces its `capacity` in the gossip record.
@@ -38,9 +38,9 @@ Options: `--ram <GB>` forces the memory budget (default: detected free RAM); `--
 ## On a LAN (quick, one machine or same WiFi)
 
 ```bash
-axyn serve --stages "embed,decoder:0-12" --port 8001 --advertise http://127.0.0.1:8001
-axyn serve --stages "decoder:12-24,head" --port 8002 --advertise http://127.0.0.1:8002 --peers http://127.0.0.1:8001
-axyn --json infer --peer http://127.0.0.1:8001 --prompt "The capital of Italy is"
+eujeno serve --stages "embed,decoder:0-12" --port 8001 --advertise http://127.0.0.1:8001
+eujeno serve --stages "decoder:12-24,head" --port 8002 --advertise http://127.0.0.1:8002 --peers http://127.0.0.1:8001
+eujeno --json infer --peer http://127.0.0.1:8001 --prompt "The capital of Italy is"
 ```
 
 ## Every node is queryable (symmetric entry point)
@@ -49,9 +49,9 @@ In P2P mode every `serve` node also exposes the **OpenAI API** `POST /v1/chat/co
 
 ```bash
 curl -s http://192.168.1.10:8001/v1/chat/completions -H 'content-type: application/json' \
-  -d '{"model":"axyn","messages":[{"role":"user","content":"Hi"}],"max_tokens":32}'
+  -d '{"model":"eujeno","messages":[{"role":"user","content":"Hi"}],"max_tokens":32}'
 ```
-`axyn infer --peer` remains available as an alternative.
+`eujeno infer --peer` remains available as an alternative.
 
 ## When it's NOT enough
 

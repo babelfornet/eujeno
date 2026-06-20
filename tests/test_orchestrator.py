@@ -6,10 +6,10 @@ import pytest
 import httpx
 import uvicorn
 
-from axyn.net.topology import StageSpec, Topology
-from axyn.net.server import create_app
-from axyn.net.orchestrator import distributed_generate
-from axyn.model.generate import reference_generate
+from eujeno.net.topology import StageSpec, Topology
+from eujeno.net.server import create_app
+from eujeno.net.orchestrator import distributed_generate
+from eujeno.model.generate import reference_generate
 
 
 def _free_port():

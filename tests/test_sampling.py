@@ -1,5 +1,5 @@
 import torch
-from axyn.net.sampling import sample_token
+from eujeno.net.sampling import sample_token
 
 
 def test_greedy_returns_argmax_when_temperature_zero():

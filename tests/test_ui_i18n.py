@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-HTML = Path(__file__).parent.parent / "axyn" / "ui" / "static" / "index.html"
+HTML = Path(__file__).parent.parent / "eujeno" / "ui" / "static" / "index.html"
 
 def read_html():
     return HTML.read_text(encoding="utf-8")
@@ -9,8 +9,8 @@ def read_html():
 def test_navigator_language_present():
     assert "navigator.language" in read_html()
 
-def test_axyn_lang_key_present():
-    assert "'axyn_lang'" in read_html()
+def test_eujeno_lang_key_present():
+    assert "'eujeno_lang'" in read_html()
 
 def test_begin_translations_marker():
     assert "// BEGIN_TRANSLATIONS" in read_html()

@@ -1,6 +1,6 @@
-# Connecting AI agents to Axyn (OpenAI-compatible API)
+# Connecting AI agents to Eujeno (OpenAI-compatible API)
 
-> An agent can even **bring up a network from scratch**: `axyn models` lists the compatible models, and `axyn up --model <id> [--dtype bfloat16]` starts a coordinator plus a node covering all layers in a single command (`--dry-run` for a preview). See [CLAUDE.md](../../CLAUDE.md).
+> An agent can even **bring up a network from scratch**: `eujeno models` lists the compatible models, and `eujeno up --model <id> [--dtype bfloat16]` starts a coordinator plus a node covering all layers in a single command (`--dry-run` for a preview). See [CLAUDE.md](../../CLAUDE.md).
 
 When the model is OPERATIONAL, the coordinator exposes an **OpenAI-compatible** API: point any OpenAI client/SDK at `http://YOUR_COORDINATOR:9000/v1`.
 
@@ -12,7 +12,7 @@ Available endpoints: `GET /v1/models`, `POST /v1/chat/completions` (with `temper
 from openai import OpenAI
 client = OpenAI(base_url="http://127.0.0.1:9000/v1", api_key="anything")
 r = client.chat.completions.create(
-    model="axyn",
+    model="eujeno",
     messages=[{"role": "user", "content": "Write a haiku about the sea"}],
     temperature=0.8, top_p=0.9, max_tokens=80,
 )
@@ -23,7 +23,7 @@ print(r.choices[0].message.content)
 
 ```bash
 curl -s http://127.0.0.1:9000/v1/chat/completions -H 'content-type: application/json' -d '{
-  "model": "axyn",
+  "model": "eujeno",
   "messages": [{"role":"user","content":"Hi!"}],
   "temperature": 0.7, "max_tokens": 64
 }'
@@ -47,7 +47,7 @@ ANTHROPIC_BASE_URL=http://LITELLM:4000 claude
 tools = [{"type":"function","function":{
   "name":"get_weather","description":"Weather for a city",
   "parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}]
-r = client.chat.completions.create(model="axyn",
+r = client.chat.completions.create(model="eujeno",
       messages=[{"role":"user","content":"What's the weather in Rome?"}], tools=tools)
 # r.choices[0].message.tool_calls -> [{function:{name:"get_weather", arguments:'{"city":"Rome"}'}}]
 ```
@@ -60,13 +60,13 @@ Configure MCP servers and use them in inference without a frontend:
 
 ```bash
 # add an MCP server (stdio)
-axyn mcp --add fs --command npx --args "@modelcontextprotocol/server-filesystem /path"
-axyn --json mcp                 # list servers + discovered tools
+eujeno mcp --add fs --command npx --args "@modelcontextprotocol/server-filesystem /path"
+eujeno --json mcp                 # list servers + discovered tools
 # query the model with the MCP tools (tool-calling loop)
-axyn infer --coordinator http://IP:9000 --mcp --prompt "List the files in /path"
-axyn mcp --remove fs
+eujeno infer --coordinator http://IP:9000 --mcp --prompt "List the files in /path"
+eujeno mcp --remove fs
 ```
-The config is saved in `~/.axyn/mcp.json` (override with `AXYN_HOME`). `--mcp` requires `--coordinator` or `--peer` (both expose `/v1`). Requires a model that supports tool calling.
+The config is saved in `~/.eujeno/mcp.json` (override with `EUJENO_HOME`). `--mcp` requires `--coordinator` or `--peer` (both expose `/v1`). Requires a model that supports tool calling.
 
 ## Many agents in parallel
 

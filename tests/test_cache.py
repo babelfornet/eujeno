@@ -1,6 +1,6 @@
 import torch
 from transformers import DynamicCache
-from axyn.model.cache import cache_to_bytes, cache_from_bytes
+from eujeno.model.cache import cache_to_bytes, cache_from_bytes
 
 
 def _make_cache(num_layers, seq=4, heads=2, head_dim=8):

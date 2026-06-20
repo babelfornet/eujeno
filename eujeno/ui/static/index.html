@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Axyn · rete di inferenza LLM decentralizzata</title>
+<title>Eujeno · rete di inferenza LLM decentralizzata</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -152,7 +152,7 @@ const TRANSLATIONS = {
     'err.http': 'errore',
     'p2p.advertise_label': 'advertise url (il tuo nodo)',
     'p2p.peers_label': 'peers (url di un nodo seed)',
-    'app.title': 'Axyn · rete di inferenza LLM decentralizzata',
+    'app.title': 'Eujeno · rete di inferenza LLM decentralizzata',
   },
   en: {
     'tab.network': 'Network',
@@ -269,7 +269,7 @@ const TRANSLATIONS = {
     'err.http': 'error',
     'p2p.advertise_label': 'advertise url (this node)',
     'p2p.peers_label': 'peers (a seed node url)',
-    'app.title': 'Axyn · decentralized LLM inference network',
+    'app.title': 'Eujeno · decentralized LLM inference network',
   },
   fr: {
     'tab.network': 'Réseau',
@@ -386,7 +386,7 @@ const TRANSLATIONS = {
     'err.http': 'erreur',
     'p2p.advertise_label': 'url advertise (ce nœud)',
     'p2p.peers_label': "peers (url d'un nœud seed)",
-    'app.title': "Axyn · réseau d'inférence LLM décentralisé",
+    'app.title': "Eujeno · réseau d'inférence LLM décentralisé",
   },
   de: {
     'tab.network': 'Netzwerk',
@@ -503,7 +503,7 @@ const TRANSLATIONS = {
     'err.http': 'Fehler',
     'p2p.advertise_label': 'advertise-URL (dieser Knoten)',
     'p2p.peers_label': 'peers (URL eines Seed-Knotens)',
-    'app.title': 'Axyn · dezentrales LLM-Inferenznetzwerk',
+    'app.title': 'Eujeno · dezentrales LLM-Inferenznetzwerk',
   },
   es: {
     'tab.network': 'Red',
@@ -620,7 +620,7 @@ const TRANSLATIONS = {
     'err.http': 'error',
     'p2p.advertise_label': 'url advertise (este nodo)',
     'p2p.peers_label': 'peers (url de un nodo seed)',
-    'app.title': 'Axyn · red de inferencia LLM descentralizada',
+    'app.title': 'Eujeno · red de inferencia LLM descentralizada',
   },
 };
 // END_TRANSLATIONS
@@ -628,7 +628,7 @@ const TRANSLATIONS = {
 const I18n = React.createContext(null);
 const LANGS = ['it', 'en', 'fr', 'de', 'es'];
 function getInitialLang(){
-  const stored = localStorage.getItem('axyn_lang');
+  const stored = localStorage.getItem('eujeno_lang');
   if (stored && LANGS.includes(stored)) return stored;
   const browser = (navigator.language || '').slice(0, 2).toLowerCase();
   return LANGS.includes(browser) ? browser : 'en';
@@ -741,7 +741,7 @@ function serveCommand(coordinatorUrl, m){
   const wsBase = wsFromHttp(coordinatorUrl);
   let piece = m.stagePieces[0];
   if (!piece) piece = m.numLayers ? ('decoder:0-' + m.numLayers) : 'decoder:0-N';
-  return 'axyn serve --coordinator ' + wsBase + '/node --stages "' + piece + '"';
+  return 'eujeno serve --coordinator ' + wsBase + '/node --stages "' + piece + '"';
 }
 
 /* ---------- small presentational atoms ---------- */
@@ -1039,9 +1039,9 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, s
     if (msgRef.current) msgRef.current.scrollTop = msgRef.current.scrollHeight;
   }, [messages, loading]);
 
-  const cli = 'axyn infer --coordinator ' + coordinatorUrl + ' --prompt "..."';
+  const cli = 'eujeno infer --coordinator ' + coordinatorUrl + ' --prompt "..."';
   const curl = "curl -X POST " + coordinatorUrl + "/v1/chat/completions -H 'content-type: application/json' -d '{\"messages\":[{\"role\":\"user\",\"content\":\"Ciao\"}]}'";
-  const openai = "from openai import OpenAI\nclient = OpenAI(base_url=\"" + coordinatorUrl + "/v1\", api_key=\"axyn\")\nclient.chat.completions.create(model=\"" + m.model + "\", messages=[{\"role\":\"user\",\"content\":\"Ciao\"}])";
+  const openai = "from openai import OpenAI\nclient = OpenAI(base_url=\"" + coordinatorUrl + "/v1\", api_key=\"eujeno\")\nclient.chat.completions.create(model=\"" + m.model + "\", messages=[{\"role\":\"user\",\"content\":\"Ciao\"}])";
 
   const send = useCallback(async (override) => {
     const text = (override != null ? override : input).trim();
@@ -1889,7 +1889,7 @@ function Header({ view, setView, coordinatorUrl, updatedAgo, operational, error,
         ),
       ),
       h('div', null,
-        h('div', { style: { fontSize: '18px', fontWeight: 700, letterSpacing: '-.3px', color: '#f1f6fc', lineHeight: 1 }}, 'Axyn'),
+        h('div', { style: { fontSize: '18px', fontWeight: 700, letterSpacing: '-.3px', color: '#f1f6fc', lineHeight: 1 }}, 'Eujeno'),
         h('div', { style: { fontSize: '11px', color: '#67788f', marginTop: '4px', letterSpacing: '.2px' }}, t('header.subtitle')),
       ),
     ),
@@ -1924,7 +1924,7 @@ function Header({ view, setView, coordinatorUrl, updatedAgo, operational, error,
 /* ---------- App ---------- */
 function App(){
   const [lang, setLang] = React.useState(getInitialLang);
-  const changeLang = l => { setLang(l); localStorage.setItem('axyn_lang', l); document.documentElement.lang = l; };
+  const changeLang = l => { setLang(l); localStorage.setItem('eujeno_lang', l); document.documentElement.lang = l; };
   const t = key => (TRANSLATIONS[lang] && TRANSLATIONS[lang][key]) || TRANSLATIONS.en[key] || key;
   const [coordinatorUrl, setCoordinatorUrl] = useState('');
   const [registry, setRegistry] = useState(null);

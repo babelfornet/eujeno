@@ -1,5 +1,5 @@
 import pytest
-from axyn.model.blocks import compute_boundaries
+from eujeno.model.blocks import compute_boundaries
 
 
 def test_even_split():

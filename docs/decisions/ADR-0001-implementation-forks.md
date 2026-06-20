@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-06-17
-- **Deciders:** `axyn-impl-forks` agent team (9 agents: 5 per-fork specialists, 3 stack architects, 1 synthesis lead architect) + user review
+- **Deciders:** `eujeno-impl-forks` agent team (9 agents: 5 per-fork specialists, 3 stack architects, 1 synthesis lead architect) + user review
 - **Context:** [00-vision-architecture.md](../00-vision-architecture.md)
 
 ## Context

@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`).
 
-**Goal:** From the dashboard you configure **MCP servers**; the `axyn ui` server acts as an **MCP host** (connects via stdio, discovers the tools, passes them to the model as `tools`, and when the model calls a tool it **executes** it on the MCP server and returns the result — a tool-calling loop). Available when the model supports tools.
+**Goal:** From the dashboard you configure **MCP servers**; the `eujeno ui` server acts as an **MCP host** (connects via stdio, discovers the tools, passes them to the model as `tools`, and when the model calls a tool it **executes** it on the MCP server and returns the result — a tool-calling loop). Available when the model supports tools.
 
-**Architecture:** `axyn ui` as MCP host: `McpRegistry` holds the MCP server configs and, via the `mcp` SDK (stdio, per-operation connection), exposes `list_tools()` (→ OpenAI format) and `call_tool()`. A pure loop `run_tool_loop(messages, tools, call_model, call_tool, max_iters)` orchestrates: model → `tool_calls` → MCP execution → `role:"tool"` → model → … → final response. New `/api/mcp/*` endpoints and an "agent" chat that uses the MCP tools. UI: **MCP** tab.
+**Architecture:** `eujeno ui` as MCP host: `McpRegistry` holds the MCP server configs and, via the `mcp` SDK (stdio, per-operation connection), exposes `list_tools()` (→ OpenAI format) and `call_tool()`. A pure loop `run_tool_loop(messages, tools, call_model, call_tool, max_iters)` orchestrates: model → `tool_calls` → MCP execution → `role:"tool"` → model → … → final response. New `/api/mcp/*` endpoints and an "agent" chat that uses the MCP tools. UI: **MCP** tab.
 
-**Tech Stack:** Python · `mcp` SDK (stdio client + FastMCP for the test server) · FastAPI · the existing `axyn/ui/*`.
+**Tech Stack:** Python · `mcp` SDK (stdio client + FastMCP for the test server) · FastAPI · the existing `eujeno/ui/*`.
 
 **Reality:** reliable tool-calling requires a capable model (7B+); with Qwen 0.5B it serves to verify the mechanism end-to-end. The UI enables MCP only when the network is operational (the model accepts `tools`).
 
@@ -17,10 +17,10 @@
 ## File Structure
 ```
 pyproject.toml                  # MOD: + mcp dependency
-axyn/ui/mcp.py               # NEW: McpRegistry (config + list_tools + call_tool via stdio)
-axyn/ui/agent.py             # NEW: run_tool_loop (pure orchestration, testable)
-axyn/ui/server.py            # MOD: /api/mcp/add|list|remove + chat-agent
-axyn/ui/static/index.html    # MOD: MCP tab + tool activity in chat
+eujeno/ui/mcp.py               # NEW: McpRegistry (config + list_tools + call_tool via stdio)
+eujeno/ui/agent.py             # NEW: run_tool_loop (pure orchestration, testable)
+eujeno/ui/server.py            # MOD: /api/mcp/add|list|remove + chat-agent
+eujeno/ui/static/index.html    # MOD: MCP tab + tool activity in chat
 tests/test_agent_loop.py        # NEW: run_tool_loop with fakes (fast)
 tests/test_mcp_registry.py      # NEW: integration with a small Python MCP server (slow)
 tests/_mcp_echo_server.py       # NEW: test MCP server (an "echo" tool)
@@ -31,9 +31,9 @@ docs/examples/frontend.md       # MOD
 
 ## Task 1: `mcp` dependency + `McpRegistry`
 
-**Files:** modify `pyproject.toml`; create `axyn/ui/mcp.py`, `tests/_mcp_echo_server.py`, `tests/test_mcp_registry.py`.
+**Files:** modify `pyproject.toml`; create `eujeno/ui/mcp.py`, `tests/_mcp_echo_server.py`, `tests/test_mcp_registry.py`.
 
-- [ ] **Step 1: add `mcp` to the dependencies** in `pyproject.toml` (`dependencies`): `"mcp>=1.0"`. Install: `cd /Users/alberto/Projects/AI/axyn && .venv/bin/pip install -e ".[dev]"`. If not installable, BLOCKED.
+- [ ] **Step 1: add `mcp` to the dependencies** in `pyproject.toml` (`dependencies`): `"mcp>=1.0"`. Install: `cd /Users/alberto/Projects/AI/eujeno && .venv/bin/pip install -e ".[dev]"`. If not installable, BLOCKED.
 
 - [ ] **Step 2: create the test MCP server `tests/_mcp_echo_server.py`**
 ```python
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 ```python
 import sys, os
 import pytest
-from axyn.ui.mcp import McpRegistry
+from eujeno.ui.mcp import McpRegistry
 
 _SERVER = os.path.join(os.path.dirname(__file__), "_mcp_echo_server.py")
 
@@ -76,9 +76,9 @@ def test_list_and_call_tool_via_stdio():
     assert reg.list_servers() == []
 ```
 
-- [ ] **Step 4: run FAIL** — `... pytest tests/test_mcp_registry.py -m slow -v` → ImportError on `axyn.ui.mcp`.
+- [ ] **Step 4: run FAIL** — `... pytest tests/test_mcp_registry.py -m slow -v` → ImportError on `eujeno.ui.mcp`.
 
-- [ ] **Step 5: implement `axyn/ui/mcp.py`** (per-operation stdio connection; tool names prefixed `server__tool`):
+- [ ] **Step 5: implement `eujeno/ui/mcp.py`** (per-operation stdio connection; tool names prefixed `server__tool`):
 ```python
 import asyncio
 
@@ -151,19 +151,19 @@ class McpRegistry:
 
 - [ ] **Step 7: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add pyproject.toml axyn/ui/mcp.py tests/_mcp_echo_server.py tests/test_mcp_registry.py && git commit -m "feat(ui): McpRegistry (stdio MCP host: list_tools/call_tool)"
+cd /Users/alberto/Projects/AI/eujeno && git add pyproject.toml eujeno/ui/mcp.py tests/_mcp_echo_server.py tests/test_mcp_registry.py && git commit -m "feat(ui): McpRegistry (stdio MCP host: list_tools/call_tool)"
 ```
 
 ---
 
 ## Task 2: `run_tool_loop` (pure orchestration)
 
-**Files:** create `axyn/ui/agent.py`, `tests/test_agent_loop.py`.
+**Files:** create `eujeno/ui/agent.py`, `tests/test_agent_loop.py`.
 
 - [ ] **Step 1: test `tests/test_agent_loop.py`**
 ```python
 import json
-from axyn.ui.agent import run_tool_loop
+from eujeno.ui.agent import run_tool_loop
 
 
 def test_loop_executes_tool_then_finishes():
@@ -203,7 +203,7 @@ def test_loop_no_tools_returns_immediately():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_agent_loop.py -v` → ImportError.
 
-- [ ] **Step 3: implement `axyn/ui/agent.py`**
+- [ ] **Step 3: implement `eujeno/ui/agent.py`**
 ```python
 import json
 
@@ -238,14 +238,14 @@ def run_tool_loop(messages, tools, call_model, call_tool, max_iters=6):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/agent.py tests/test_agent_loop.py && git commit -m "feat(ui): run_tool_loop (tool-calling orchestration, tested)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/ui/agent.py tests/test_agent_loop.py && git commit -m "feat(ui): run_tool_loop (tool-calling orchestration, tested)"
 ```
 
 ---
 
 ## Task 3: MCP endpoints + chat-agent in the server
 
-**Files:** modify `axyn/ui/server.py`; modify `tests/test_ui_server.py`.
+**Files:** modify `eujeno/ui/server.py`; modify `tests/test_ui_server.py`.
 
 - [ ] **Step 1: add a test to `tests/test_ui_server.py`**
 ```python
@@ -262,9 +262,9 @@ def test_mcp_add_list_remove():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_ui_server.py::test_mcp_add_list_remove -v`.
 
-- [ ] **Step 3: modify `axyn/ui/server.py`**
+- [ ] **Step 3: modify `eujeno/ui/server.py`**
 
-Add imports at the top: `from axyn.ui.mcp import McpRegistry` and `from axyn.ui.agent import run_tool_loop` and `import json`. Inside `create_ui_app`, after `manager = NodeManager()`, add `mcp = McpRegistry()`. Add the endpoints (before `return app`):
+Add imports at the top: `from eujeno.ui.mcp import McpRegistry` and `from eujeno.ui.agent import run_tool_loop` and `import json`. Inside `create_ui_app`, after `manager = NodeManager()`, add `mcp = McpRegistry()`. Add the endpoints (before `return app`):
 ```python
     @app.get("/api/mcp/list")
     async def mcp_list():
@@ -334,14 +334,14 @@ Add `import asyncio` at the top of server.py.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/server.py tests/test_ui_server.py && git commit -m "feat(ui): MCP endpoints (add/list/remove) + chat-agent with MCP tools"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/ui/server.py tests/test_ui_server.py && git commit -m "feat(ui): MCP endpoints (add/list/remove) + chat-agent with MCP tools"
 ```
 
 ---
 
 ## Task 4: MCP tab in the frontend
 
-**Files:** modify `axyn/ui/static/index.html`.
+**Files:** modify `eujeno/ui/static/index.html`.
 
 - [ ] **Step 1: extend the app** (do NOT rewrite it) with an **MCP** tab (next to Network/Chat/Management), same style:
   - **MCP servers**: a form to add a server (name, command, space-separated args) → `POST /api/mcp/add`; a list of servers from `GET /api/mcp/list` with their **tools** (name + description) and a Remove button → `POST /api/mcp/remove`. Poll/refresh after every action. If `list` returns `error`, show it.
@@ -349,13 +349,13 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/server.py tests/test_ui_se
   - In the **Chat view**: when `useMcp` is active, show a "MCP active (N tools)" badge; when a response includes `tool_runs`, show below the bubble which tools were called (name + short result). The chat call already goes through `/api/chat` (add `use_mcp: useMcp` to the body).
   - Note in the UI: "requires a model that supports tool-calling".
 
-- [ ] **Step 2: structural check** — `cd /Users/alberto/Projects/AI/axyn && .venv/bin/python -c "h=open('axyn/ui/static/index.html').read(); assert '/api/mcp/add' in h and '/api/mcp/list' in h and 'use_mcp' in h and 'MCP' in h; print('mcp tab ok', len(h))"`
+- [ ] **Step 2: structural check** — `cd /Users/alberto/Projects/AI/eujeno && .venv/bin/python -c "h=open('eujeno/ui/static/index.html').read(); assert '/api/mcp/add' in h and '/api/mcp/list' in h and 'use_mcp' in h and 'MCP' in h; print('mcp tab ok', len(h))"`
 
 - [ ] **Step 3: serve test** — `... pytest tests/test_ui_server.py::test_serves_index_html -v` → PASS.
 
 - [ ] **Step 4: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/static/index.html && git commit -m "feat(ui): MCP tab (server + tool config, toggle in chat)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/ui/static/index.html && git commit -m "feat(ui): MCP tab (server + tool config, toggle in chat)"
 ```
 
 ---
@@ -364,13 +364,13 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/static/index.html && git c
 
 **Files:** modify `docs/examples/frontend.md`.
 
-- [ ] **Step 1: update `docs/examples/frontend.md`** — "MCP tools (MCP tab)" section: add an MCP server (stdio command, e.g. a filesystem/echo server), enable "use MCP tools" in chat; when the model supports tool-calling, `axyn ui` executes the tools and shows the activity. Note: a capable model is needed (7B+); with 0.5B it is demonstrative. stdio only for now.
+- [ ] **Step 1: update `docs/examples/frontend.md`** — "MCP tools (MCP tab)" section: add an MCP server (stdio command, e.g. a filesystem/echo server), enable "use MCP tools" in chat; when the model supports tool-calling, `eujeno ui` executes the tools and shows the activity. Note: a capable model is needed (7B+); with 0.5B it is demonstrative. stdio only for now.
 
 - [ ] **Step 2: full suite** — `... pytest -q -p no:warnings` → green.
 
 - [ ] **Step 3: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add docs/examples/frontend.md && git commit -m "docs: MCP tools in the frontend (Phase 3)"
+cd /Users/alberto/Projects/AI/eujeno && git add docs/examples/frontend.md && git commit -m "docs: MCP tools in the frontend (Phase 3)"
 ```
 
 ---

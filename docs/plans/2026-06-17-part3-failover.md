@@ -6,7 +6,7 @@
 
 **Architecture:** [ADR-0001](../decisions/ADR-0001-implementation-forks.md) Fork C (failover = re-dispatch to a redundant holder). Milestone 0 implementation: the coordinator drives generation; if a hop fails (disconnected node → the pending Future raises `ConnectionError`), it excludes that node, recomputes the chain from the remaining nodes (`build_chain(..., exclude)`) and **restarts generation from scratch** with a new `job_id`, up to K failovers. It requires **redundancy**: ≥2 nodes serving the same block. (Per-hop re-dispatch with prefix replay and durable store-and-forward on SQLite remain a later deep-dive; restarting from scratch is simple, correct and acceptable under the async framing.)
 
-**Tech Stack:** Python · the existing `axyn/net/{coordinator,discovery,node,node_exec}.py` · asyncio · pytest.
+**Tech Stack:** Python · the existing `eujeno/net/{coordinator,discovery,node,node_exec}.py` · asyncio · pytest.
 
 **Out of scope:** per-hop failover with prefix replay (preserves progress); durable SQLite store-and-forward; failover in direct P2P mode (follow-up); failover of the coordinator itself.
 
@@ -15,8 +15,8 @@
 ## File Structure
 
 ```
-axyn/net/discovery.py        # MODIFY: build_chain(..., exclude=None)
-axyn/net/coordinator.py      # MODIFY: failover loop (exclude downed node, recompute, restart)
+eujeno/net/discovery.py        # MODIFY: build_chain(..., exclude=None)
+eujeno/net/coordinator.py      # MODIFY: failover loop (exclude downed node, recompute, restart)
 tests/
   test_discovery.py             # MODIFY: + test build_chain with exclude and redundancy
   test_failover_e2e.py          # NEW: node crashing mid-hop -> completes via redundant (slow)
@@ -28,7 +28,7 @@ docs/ROADMAP.md
 
 ## Task 1: `build_chain(exclude)` — redundancy-aware
 
-**Files:** modify `axyn/net/discovery.py`; modify `tests/test_discovery.py`.
+**Files:** modify `eujeno/net/discovery.py`; modify `tests/test_discovery.py`.
 
 - [ ] **Step 1: add the tests at the end of `tests/test_discovery.py`**
 ```python
@@ -56,9 +56,9 @@ def test_build_chain_exclude_breaks_coverage_returns_none():
     assert build_chain(reg, 24, exclude={"B"}) is None   # without B, 12-24 is missing
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_discovery.py -v` → TypeError (build_chain does not accept `exclude`).
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_discovery.py -v` → TypeError (build_chain does not accept `exclude`).
 
-- [ ] **Step 3: modify `build_chain` in `axyn/net/discovery.py`**
+- [ ] **Step 3: modify `build_chain` in `eujeno/net/discovery.py`**
 
 Replace the signature and the start of the `build_chain` function with:
 ```python
@@ -94,14 +94,14 @@ def build_chain(stages_by_url: dict, num_layers: int, exclude=None):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): build_chain with exclude (redundancy-aware for failover)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): build_chain with exclude (redundancy-aware for failover)"
 ```
 
 ---
 
 ## Task 2: failover in the coordinator + e2e with a crashing node
 
-**Files:** modify `axyn/net/coordinator.py`; create `tests/test_failover_e2e.py`.
+**Files:** modify `eujeno/net/coordinator.py`; create `tests/test_failover_e2e.py`.
 
 - [ ] **Step 1: write `tests/test_failover_e2e.py`**
 ```python
@@ -115,12 +115,12 @@ import httpx
 import uvicorn
 import websockets
 
-from axyn.net.coordinator import create_coordinator_app
-from axyn.net.node import run_node
-from axyn.net.node_exec import NodeState, handle_request
-from axyn.net.framing import pack, unpack
-from axyn.net.topology import StageSpec
-from axyn.model.generate import reference_generate
+from eujeno.net.coordinator import create_coordinator_app
+from eujeno.net.node import run_node
+from eujeno.net.node_exec import NodeState, handle_request
+from eujeno.net.framing import pack, unpack
+from eujeno.net.topology import StageSpec
+from eujeno.model.generate import reference_generate
 
 
 def _free_port():
@@ -200,9 +200,9 @@ def test_failover_completes_via_redundant_node(full_model):
         server.should_exit = True
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_failover_e2e.py -m slow -v`. Expected: FAIL (`data` has no `failovers`, or the infer hangs/errors because the failover logic is missing).
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_failover_e2e.py -m slow -v`. Expected: FAIL (`data` has no `failovers`, or the infer hangs/errors because the failover logic is missing).
 
-- [ ] **Step 3: modify `axyn/net/coordinator.py`**
+- [ ] **Step 3: modify `eujeno/net/coordinator.py`**
 
 (a) Add a constant and an exception near the start of the module (after the imports):
 ```python
@@ -290,7 +290,7 @@ Verify no regression: `... pytest tests/test_coordinator_e2e.py tests/test_cli_c
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test_failover_e2e.py && git commit -m "feat(net): failover in the coordinator (exclude downed node, reroute to redundant)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/coordinator.py tests/test_failover_e2e.py && git commit -m "feat(net): failover in the coordinator (exclude downed node, reroute to redundant)"
 ```
 
 ---
@@ -307,8 +307,8 @@ Start **multiple nodes serving the same block** for resilience: if a node goes d
 
 ```bash
 # block 12-24 + head served by TWO nodes (B and C): if B goes down, the job continues on C
-axyn serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"   # node B
-axyn serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"   # node C (redundant)
+eujeno serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"   # node B
+eujeno serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"   # node C (redundant)
 ```
 
 The `infer` response includes `"failovers": N` (how many reroutes were needed). If no redundant node covers the downed block, `infer` responds `NOT_OPERATIONAL`.
@@ -318,11 +318,11 @@ The `infer` response includes `"failovers": N` (how many reroutes were needed). 
 
 - [ ] **Step 2: update `docs/ROADMAP.md`** — under "Discovery & Routing", mark failover (coordinator) as done; under "Queue & Load Balancing"/Part 3 note that durable store-and-forward + per-hop failover remain to be done. Update the "Last updated" line.
 
-- [ ] **Step 3: full suite** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q -p no:warnings` → all PASS.
+- [ ] **Step 3: full suite** — `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest -q -p no:warnings` → all PASS.
 
 - [ ] **Step 4: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add docs/examples/coordinator.md docs/ROADMAP.md && git commit -m "docs: redundancy and failover (coordinator); ROADMAP Part 3"
+cd /Users/alberto/Projects/AI/eujeno && git add docs/examples/coordinator.md docs/ROADMAP.md && git commit -m "docs: redundancy and failover (coordinator); ROADMAP Part 3"
 ```
 
 ---

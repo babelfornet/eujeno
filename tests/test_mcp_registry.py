@@ -1,6 +1,6 @@
 import sys, os
 import pytest
-from axyn.ui.mcp import McpRegistry
+from eujeno.ui.mcp import McpRegistry
 
 _SERVER = os.path.join(os.path.dirname(__file__), "_mcp_echo_server.py")
 

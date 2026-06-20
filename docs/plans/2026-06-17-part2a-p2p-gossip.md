@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** **Automatic and decentralized** discovery (no central server): `axyn serve` nodes discover each other via **gossip** between peers and self-announce; `axyn infer --peer <any-node>` builds the topology on its own and runs over the **direct transport** from Part 1.
+**Goal:** **Automatic and decentralized** discovery (no central server): `eujeno serve` nodes discover each other via **gossip** between peers and self-announce; `eujeno infer --peer <any-node>` builds the topology on its own and runs over the **direct transport** from Part 1.
 
 **Architecture:** [ADR-0002](../decisions/ADR-0002-nat-connectivity.md) Mode A. Each BlockServer keeps a **Registry** (url→stage, with TTL) and a **gossip pull** loop: refresh of its own entry + fetch of the `/registry` from seed peers + merge + prune. Coverage and topology are computed from the registry with `build_chain`. Activation transport = direct HTTP (`distributed_generate` from Part 1). Works wherever the nodes are mutually reachable (LAN/VPN/public IPs).
 
-**Tech Stack:** Python · FastAPI (lifespan background task) · httpx (async for gossip, sync for infer) · the existing `axyn/net/{server,orchestrator,topology}.py`.
+**Tech Stack:** Python · FastAPI (lifespan background task) · httpx (async for gossip, sync for infer) · the existing `eujeno/net/{server,orchestrator,topology}.py`.
 
 **Out of scope:** NAT traversal without VPN (→ Mode B coordinator, or future libp2p); failover/durability (Part 3).
 
@@ -15,9 +15,9 @@
 ## File Structure
 
 ```
-axyn/net/discovery.py        # NEW: Registry (gossip state) + build_chain (coverage)
-axyn/net/server.py           # MODIFY: create_app + Registry, GET /registry, gossip loop (lifespan)
-axyn/cli.py                  # MODIFY: serve --peers/--advertise ; infer --peer
+eujeno/net/discovery.py        # NEW: Registry (gossip state) + build_chain (coverage)
+eujeno/net/server.py           # MODIFY: create_app + Registry, GET /registry, gossip loop (lifespan)
+eujeno/cli.py                  # MODIFY: serve --peers/--advertise ; infer --peer
 tests/
   test_discovery.py             # Registry + build_chain (fast)
   test_gossip_e2e.py            # 2 real servers: the registry converges (slow)
@@ -29,11 +29,11 @@ docs/examples/p2p.md            # NEW: pure P2P quickstart
 
 ## Task 1: `Registry` + `build_chain` (pure logic)
 
-**Files:** create `axyn/net/discovery.py`, `tests/test_discovery.py`.
+**Files:** create `eujeno/net/discovery.py`, `tests/test_discovery.py`.
 
 - [ ] **Step 1: test `tests/test_discovery.py`**
 ```python
-from axyn.net.discovery import Registry, build_chain
+from eujeno.net.discovery import Registry, build_chain
 
 
 def test_build_chain_full_coverage():
@@ -68,9 +68,9 @@ def test_registry_refresh_extends_expiry():
     assert "http://a" in r.stages_by_url(now=200.0)   # refreshed at 150 -> expires at 210
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_discovery.py -v` → ImportError.
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_discovery.py -v` → ImportError.
 
-- [ ] **Step 3: implement `axyn/net/discovery.py`**
+- [ ] **Step 3: implement `eujeno/net/discovery.py`**
 ```python
 class Registry:
     """Decentralized discovery state: url -> {stages, expiry}. Relative TTL:
@@ -121,14 +121,14 @@ def build_chain(stages_by_url: dict, num_layers: int):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): Registry gossip + build_chain (decentralized discovery)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): Registry gossip + build_chain (decentralized discovery)"
 ```
 
 ---
 
 ## Task 2: gossip in the BlockServer (`/registry` + loop)
 
-**Files:** modify `axyn/net/server.py`; create `tests/test_gossip_e2e.py`.
+**Files:** modify `eujeno/net/server.py`; create `tests/test_gossip_e2e.py`.
 
 - [ ] **Step 1: test `tests/test_gossip_e2e.py`**
 ```python
@@ -140,8 +140,8 @@ import pytest
 import httpx
 import uvicorn
 
-from axyn.net.topology import StageSpec
-from axyn.net.server import create_app
+from eujeno.net.topology import StageSpec
+from eujeno.net.server import create_app
 
 
 def _free_port():
@@ -190,7 +190,7 @@ def test_registry_converges_via_gossip(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_gossip_e2e.py -m slow -v` → TypeError (create_app does not accept the new kwargs).
 
-- [ ] **Step 3: modify `axyn/net/server.py`**
+- [ ] **Step 3: modify `eujeno/net/server.py`**
 
 Update the imports at the top:
 ```python
@@ -202,9 +202,9 @@ import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from axyn.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
-from axyn.net.wire import encode_tensors, decode_tensors
-from axyn.net.discovery import Registry
+from eujeno.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
+from eujeno.net.wire import encode_tensors, decode_tensors
+from eujeno.net.discovery import Registry
 ```
 Replace the signature and the beginning of `create_app` to accept the gossip parameters (optional: without them the Part 1 behavior is unchanged) and register itself + start the loop:
 ```python
@@ -257,14 +257,14 @@ Verify that the Part 1 tests (`tests/test_server.py`, `tests/test_orchestrator.p
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/server.py tests/test_gossip_e2e.py && git commit -m "feat(net): gossip discovery in the BlockServer (/registry + loop, backward-compatible)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/server.py tests/test_gossip_e2e.py && git commit -m "feat(net): gossip discovery in the BlockServer (/registry + loop, backward-compatible)"
 ```
 
 ---
 
-## Task 3: `axyn serve --peers/--advertise` + `axyn infer --peer`
+## Task 3: `eujeno serve --peers/--advertise` + `eujeno infer --peer`
 
-**Files:** modify `axyn/cli.py`; create `tests/test_infer_peer.py`.
+**Files:** modify `eujeno/cli.py`; create `tests/test_infer_peer.py`.
 
 - [ ] **Step 1: test `tests/test_infer_peer.py`**
 ```python
@@ -277,10 +277,10 @@ import pytest
 import uvicorn
 
 from typer.testing import CliRunner
-from axyn.cli import app as cli_app
-from axyn.net.topology import StageSpec
-from axyn.net.server import create_app
-from axyn.model.generate import reference_generate
+from eujeno.cli import app as cli_app
+from eujeno.net.topology import StageSpec
+from eujeno.net.server import create_app
+from eujeno.model.generate import reference_generate
 
 runner = CliRunner()
 
@@ -333,12 +333,12 @@ def test_infer_peer_autodiscovers_and_matches_reference(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_infer_peer.py -m slow -v` → FAIL (`--peer` is missing).
 
-- [ ] **Step 3: modify `axyn/cli.py`**
+- [ ] **Step 3: modify `eujeno/cli.py`**
 
-Add imports near the other `from axyn.net...`:
+Add imports near the other `from eujeno.net...`:
 ```python
-from axyn.net.discovery import build_chain
-from axyn.net.topology import Topology
+from eujeno.net.discovery import build_chain
+from eujeno.net.topology import Topology
 ```
 Extend the `serve` command with the gossip options (direct mode): add the parameters and pass them to `create_app`. Add to the `serve` signature (in the direct, non-coordinator branch):
 ```python
@@ -354,7 +354,7 @@ and in the direct branch (the `else:` of `serve`, the one that does `create_app`
         seeds = [p.strip() for p in peers.split(",")] if peers else []
         nl = num_layers if num_layers is not None else model_config_dims(model_id)["num_layers"]
         fastapi_app = create_app(model, tokenizer, spec, node_url=own_url, peers=seeds, num_layers=nl)
-        typer.echo(f"axyn serve (P2P): stages={stages} on http://{host}:{port} advertise={own_url} peers={seeds}", err=True)
+        typer.echo(f"eujeno serve (P2P): stages={stages} on http://{host}:{port} advertise={own_url} peers={seeds}", err=True)
         uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
 ```
 (`model_config_dims` is already imported in cli.py.)
@@ -368,7 +368,7 @@ and at the top of the `infer` body, after `prompt = _read_prompt(prompt)`, befor
     if peer:
         import httpx
         from transformers import AutoTokenizer
-        from axyn.net.orchestrator import distributed_generate
+        from eujeno.net.orchestrator import distributed_generate
         try:
             reg = httpx.get(f"{peer}/registry", timeout=30.0).json()
         except Exception as e:
@@ -392,7 +392,7 @@ and at the top of the `infer` body, after `prompt = _read_prompt(prompt)`, befor
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_infer_peer.py && git commit -m "feat(cli): serve --peers/--advertise + infer --peer (pure P2P, auto-discovery)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/cli.py tests/test_infer_peer.py && git commit -m "feat(cli): serve --peers/--advertise + infer --peer (pure P2P, auto-discovery)"
 ```
 
 ---
@@ -409,14 +409,14 @@ Every node is equal: they discover each other via gossip (one seed is enough) an
 
 ```bash
 # Node A — embedding + first 12 layers (first node, no seed)
-axyn serve --stages "embed,decoder:0-12" --port 8001 --advertise http://192.168.1.10:8001
+eujeno serve --stages "embed,decoder:0-12" --port 8001 --advertise http://192.168.1.10:8001
 
 # Node B — last 12 layers + head, knows A as a seed
-axyn serve --stages "decoder:12-24,head" --port 8001 \
+eujeno serve --stages "decoder:12-24,head" --port 8001 \
   --advertise http://192.168.1.11:8001 --peers http://192.168.1.10:8001
 
 # Inference: point at ANY node; it discovers the rest on its own
-axyn --json infer --peer http://192.168.1.10:8001 --prompt "The capital of Italy is"
+eujeno --json infer --peer http://192.168.1.10:8001 --prompt "The capital of Italy is"
 ```
 
 Until coverage is complete (embed + all decoders + head), `infer` responds `NOT_OPERATIONAL`. Add nodes with different ranges and the network assembles itself progressively.
@@ -426,11 +426,11 @@ Until coverage is complete (embed + all decoders + head), `infer` responds `NOT_
 
 - [ ] **Step 3: update `docs/ROADMAP.md`** — under "Discovery & Routing" mark the P2P discovery via gossip as done (link to this plan and to [ADR-0002](../decisions/ADR-0002-nat-connectivity.md)); update the "Last updated" line. Failover and libp2p remain to be done.
 
-- [ ] **Step 4: full suite** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q -p no:warnings` → all PASS.
+- [ ] **Step 4: full suite** — `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest -q -p no:warnings` → all PASS.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add docs/examples/p2p.md README.md docs/ROADMAP.md && git commit -m "docs: pure P2P quickstart; ROADMAP gossip discovery"
+cd /Users/alberto/Projects/AI/eujeno && git add docs/examples/p2p.md README.md docs/ROADMAP.md && git commit -m "docs: pure P2P quickstart; ROADMAP gossip discovery"
 ```
 
 ---

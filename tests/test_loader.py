@@ -1,5 +1,5 @@
 import pytest
-from axyn.model.loader import model_dims
+from eujeno.model.loader import model_dims
 
 @pytest.mark.slow
 def test_loads_with_expected_dims(full_model):

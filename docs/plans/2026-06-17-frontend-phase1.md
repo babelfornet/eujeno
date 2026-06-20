@@ -1,12 +1,12 @@
-# Frontend Phase 1 — `axyn ui` + real dashboard (network status + chat) — Implementation Plan
+# Frontend Phase 1 — `eujeno ui` + real dashboard (network status + chat) — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`).
 
-**Goal:** Every node launches `axyn ui`: a local control server that serves a real frontend (rebuilt from the mock) used to **view the network status** (#2) and **run inference via chat** (#3), talking only to the local server (which acts as a proxy to the coordinator, no CORS).
+**Goal:** Every node launches `eujeno ui`: a local control server that serves a real frontend (rebuilt from the mock) used to **view the network status** (#2) and **run inference via chat** (#3), talking only to the local server (which acts as a proxy to the coordinator, no CORS).
 
-**Architecture:** `axyn ui --coordinator <url> --port 8500` starts a FastAPI that (a) serves `axyn/ui/static/index.html`, (b) exposes `/api/config`, `/api/registry` (proxy GET to coordinator `/registry`), `/api/chat` (proxy POST to coordinator `/v1/chat/completions`). The frontend (React via CDN, single file, faithful to the mock) polls `/api/registry`, computes coverage client-side, and chats via `/api/chat`. Create/join-network (#1) and MCP (#4) are later phases on the same server.
+**Architecture:** `eujeno ui --coordinator <url> --port 8500` starts a FastAPI that (a) serves `eujeno/ui/static/index.html`, (b) exposes `/api/config`, `/api/registry` (proxy GET to coordinator `/registry`), `/api/chat` (proxy POST to coordinator `/v1/chat/completions`). The frontend (React via CDN, single file, faithful to the mock) polls `/api/registry`, computes coverage client-side, and chats via `/api/chat`. Create/join-network (#1) and MCP (#4) are later phases on the same server.
 
-**Tech Stack:** Python · FastAPI + httpx (proxy) · React 18 + Babel standalone via CDN (single-file frontend, no build) · IBM Plex (Google Fonts). Visual reference: `frontend/_mock/Axyn Dashboard.dc.html`.
+**Tech Stack:** Python · FastAPI + httpx (proxy) · React 18 + Babel standalone via CDN (single-file frontend, no build) · IBM Plex (Google Fonts). Visual reference: `frontend/_mock/Eujeno Dashboard.dc.html`.
 
 **Out of scope (phases 2/3):** starting coordinator/serve processes from the UI; MCP config + execution; streaming.
 
@@ -14,10 +14,10 @@
 
 ## File Structure
 ```
-axyn/ui/__init__.py          # NEW (empty)
-axyn/ui/server.py            # NEW: create_ui_app(coordinator_url) + /api/* endpoints
-axyn/ui/static/index.html    # NEW: real frontend (Network + Chat)
-axyn/cli.py                  # MOD: `ui` command
+eujeno/ui/__init__.py          # NEW (empty)
+eujeno/ui/server.py            # NEW: create_ui_app(coordinator_url) + /api/* endpoints
+eujeno/ui/static/index.html    # NEW: real frontend (Network + Chat)
+eujeno/cli.py                  # MOD: `ui` command
 tests/test_ui_server.py         # NEW: proxy + serve index (slow: stub coordinator in thread)
 docs/examples/frontend.md       # NEW: how to launch the UI
 .gitignore                      # MOD: ignore frontend/_mock/
@@ -25,9 +25,9 @@ docs/examples/frontend.md       # NEW: how to launch the UI
 
 ---
 
-## Task 1: `axyn/ui/server.py` (control server + proxy)
+## Task 1: `eujeno/ui/server.py` (control server + proxy)
 
-**Files:** create `axyn/ui/__init__.py` (empty), `axyn/ui/server.py`; create `tests/test_ui_server.py`. (index.html is created in Task 2; for now the serve test skips it or creates a minimal file — see Step 1.)
+**Files:** create `eujeno/ui/__init__.py` (empty), `eujeno/ui/server.py`; create `tests/test_ui_server.py`. (index.html is created in Task 2; for now the serve test skips it or creates a minimal file — see Step 1.)
 
 - [ ] **Step 1: test `tests/test_ui_server.py`**
 ```python
@@ -35,7 +35,7 @@ import socket, threading, time
 import pytest, uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from axyn.ui.server import create_ui_app
+from eujeno.ui.server import create_ui_app
 
 
 def _free_port():
@@ -78,7 +78,7 @@ def test_serves_index_html():
     app = create_ui_app("http://example:9000")
     r = TestClient(app).get("/")
     assert r.status_code == 200
-    assert "Axyn" in r.text
+    assert "Eujeno" in r.text
 
 
 @pytest.mark.slow
@@ -96,9 +96,9 @@ def test_proxies_registry_and_chat():
         srv.should_exit = True
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_ui_server.py -v` → ImportError.
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_ui_server.py -v` → ImportError.
 
-- [ ] **Step 3: create `axyn/ui/__init__.py`** (empty) and `axyn/ui/server.py`:
+- [ ] **Step 3: create `eujeno/ui/__init__.py`** (empty) and `eujeno/ui/server.py`:
 ```python
 import os
 
@@ -119,7 +119,7 @@ def create_ui_app(coordinator_url: str) -> FastAPI:
         if os.path.exists(path):
             with open(path, encoding="utf-8") as f:
                 return f.read()
-        return "<!doctype html><title>Axyn</title><h1>Axyn UI</h1>"
+        return "<!doctype html><title>Eujeno</title><h1>Eujeno UI</h1>"
 
     @app.get("/", response_class=HTMLResponse)
     async def index():
@@ -152,22 +152,22 @@ def create_ui_app(coordinator_url: str) -> FastAPI:
     return app
 ```
 
-- [ ] **Step 4: run PASS** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_ui_server.py -v` → 2 fast pass; `... -m slow -v` → proxy test pass. (`test_serves_index_html` passes with the minimal fallback until the real index.html exists.)
+- [ ] **Step 4: run PASS** — `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_ui_server.py -v` → 2 fast pass; `... -m slow -v` → proxy test pass. (`test_serves_index_html` passes with the minimal fallback until the real index.html exists.)
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/__init__.py axyn/ui/server.py tests/test_ui_server.py && git commit -m "feat(ui): local control server with proxy /api/registry and /api/chat"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/ui/__init__.py eujeno/ui/server.py tests/test_ui_server.py && git commit -m "feat(ui): local control server with proxy /api/registry and /api/chat"
 ```
 
 ---
 
-## Task 2: real frontend `axyn/ui/static/index.html`
+## Task 2: real frontend `eujeno/ui/static/index.html`
 
-**Files:** create `axyn/ui/static/index.html`.
+**Files:** create `eujeno/ui/static/index.html`.
 
-> Rebuild the design of the mock `frontend/_mock/Axyn Dashboard.dc.html` as a real **single-file** app (React 18 + Babel standalone via CDN, no build). No Claude Design runtime. The frontend talks ONLY to the local server (`/api/*`, same origin).
+> Rebuild the design of the mock `frontend/_mock/Eujeno Dashboard.dc.html` as a real **single-file** app (React 18 + Babel standalone via CDN, no build). No Claude Design runtime. The frontend talks ONLY to the local server (`/api/*`, same origin).
 
-- [ ] **Step 1: implement `axyn/ui/static/index.html`** with these precise requirements:
+- [ ] **Step 1: implement `eujeno/ui/static/index.html`** with these precise requirements:
 
 **Tech:** `<script src="https://unpkg.com/react@18/umd/react.production.min.js">`, `react-dom@18`, `@babel/standalone`; a single `<script type="text/babel">` with the app. IBM Plex Sans/Mono fonts from Google Fonts. Inline styles (like the mock).
 
@@ -181,29 +181,29 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/__init__.py axyn/ui/server
 
 **Layout (faithful to the mock):** dark theme `#070a10`, card `#0c1421`/border `#1b2a3f`, teal accent `#2dd4bf`, amber `#f3c46b`. Header with logo (reuse the mock's SVG), **Network**/**Chat** tabs, coordinator URL, and a status badge **OPERATIONAL** (teal) / **NOT OPERATIONAL** (amber).
 
-- **Network view:** (1) "Model assembly" strip: `EMBED → [bar with segments colored per node, with a 0…num_layers ruler, uncovered gaps in red] → HEAD`, and `coveredLayers/num_layers · pct%`. (2) if incomplete, amber alert "MISSING FROM THE NETWORK" with the missing pieces + a copyable command `axyn serve --coordinator <ws-url>/node --stages "<missing piece>"`. (3) "The network": `N nodes · coordinator <url>`, COVERAGE %, total MEMORY, and a **2D SVG graph** (coordinator at the center, nodes around it connected, color per node, status dot) — do NOT use three.js, SVG is enough. (4) "Node details": one card per node (label/conn, status, stage chips `embed`/`decoder X-Y`/`head`, memory).
+- **Network view:** (1) "Model assembly" strip: `EMBED → [bar with segments colored per node, with a 0…num_layers ruler, uncovered gaps in red] → HEAD`, and `coveredLayers/num_layers · pct%`. (2) if incomplete, amber alert "MISSING FROM THE NETWORK" with the missing pieces + a copyable command `eujeno serve --coordinator <ws-url>/node --stages "<missing piece>"`. (3) "The network": `N nodes · coordinator <url>`, COVERAGE %, total MEMORY, and a **2D SVG graph** (coordinator at the center, nodes around it connected, color per node, status dot) — do NOT use three.js, SVG is enough. (4) "Node details": one card per node (label/conn, status, stage chips `embed`/`decoder X-Y`/`head`, memory).
 
-- **Chat view:** if `!operational` → "🔒 The model is not assembled" screen with the missing pieces + command. If operational → "CONNECT A CLIENT" toolbar with copy buttons (CLI `axyn infer --coordinator <url> --prompt …`, cURL to `<url>/v1/chat/completions`, OpenAI SDK snippet); message area (user/assistant bubbles, `failovers: N` badge if present, "typing" indicator); textarea input (Enter sends, Shift+Enter newline). Sending chat → `POST /api/chat` with `{"messages":[...history...],"max_tokens":256,"temperature":0.7}`; show `choices[0].message.content`. On `503`/error show the message.
+- **Chat view:** if `!operational` → "🔒 The model is not assembled" screen with the missing pieces + command. If operational → "CONNECT A CLIENT" toolbar with copy buttons (CLI `eujeno infer --coordinator <url> --prompt …`, cURL to `<url>/v1/chat/completions`, OpenAI SDK snippet); message area (user/assistant bubbles, `failovers: N` badge if present, "typing" indicator); textarea input (Enter sends, Shift+Enter newline). Sending chat → `POST /api/chat` with `{"messages":[...history...],"max_tokens":256,"temperature":0.7}`; show `choices[0].message.content`. On `503`/error show the message.
 
 **Suggestions** in an empty chat (3 clickable example prompts).
 
-- [ ] **Step 2: verify the server serves it** — `cd /Users/alberto/Projects/AI/axyn && .venv/bin/python -m pytest tests/test_ui_server.py::test_serves_index_html -v` → PASS (now it serves the real index; it must contain "Axyn" and "Model assembly"). Update the assert if needed: the test only looks for "Axyn".
+- [ ] **Step 2: verify the server serves it** — `cd /Users/alberto/Projects/AI/eujeno && .venv/bin/python -m pytest tests/test_ui_server.py::test_serves_index_html -v` → PASS (now it serves the real index; it must contain "Eujeno" and "Model assembly"). Update the assert if needed: the test only looks for "Eujeno".
 
 - [ ] **Step 3: manual rendering smoke test** — starting with a stub and opening the browser is NOT automatable here; as a minimal check verify the HTML is well-formed:
-`cd /Users/alberto/Projects/AI/axyn && .venv/bin/python -c "import re,sys; h=open('axyn/ui/static/index.html').read(); assert 'react' in h.lower() and 'Model assembly' in h and '/api/registry' in h and '/api/chat' in h; print('index ok', len(h), 'bytes')"`
+`cd /Users/alberto/Projects/AI/eujeno && .venv/bin/python -c "import re,sys; h=open('eujeno/ui/static/index.html').read(); assert 'react' in h.lower() and 'Model assembly' in h and '/api/registry' in h and '/api/chat' in h; print('index ok', len(h), 'bytes')"`
 
 - [ ] **Step 4: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/ui/static/index.html && git commit -m "feat(ui): real frontend (Network + Chat views) faithful to the mock"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/ui/static/index.html && git commit -m "feat(ui): real frontend (Network + Chat views) faithful to the mock"
 ```
 
 ---
 
-## Task 3: `axyn ui` CLI command + docs
+## Task 3: `eujeno ui` CLI command + docs
 
-**Files:** modify `axyn/cli.py`; create `docs/examples/frontend.md`; modify `.gitignore`, `README.md`.
+**Files:** modify `eujeno/cli.py`; create `docs/examples/frontend.md`; modify `.gitignore`, `README.md`.
 
-- [ ] **Step 1: add the `ui` command in `axyn/cli.py`** (after `coordinator`):
+- [ ] **Step 1: add the `ui` command in `eujeno/cli.py`** (after `coordinator`):
 ```python
 @app.command()
 def ui(
@@ -213,15 +213,15 @@ def ui(
 ):
     """Start the local control frontend (network dashboard + chat)."""
     import uvicorn
-    from axyn.ui.server import create_ui_app
-    typer.echo(f"axyn ui: http://{host}:{port}  (coordinator={coordinator})", err=True)
+    from eujeno.ui.server import create_ui_app
+    typer.echo(f"eujeno ui: http://{host}:{port}  (coordinator={coordinator})", err=True)
     uvicorn.run(create_ui_app(coordinator), host=host, port=port, log_level="info")
 ```
 
 - [ ] **Step 2: include the static files in the package** — in `pyproject.toml`, under `[tool.setuptools]` add (or extend) to include the package data:
 ```toml
 [tool.setuptools.package-data]
-"axyn.ui" = ["static/*.html"]
+"eujeno.ui" = ["static/*.html"]
 ```
 (verify that the existing `[tool.setuptools.packages.find]` section stays valid.)
 
@@ -229,12 +229,12 @@ def ui(
 
 - [ ] **Step 4: `docs/examples/frontend.md`**
 ```markdown
-# Axyn frontend (`axyn ui`)
+# Eujeno frontend (`eujeno ui`)
 
 Every node can launch its own local dashboard:
 
 ```bash
-axyn ui --coordinator http://COORDINATOR_IP:9000 --port 8500
+eujeno ui --coordinator http://COORDINATOR_IP:9000 --port 8500
 # open http://127.0.0.1:8500
 ```
 
@@ -242,28 +242,28 @@ What it offers (Phase 1):
 - **Network status**: connected nodes, model assembly across the layers, coverage, memory, and whether the model is operational.
 - **Chat**: query the distributed model (active only when the network is complete); it also shows how to connect other clients (CLI/cURL/OpenAI).
 
-The browser only talks to the local `axyn ui` server, which acts as a proxy to the coordinator (no CORS).
+The browser only talks to the local `eujeno ui` server, which acts as a proxy to the coordinator (no CORS).
 
 Coming soon: create/join a network from the frontend (Phase 2) and configure MCP tools (Phase 3).
 ```
 
-- [ ] **Step 5:** add a line to `README.md` (Quickstart section): "**Frontend:** `axyn ui --coordinator http://IP:9000` → network dashboard + chat (see [docs/examples/frontend.md](docs/examples/frontend.md))."
+- [ ] **Step 5:** add a line to `README.md` (Quickstart section): "**Frontend:** `eujeno ui --coordinator http://IP:9000` → network dashboard + chat (see [docs/examples/frontend.md](docs/examples/frontend.md))."
 
 - [ ] **Step 6: reinstall + verify the command**
-`cd /Users/alberto/Projects/AI/axyn && .venv/bin/pip install -e . >/dev/null 2>&1 && .venv/bin/axyn --help | grep -q "ui" && echo "ui command ok"`
+`cd /Users/alberto/Projects/AI/eujeno && .venv/bin/pip install -e . >/dev/null 2>&1 && .venv/bin/eujeno --help | grep -q "ui" && echo "ui command ok"`
 
 - [ ] **Step 7: full suite** — `... pytest -q -p no:warnings` → green.
 
 - [ ] **Step 8: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py pyproject.toml .gitignore docs/examples/frontend.md README.md && git commit -m "feat(cli): 'axyn ui' command (local frontend) + docs"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/cli.py pyproject.toml .gitignore docs/examples/frontend.md README.md && git commit -m "feat(cli): 'eujeno ui' command (local frontend) + docs"
 ```
 
 ---
 
 ## Self-Review
 
-**Coverage:** #2 network status (Network view: assembly + coverage + nodes + graph, Task 2) ✓; #3 chat (Chat view via /api/chat, Task 2) ✓; local control server that serves as the base for #1/#4 (Task 1) ✓; `axyn ui` command (Task 3) ✓. #1 create/join and #4 MCP are explicitly phases 2/3.
+**Coverage:** #2 network status (Network view: assembly + coverage + nodes + graph, Task 2) ✓; #3 chat (Chat view via /api/chat, Task 2) ✓; local control server that serves as the base for #1/#4 (Task 1) ✓; `eujeno ui` command (Task 3) ✓. #1 create/join and #4 MCP are explicitly phases 2/3.
 
 **Placeholder scan:** the server and CLI have complete code; the frontend (Task 2) is specified in detail with reference to the mock (large visual artifact, not TDD-able line by line) + automatic structural checks (Steps 2/3).
 

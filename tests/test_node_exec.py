@@ -1,9 +1,9 @@
 import pytest
 import torch
-from axyn.net.node_exec import NodeState, handle_request
-from axyn.net.wire import encode_tensors, decode_tensors
-from axyn.net.topology import StageSpec
-from axyn.model.generate import reference_generate
+from eujeno.net.node_exec import NodeState, handle_request
+from eujeno.net.wire import encode_tensors, decode_tensors
+from eujeno.net.topology import StageSpec
+from eujeno.model.generate import reference_generate
 
 
 @pytest.mark.slow

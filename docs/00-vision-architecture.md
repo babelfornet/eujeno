@@ -4,13 +4,13 @@
 
 ## 1. Vision
 
-Axyn is a **fully decentralized, peer-to-peer LLM inference network**. A large model is split into **layer blocks**; each node in the network hosts and runs one or more blocks. When a user asks a question, the **hidden-state vectors (hidden states)** are routed through the nodes responsible for the blocks, in sequence, until the answer is produced. No central server: the network *is* the model.
+Eujeno is a **fully decentralized, peer-to-peer LLM inference network**. A large model is split into **layer blocks**; each node in the network hosts and runs one or more blocks. When a user asks a question, the **hidden-state vectors (hidden states)** are routed through the nodes responsible for the blocks, in sequence, until the answer is produced. No central server: the network *is* the model.
 
 ### The reframe that defines everything: high latency
 
 The defining trait is not speed, it is **tolerance to extremely high latencies** — an answer may arrive after **hours, days or weeks**. This changes the mental model:
 
-> **Axyn ≈ "BOINC / SETI@home for the layers of an LLM"**, not "real-time Petals".
+> **Eujeno ≈ "BOINC / SETI@home for the layers of an LLM"**, not "real-time Petals".
 
 Inference is **not** a live socket session: it is a **durable job** that advances hop-by-hop via **store-and-forward**. Each hop persists the intermediate state and forwards it when the next node is reachable. Giving up real-time is a **liberation**:
 
@@ -146,7 +146,7 @@ As nodes are added, the model **composes progressively** across the network. As 
 
 ## 9. The 5 implementation forks (decided)
 
-Compared by a **team of agents** (`axyn-impl-forks` workflow, 9 agents) and crystallized in **[ADR-0001](./decisions/ADR-0001-implementation-forks.md)**. Summary:
+Compared by a **team of agents** (`eujeno-impl-forks` workflow, 9 agents) and crystallized in **[ADR-0001](./decisions/ADR-0001-implementation-forks.md)**. Summary:
 
 | # | Decision | Outcome |
 |---|-----------|-------|

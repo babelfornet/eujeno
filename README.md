@@ -1,36 +1,36 @@
-# Axyn
+# Eujeno
 
 **A fully decentralized, peer-to-peer LLM inference network.** No central server: every node is a symmetric peer that hosts and runs one or more *blocks* of layers of an open-source model (from Hugging Face). User prompts are routed as **durable jobs** across the network of nodes responsible for the various blocks.
 
-> **Guiding idea:** Axyn is not "real-time Petals". It's **"BOINC / SETI@home for the layers of an LLM"** — it tolerates very high latencies (hours, days, weeks) and treats inference as an asynchronous job that advances hop-by-hop in *store-and-forward* fashion. Giving up real-time makes failover and queueing simpler, not harder.
+> **Guiding idea:** Eujeno is not "real-time Petals". It's **"BOINC / SETI@home for the layers of an LLM"** — it tolerates very high latencies (hours, days, weeks) and treats inference as an asynchronous job that advances hop-by-hop in *store-and-forward* fashion. Giving up real-time makes failover and queueing simpler, not harder.
 
 ## Installation / Getting started
 
 After `git clone`, get going right away with the auto-bootstrap launcher (it creates `.venv` and installs on first run):
 
 ```bash
-./bin/axyn --help                 # first run: creates .venv + pip install -e . , then runs
+./bin/eujeno --help                 # first run: creates .venv + pip install -e . , then runs
 ```
 
 Alternatively, manual installation:
 
 ```bash
 python -m venv .venv && . .venv/bin/activate && pip install -e .
-axyn --help
+eujeno --help
 ```
 
 Single-node quickstart (starts a coordinator + one node that covers the whole model, in a single command):
 
 ```bash
-axyn models                                   # which models can I use?
-axyn up --model Qwen/Qwen2.5-0.5B-Instruct    # bring-up; --dtype bfloat16 for large models
+eujeno models                                   # which models can I use?
+eujeno up --model Qwen/Qwen2.5-0.5B-Instruct    # bring-up; --dtype bfloat16 for large models
 ```
 
-> **AI agents:** the CLI is AI-native (`--json` on every command). See **[CLAUDE.md](CLAUDE.md)** for the guide on driving Axyn from an agent.
+> **AI agents:** the CLI is AI-native (`--json` on every command). See **[CLAUDE.md](CLAUDE.md)** for the guide on driving Eujeno from an agent.
 
 ## Status
 
-🚧 **PoC under construction.** Distributed inference across multiple nodes over HTTP already works (orchestrator-driven, Milestone 0): a model is split into layer blocks hosted by `axyn serve` on different nodes, and `axyn infer` runs generation across the network — reproducing the full model exactly. **Next steps:** DHT discovery (node self-organization), durable store-and-forward queue with failover. Token incentives are deferred (designed on paper).
+🚧 **PoC under construction.** Distributed inference across multiple nodes over HTTP already works (orchestrator-driven, Milestone 0): a model is split into layer blocks hosted by `eujeno serve` on different nodes, and `eujeno infer` runs generation across the network — reproducing the full model exactly. **Next steps:** DHT discovery (node self-organization), durable store-and-forward queue with failover. Token incentives are deferred (designed on paper).
 
 **Goal of the first PoC:** distributed inference of a **1–3B** model across **2–3 real nodes**, with DHT discovery, an asynchronous queue, and automatic failover.
 
@@ -40,29 +40,29 @@ Three ways, pick based on your network:
 
 - **[Pure P2P](docs/examples/p2p.md)** (decentralized, recommended) — nodes discover each other via **gossip**, no central server; the entry point targets any node and discovers the topology on its own. For LAN/VPN/public IPs.
   ```bash
-  axyn serve --stages "embed,decoder:0-12" --port 8001 --advertise http://127.0.0.1:8001
-  axyn serve --stages "decoder:12-24,head" --port 8002 --advertise http://127.0.0.1:8002 --peers http://127.0.0.1:8001
-  axyn --json infer --peer http://127.0.0.1:8001 --prompt "The capital of Italy is"
+  eujeno serve --stages "embed,decoder:0-12" --port 8001 --advertise http://127.0.0.1:8001
+  eujeno serve --stages "decoder:12-24,head" --port 8002 --advertise http://127.0.0.1:8002 --peers http://127.0.0.1:8001
+  eujeno --json infer --peer http://127.0.0.1:8001 --prompt "The capital of Italy is"
   ```
 - **[Coordinator](docs/examples/coordinator.md)** (opt-in) — for machines behind NAT on different networks **without a VPN**: nodes connect outbound to a reachable coordinator.
   ```bash
-  axyn coordinator --port 9000                                                  # reachable machine
-  axyn serve --coordinator ws://IP:9000/node --stages "embed,decoder:0-12"      # node A (any network)
-  axyn serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"      # node B (any network)
-  axyn --json infer --coordinator http://IP:9000 --prompt "The capital of Italy is"
+  eujeno coordinator --port 9000                                                  # reachable machine
+  eujeno serve --coordinator ws://IP:9000/node --stages "embed,decoder:0-12"      # node A (any network)
+  eujeno serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head"      # node B (any network)
+  eujeno --json infer --coordinator http://IP:9000 --prompt "The capital of Italy is"
   ```
 - **Static topology** — a JSON file with the IPs, direct transport, no discovery:
   ```bash
-  axyn serve --stages "embed,decoder:0-12" --port 8001
-  axyn serve --stages "decoder:12-24,head" --port 8002
-  axyn --json infer --topology docs/examples/topology.localhost.json --prompt "The capital of Italy is"
+  eujeno serve --stages "embed,decoder:0-12" --port 8001
+  eujeno serve --stages "decoder:12-24,head" --port 8002
+  eujeno --json infer --topology docs/examples/topology.localhost.json --prompt "The capital of Italy is"
   ```
 
 Machines download the model from Hugging Face on first run.
 
 When the model is operational, the coordinator exposes an **OpenAI-compatible API** (`/v1/chat/completions`): you can connect agents and OpenAI clients to it (and Claude Code via LiteLLM). See **[docs/examples/agents.md](docs/examples/agents.md)**.
 
-**Frontend:** `axyn ui --coordinator http://IP:9000` starts a local dashboard (network status + chat) → open `http://127.0.0.1:8500`. See **[docs/examples/frontend.md](docs/examples/frontend.md)**.
+**Frontend:** `eujeno ui --coordinator http://IP:9000` starts a local dashboard (network status + chat) → open `http://127.0.0.1:8500`. See **[docs/examples/frontend.md](docs/examples/frontend.md)**.
 
 ## Documentation
 
@@ -86,4 +86,4 @@ Python · Hugging Face `transformers` + `accelerate` + `safetensors` · `hivemin
 
 ## License
 
-[Apache-2.0](./LICENSE). "Axyn" and the Axyn logo are trademarks of the project owner — see [TRADEMARKS.md](./TRADEMARKS.md) and [NOTICE](./NOTICE).
+[Apache-2.0](./LICENSE). "Eujeno" and the Eujeno logo are trademarks of the project owner — see [TRADEMARKS.md](./TRADEMARKS.md) and [NOTICE](./NOTICE).

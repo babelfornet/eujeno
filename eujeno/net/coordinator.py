@@ -9,11 +9,11 @@ import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import JSONResponse
 
-from axyn.net.framing import pack, unpack
-from axyn.net.wire import encode_tensors, decode_tensors
-from axyn.net.discovery import build_chain
-from axyn.net.sampling import sample_token
-from axyn.net.tools import extract_tool_calls
+from eujeno.net.framing import pack, unpack
+from eujeno.net.wire import encode_tensors, decode_tensors
+from eujeno.net.discovery import build_chain
+from eujeno.net.sampling import sample_token
+from eujeno.net.tools import extract_tool_calls
 
 
 MAX_FAILOVERS = 5
@@ -158,8 +158,8 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
     @app.get("/v1/models")
     async def list_models():
         return {"object": "list",
-                "data": [{"id": "axyn", "object": "model", "owned_by": "axyn"},
-                         {"id": model_id, "object": "model", "owned_by": "axyn"}]}
+                "data": [{"id": "eujeno", "object": "model", "owned_by": "eujeno"},
+                         {"id": model_id, "object": "model", "owned_by": "eujeno"}]}
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: Request):

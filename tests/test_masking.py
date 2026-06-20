@@ -1,5 +1,5 @@
 import torch
-from axyn.model.masking import build_causal_mask
+from eujeno.model.masking import build_causal_mask
 
 
 def test_prefill_mask_is_lower_triangular():

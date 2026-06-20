@@ -9,9 +9,9 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from axyn.ui.manager import NodeManager
-from axyn.ui.mcp import McpRegistry
-from axyn.ui.agent import run_tool_loop
+from eujeno.ui.manager import NodeManager
+from eujeno.ui.mcp import McpRegistry
+from eujeno.ui.agent import run_tool_loop
 
 _STATIC = os.path.join(os.path.dirname(__file__), "static")
 
@@ -32,7 +32,7 @@ def create_ui_app(coordinator_url: str) -> FastAPI:
         if os.path.exists(path):
             with open(path, encoding="utf-8") as f:
                 return f.read()
-        return "<!doctype html><title>Axyn</title><h1>Axyn UI</h1>"
+        return "<!doctype html><title>Eujeno</title><h1>Eujeno UI</h1>"
 
     @app.get("/", response_class=HTMLResponse)
     async def index():
@@ -127,7 +127,7 @@ def create_ui_app(coordinator_url: str) -> FastAPI:
         body = await request.json()
         model = body.get("model", "Qwen/Qwen2.5-0.5B-Instruct")
         port = int(body.get("port", 9000))
-        cmd = [sys.executable, "-m", "axyn", "coordinator", "--model", model, "--port", str(port)]
+        cmd = [sys.executable, "-m", "eujeno", "coordinator", "--model", model, "--port", str(port)]
         manager.start("coordinator", cmd, {"role": "coordinator", "port": port, "model": model,
                                            "url": f"http://127.0.0.1:{port}"})
         state["coordinator_url"] = f"http://127.0.0.1:{port}"
@@ -142,7 +142,7 @@ def create_ui_app(coordinator_url: str) -> FastAPI:
         model = body.get("model", "Qwen/Qwen2.5-0.5B-Instruct")
         if not stages:
             return JSONResponse({"error": "stages are required (e.g. 'embed,decoder:0-12')"}, status_code=400)
-        cmd = [sys.executable, "-m", "axyn", "serve", "--coordinator", ws, "--stages", stages, "--model", model]
+        cmd = [sys.executable, "-m", "eujeno", "serve", "--coordinator", ws, "--stages", stages, "--model", model]
         manager.start("worker", cmd, {"role": "worker", "stages": stages, "coordinator": coord_url, "model": model})
         state["coordinator_url"] = coord_url
         return {"ok": True, "coordinator_url": _coord(), "status": manager.status()}
@@ -166,7 +166,7 @@ def create_ui_app(coordinator_url: str) -> FastAPI:
         if not stages:
             return JSONResponse({"error": "stages are required"}, status_code=400)
         port = advertise.rsplit(":", 1)[-1]
-        cmd = [sys.executable, "-m", "axyn", "serve", "--advertise", advertise,
+        cmd = [sys.executable, "-m", "eujeno", "serve", "--advertise", advertise,
                "--stages", stages, "--model", model, "--host", "0.0.0.0", "--port", str(port)]
         manager.start("worker", cmd, {"role": "worker", "mode": "p2p", "advertise": advertise, "stages": stages})
         state["coordinator_url"] = advertise
@@ -182,7 +182,7 @@ def create_ui_app(coordinator_url: str) -> FastAPI:
         if not stages or not peers:
             return JSONResponse({"error": "stages and peers are required"}, status_code=400)
         port = advertise.rsplit(":", 1)[-1]
-        cmd = [sys.executable, "-m", "axyn", "serve", "--advertise", advertise, "--peers", peers,
+        cmd = [sys.executable, "-m", "eujeno", "serve", "--advertise", advertise, "--peers", peers,
                "--stages", stages, "--model", model, "--host", "0.0.0.0", "--port", str(port)]
         manager.start("worker", cmd, {"role": "worker", "mode": "p2p", "advertise": advertise,
                                       "peers": peers, "stages": stages})

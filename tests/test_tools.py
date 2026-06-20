@@ -1,5 +1,5 @@
 import json
-from axyn.net.tools import extract_tool_calls
+from eujeno.net.tools import extract_tool_calls
 
 
 def test_single_tool_call():

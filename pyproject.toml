@@ -1,5 +1,5 @@
 [project]
-name = "axyn"
+name = "eujeno"
 version = "0.0.1"
 description = "Decentralized peer-to-peer LLM inference network"
 requires-python = ">=3.11"
@@ -24,14 +24,14 @@ dependencies = [
 dev = ["pytest>=8.0"]
 
 [project.scripts]
-axyn = "axyn.cli:app"
+eujeno = "eujeno.cli:app"
 
 [tool.pytest.ini_options]
 markers = ["slow: scarica/esegue il modello (lento)"]
 addopts = "-q"
 
 [tool.setuptools.packages.find]
-include = ["axyn*"]
+include = ["eujeno*"]
 
 [tool.setuptools.package-data]
-"axyn.ui" = ["static/*.html"]
+"eujeno.ui" = ["static/*.html"]

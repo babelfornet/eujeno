@@ -5,8 +5,8 @@ import asyncio
 
 import websockets
 
-from axyn.net.framing import pack, unpack
-from axyn.net.node_exec import handle_request
+from eujeno.net.framing import pack, unpack
+from eujeno.net.node_exec import handle_request
 
 
 async def run_node(coordinator_ws_url: str, state):

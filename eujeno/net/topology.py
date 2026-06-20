@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class StageSpec:
-    """Which stages a node serves (for `axyn serve`)."""
+    """Which stages a node serves (for `eujeno serve`)."""
     embed: bool = False
     head: bool = False
     decoders: list = field(default_factory=list)   # list[tuple[int, int]]
@@ -37,7 +37,7 @@ def parse_stages(spec: str) -> StageSpec:
 
 @dataclass
 class Topology:
-    """Maps stage->URL for distributed inference (for `axyn infer`)."""
+    """Maps stage->URL for distributed inference (for `eujeno infer`)."""
     model: str
     embed: str
     head: str

@@ -6,17 +6,17 @@
 
 **Architecture:** Three pure functions (capacity, gaps, decision) + the wiring in `serve --auto`: at startup the node probes its RAM, queries a seed `/registry`, picks the neediest range that fits, then loads ONLY those layers and serves. Capacity is advertised (additively) in the gossip record. The replica `target` is parametric (≥2 ⇒ redundancy at startup). Implements slices 1-3 of [ADR-0003](../decisions/ADR-0003-capacity-aware-allocation.md). Runtime failover-reload + reward ledger = next plan.
 
-**Tech Stack:** Python · Typer · the existing `axyn/net/{discovery,server}.py`, `axyn/cli.py`, `model_config_dims`, `parse_stages`, `parse_dtype`. Optional dependency `psutil` (stdlib fallback).
+**Tech Stack:** Python · Typer · the existing `eujeno/net/{discovery,server}.py`, `eujeno/cli.py`, `model_config_dims`, `parse_stages`, `parse_dtype`. Optional dependency `psutil` (stdlib fallback).
 
 ---
 
 ## File Structure
 ```
-axyn/net/capacity.py     # NEW: fit_layers (extracted from cli.fit) + probe_capacity
-axyn/net/discovery.py    # MOD: coverage_gaps()
-axyn/net/allocator.py    # NEW: choose_stages() (pure decision)
-axyn/net/server.py       # MOD: capacity in the own_stages record
-axyn/cli.py              # MOD: fit uses fit_layers; serve --auto/--ram/--reserve
+eujeno/net/capacity.py     # NEW: fit_layers (extracted from cli.fit) + probe_capacity
+eujeno/net/discovery.py    # MOD: coverage_gaps()
+eujeno/net/allocator.py    # NEW: choose_stages() (pure decision)
+eujeno/net/server.py       # MOD: capacity in the own_stages record
+eujeno/cli.py              # MOD: fit uses fit_layers; serve --auto/--ram/--reserve
 tests/test_capacity.py      # NEW
 tests/test_coverage_gaps.py # NEW
 tests/test_allocator.py     # NEW
@@ -27,11 +27,11 @@ tests/test_serve_auto.py    # NEW (unit test of the selection path, without star
 
 ## Task 1: `net/capacity.py` — fit_layers (estratto) + probe_capacity
 
-**Files:** Create `axyn/net/capacity.py`, `tests/test_capacity.py`; Modify `axyn/cli.py` (fit uses fit_layers).
+**Files:** Create `eujeno/net/capacity.py`, `tests/test_capacity.py`; Modify `eujeno/cli.py` (fit uses fit_layers).
 
 - [ ] **Step 1: test `tests/test_capacity.py`**
 ```python
-from axyn.net.capacity import fit_layers, probe_capacity
+from eujeno.net.capacity import fit_layers, probe_capacity
 
 DIMS = {"num_layers": 28, "hidden_size": 3584, "num_attention_heads": 28,
         "num_key_value_heads": 4, "intermediate_size": 18944, "vocab_size": 152064}
@@ -58,7 +58,7 @@ def test_probe_capacity_shape():
 
 - [ ] **Step 2: run FAIL** — `.venv/bin/python -m pytest tests/test_capacity.py -v` → ImportError.
 
-- [ ] **Step 3: create `axyn/net/capacity.py`**
+- [ ] **Step 3: create `eujeno/net/capacity.py`**
 ```python
 """Estimate a node's capacity: how many layers it can hold given the RAM, plus a resource probe."""
 import os
@@ -110,7 +110,7 @@ def probe_capacity() -> dict:
 - [ ] **Step 4: refactor `cli.py::fit`** to use `fit_layers` (do NOT change the emitted `data` fields). Replace the computation block inside `fit` (from `bytes_per = torch.finfo(...)` up to the `data` dict) with:
 ```python
     import torch
-    from axyn.net.capacity import fit_layers
+    from eujeno.net.capacity import fit_layers
     bytes_per = torch.finfo(_dt).bits // 8
     d = model_config_dims(model_id)
     nl = d["num_layers"]
@@ -138,18 +138,18 @@ def probe_capacity() -> dict:
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/capacity.py axyn/cli.py tests/test_capacity.py && git commit -m "feat(net): capacity.fit_layers + probe_capacity (fit CLI refactored)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/capacity.py eujeno/cli.py tests/test_capacity.py && git commit -m "feat(net): capacity.fit_layers + probe_capacity (fit CLI refactored)"
 ```
 
 ---
 
 ## Task 2: `discovery.coverage_gaps()`
 
-**Files:** Modify `axyn/net/discovery.py`; Create `tests/test_coverage_gaps.py`.
+**Files:** Modify `eujeno/net/discovery.py`; Create `tests/test_coverage_gaps.py`.
 
 - [ ] **Step 1: test `tests/test_coverage_gaps.py`**
 ```python
-from axyn.net.discovery import coverage_gaps
+from eujeno.net.discovery import coverage_gaps
 
 A = {"embed": True, "head": False, "decoders": ["0-12"]}
 B = {"embed": False, "head": True, "decoders": ["12-24"]}
@@ -175,7 +175,7 @@ def test_under_replicated_with_target_2():
 
 - [ ] **Step 2: run FAIL** — `.venv/bin/python -m pytest tests/test_coverage_gaps.py -v` → ImportError.
 
-- [ ] **Step 3: append a `axyn/net/discovery.py`**
+- [ ] **Step 3: append a `eujeno/net/discovery.py`**
 ```python
 def coverage_gaps(stages_by_url: dict, num_layers: int, target: int = 1) -> dict:
     """Decoder ranges with replicas < target (uncovered or under-replicated), plus the
@@ -209,18 +209,18 @@ def coverage_gaps(stages_by_url: dict, num_layers: int, target: int = 1) -> dict
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_coverage_gaps.py && git commit -m "feat(net): coverage_gaps (uncovered/under-replicated ranges)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/discovery.py tests/test_coverage_gaps.py && git commit -m "feat(net): coverage_gaps (uncovered/under-replicated ranges)"
 ```
 
 ---
 
 ## Task 3: `net/allocator.py` — choose_stages() (pure decision)
 
-**Files:** Create `axyn/net/allocator.py`, `tests/test_allocator.py`.
+**Files:** Create `eujeno/net/allocator.py`, `tests/test_allocator.py`.
 
 - [ ] **Step 1: test `tests/test_allocator.py`**
 ```python
-from axyn.net.allocator import choose_stages
+from eujeno.net.allocator import choose_stages
 
 
 def gaps(decoder_gaps, e=0, h=0, target=1):
@@ -250,7 +250,7 @@ def test_no_gaps_returns_empty():
 
 - [ ] **Step 2: run FAIL** — `.venv/bin/python -m pytest tests/test_allocator.py -v` → ImportError.
 
-- [ ] **Step 3: create `axyn/net/allocator.py`**
+- [ ] **Step 3: create `eujeno/net/allocator.py`**
 ```python
 """Self-assignment decision: given the gap picture (coverage_gaps) and the
 node's capacity, choose the stage spec to claim. Pure function."""
@@ -279,18 +279,18 @@ def choose_stages(gaps: dict, max_decoder_layers: int, num_layers: int,
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/allocator.py tests/test_allocator.py && git commit -m "feat(net): allocator.choose_stages (self-assignment decision)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/allocator.py tests/test_allocator.py && git commit -m "feat(net): allocator.choose_stages (self-assignment decision)"
 ```
 
 ---
 
 ## Task 4: `serve --auto` + capacity in the record
 
-**Files:** Modify `axyn/net/server.py` (capacity in the record), `axyn/cli.py` (serve --auto). Create `tests/test_serve_auto.py`.
+**Files:** Modify `eujeno/net/server.py` (capacity in the record), `eujeno/cli.py` (serve --auto). Create `tests/test_serve_auto.py`.
 
 - [ ] **Step 1: test `tests/test_serve_auto.py`** — tests the pure planning function `plan_auto_stages` (no server started).
 ```python
-from axyn.cli import plan_auto_stages
+from eujeno.cli import plan_auto_stages
 
 DIMS = {"num_layers": 24, "hidden_size": 896, "num_attention_heads": 14,
         "num_key_value_heads": 2, "intermediate_size": 4864, "vocab_size": 151936}
@@ -313,14 +313,14 @@ def test_plan_second_node_fills_remaining_gap():
 
 - [ ] **Step 2: run FAIL** — `.venv/bin/python -m pytest tests/test_serve_auto.py -v` → ImportError (`plan_auto_stages`).
 
-- [ ] **Step 3a: in `axyn/cli.py` add the pure function `plan_auto_stages`** (next to the other helpers, NOT inside a command):
+- [ ] **Step 3a: in `eujeno/cli.py` add the pure function `plan_auto_stages`** (next to the other helpers, NOT inside a command):
 ```python
 def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
                      stages_by_url: dict, target: int) -> str:
     """Decide the stage spec to claim by combining capacity (fit) and gaps."""
-    from axyn.net.capacity import fit_layers
-    from axyn.net.discovery import coverage_gaps
-    from axyn.net.allocator import choose_stages
+    from eujeno.net.capacity import fit_layers
+    from eujeno.net.discovery import coverage_gaps
+    from eujeno.net.allocator import choose_stages
     nl = dims["num_layers"]
     fit = fit_layers(dims, bytes_per, ram_gb, reserve)
     gaps = coverage_gaps(stages_by_url, nl, target=target)
@@ -329,7 +329,7 @@ def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
     return choose_stages(gaps, fit["max_decoder_layers"], nl, take_embed_head=take_eh)
 ```
 
-- [ ] **Step 3b: in `axyn/cli.py` make `--stages` optional and add `--auto/--ram/--reserve` to `serve`.** Change the `serve` signature:
+- [ ] **Step 3b: in `eujeno/cli.py` make `--stages` optional and add `--auto/--ram/--reserve` to `serve`.** Change the `serve` signature:
   - `stages: str = typer.Option(None, "--stages", ...)` (was `...`, required).
   - add:
     ```python
@@ -342,8 +342,8 @@ def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
 ```python
     if auto:
         import torch, httpx
-        from axyn.net.capacity import probe_capacity, fit_layers
-        from axyn.config import parse_dtype as _pdt
+        from eujeno.net.capacity import probe_capacity, fit_layers
+        from eujeno.config import parse_dtype as _pdt
         _bp = torch.finfo(_pdt(dtype)).bits // 8
         dims = model_config_dims(model_id)
         ram_gb = ram if ram is not None else (probe_capacity().get("ram_free_gb") or 4.0)
@@ -356,26 +356,26 @@ def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
         stages = plan_auto_stages(dims, _bp, ram_gb, reserve, learned, target)
         if not stages:
             _fail("serve", "NO_GAP", "no range to cover (full coverage or insufficient RAM)", exit_code=2)
-        typer.echo(f"axyn serve --auto: claiming stages={stages} (ram={ram_gb}GB, target={target})", err=True)
+        typer.echo(f"eujeno serve --auto: claiming stages={stages} (ram={ram_gb}GB, target={target})", err=True)
     elif stages is None:
         _fail("serve", "USAGE_ERROR", "specify --stages or --auto", exit_code=2)
 ```
   (The rest of `serve` continues unchanged: `parse_stages(stages)`, `load_partial_model`, `create_app`. The `--coordinator` path remains valid with `--auto` too.)
 
-- [ ] **Step 3c: in `axyn/net/server.py` advertise the capacity in the record.** After the `own_stages = {...}` line (line ~27) add:
+- [ ] **Step 3c: in `eujeno/net/server.py` advertise the capacity in the record.** After the `own_stages = {...}` line (line ~27) add:
 ```python
-    from axyn.net.capacity import probe_capacity
+    from eujeno.net.capacity import probe_capacity
     own_stages["capacity"] = probe_capacity()
 ```
   (It's additive: `build_chain` and `coverage_gaps` only read `embed`/`head`/`decoders`; `capacity` travels in the gossip and will be used by the allocator.)
 
-- [ ] **Step 4: run PASS** — `.venv/bin/python -m pytest tests/test_serve_auto.py -v` → 2 passed. Verify CLI: `.venv/bin/axyn serve --help | grep -q auto && echo ok`.
+- [ ] **Step 4: run PASS** — `.venv/bin/python -m pytest tests/test_serve_auto.py -v` → 2 passed. Verify CLI: `.venv/bin/eujeno serve --help | grep -q auto && echo ok`.
 
 - [ ] **Step 5: full suite** — `.venv/bin/python -m pytest -q -p no:warnings` → green (no regressions; in particular `serve` with explicit `--stages` keeps working).
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py axyn/net/server.py tests/test_serve_auto.py && git commit -m "feat(cli): serve --auto (layer self-assignment from capacity + gaps) + capacity in record"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/cli.py eujeno/net/server.py tests/test_serve_auto.py && git commit -m "feat(cli): serve --auto (layer self-assignment from capacity + gaps) + capacity in record"
 ```
 
 ---
@@ -385,7 +385,7 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py axyn/net/server.py tes
 **Files:** Modify `CLAUDE.md`, `docs/examples/p2p.md`. (Done by the controller.)
 
 - [ ] **Step 1:** in `CLAUDE.md` add a row to the commands table for `serve --auto` and a note: "in P2P, start the nodes with `--auto --peers <seed>` and they split the layers among themselves (use `--target 2` for redundancy)".
-- [ ] **Step 2:** in `docs/examples/p2p.md` add an "Auto-assembly" section with the example `axyn serve --auto --peers ...`.
+- [ ] **Step 2:** in `docs/examples/p2p.md` add an "Auto-assembly" section with the example `eujeno serve --auto --peers ...`.
 - [ ] **Step 3:** commit `docs: serve --auto (P2P auto-assembly)`.
 
 ---

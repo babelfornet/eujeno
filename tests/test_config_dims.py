@@ -1,5 +1,5 @@
 import pytest
-from axyn.model.loader import model_config_dims
+from eujeno.model.loader import model_config_dims
 
 
 @pytest.mark.slow

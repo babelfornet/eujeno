@@ -1,4 +1,4 @@
-from axyn.net.capacity import fit_layers, probe_capacity
+from eujeno.net.capacity import fit_layers, probe_capacity
 
 DIMS = {"num_layers": 28, "hidden_size": 3584, "num_attention_heads": 28,
         "num_key_value_heads": 4, "intermediate_size": 18944, "vocab_size": 152064}

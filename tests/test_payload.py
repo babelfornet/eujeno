@@ -1,5 +1,5 @@
 import torch
-from axyn.model.payload import HopPayload
+from eujeno.model.payload import HopPayload
 
 
 def test_payload_roundtrip():

@@ -1,6 +1,6 @@
 import torch
 import pytest
-from axyn.config import parse_dtype
+from eujeno.config import parse_dtype
 
 
 def test_parse_known():

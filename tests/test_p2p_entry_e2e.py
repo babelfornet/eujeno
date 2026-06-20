@@ -1,7 +1,7 @@
 import socket, threading, time
 import pytest, httpx, uvicorn
-from axyn.net.topology import StageSpec
-from axyn.net.server import create_app
+from eujeno.net.topology import StageSpec
+from eujeno.net.server import create_app
 
 
 def _free_port():
@@ -35,7 +35,7 @@ def test_query_a_peer_directly(full_model):
                     break
                 time.sleep(0.1)
             r = c.post(f"{u1}/v1/chat/completions", json={
-                "model": "axyn", "messages": [{"role": "user", "content": "Di' ciao."}], "max_tokens": 8})
+                "model": "eujeno", "messages": [{"role": "user", "content": "Di' ciao."}], "max_tokens": 8})
             body = r.json()
         assert body["object"] == "chat.completion"
         assert isinstance(body["choices"][0]["message"]["content"], str)

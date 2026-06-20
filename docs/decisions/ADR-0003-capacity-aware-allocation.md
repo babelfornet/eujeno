@@ -10,7 +10,7 @@
 
 Today, splitting a model across nodes is **manual**: the operator passes `--stages "embed,decoder:0-12"` by hand. Three capabilities are missing:
 
-1. **Knowing what a node can hold.** A 4 GB node cannot host the same layers as a 32 GB one. We need to measure available RAM and translate it into "how many layers". *(The `axyn fit` command already does the calculation by hand — see §4.1.)*
+1. **Knowing what a node can hold.** A 4 GB node cannot host the same layers as a 32 GB one. We need to measure available RAM and translate it into "how many layers". *(The `eujeno fit` command already does the calculation by hand — see §4.1.)*
 2. **Auto-assembly.** Nodes should cover the missing layers `[0,N) + embed + head` on their own, without a human assigning the ranges.
 3. **Reward proportional to resources.** Whoever provides more RAM/layers, more uptime, and serves more tokens should earn more.
 
@@ -44,11 +44,11 @@ flowchart TD
 
 | File | Responsibility |
 |---|---|
-| `axyn/net/capacity.py` *(new)* | `probe_capacity() -> {ram_total_gb, ram_free_gb, cpu_count}` and `fit_layers(dims, dtype, ram_gb, reserve) -> {ram_per_layer, max_decoder_layers, ram_embed_head, fits_whole}`. **Refactor**: the math is the one already written in `cli.py::fit` — it is extracted here and `fit` calls it (DRY). |
-| `axyn/net/discovery.py` *(mod)* | `coverage_gaps(registry, num_layers, target=2) -> [{lo, hi, replicas}]`: uncovered or **under-replicated** decoder ranges, + status of `embed`/`head`. Sorts by urgency (uncovered first, then under-replicated). |
-| `axyn/net/allocator.py` *(new)* | Self-assignment loop on each node (§3.3). |
-| `axyn/net/rewards.py` *(new)* | Points ledger (§3.5) on SQLite (ADR-0001). |
-| `axyn/cli.py` *(mod)* | `serve --auto` (self-assignment instead of fixed `--stages`); `rewards [--node]`. |
+| `eujeno/net/capacity.py` *(new)* | `probe_capacity() -> {ram_total_gb, ram_free_gb, cpu_count}` and `fit_layers(dims, dtype, ram_gb, reserve) -> {ram_per_layer, max_decoder_layers, ram_embed_head, fits_whole}`. **Refactor**: the math is the one already written in `cli.py::fit` — it is extracted here and `fit` calls it (DRY). |
+| `eujeno/net/discovery.py` *(mod)* | `coverage_gaps(registry, num_layers, target=2) -> [{lo, hi, replicas}]`: uncovered or **under-replicated** decoder ranges, + status of `embed`/`head`. Sorts by urgency (uncovered first, then under-replicated). |
+| `eujeno/net/allocator.py` *(new)* | Self-assignment loop on each node (§3.3). |
+| `eujeno/net/rewards.py` *(new)* | Points ledger (§3.5) on SQLite (ADR-0001). |
+| `eujeno/cli.py` *(mod)* | `serve --auto` (self-assignment instead of fixed `--stages`); `rewards [--node]`. |
 | record schema *(mod)* | Adds `capacity` to the gossip/registry record (§3.2). |
 
 ### 3.2 Capacity advertisement (record schema, additive)
@@ -103,20 +103,20 @@ reward(node) +=  hosted_layers × ram_per_layer_bytes      # resources committed
 - `redundancy_bonus` is **higher for ranges with fewer replicas** → it incentivizes covering what is scarce (network anti-collapse).
 - **`tokens_served` attribution:** every stage that processes a job's hop records a contribution; at job close the entry (coordinator in relay mode, or the ingress peer in P2P) splits the points among the contributing nodes, **keyed on `(job_id, stage)`** so retries are not counted twice.
 - **Persistence:** `ledger(node_id, epoch, points, layers, tokens, uptime)` table on SQLite (ADR-0001 #2 substrate).
-- **Exposure:** `axyn rewards [--node <id>]` + a `/rewards` endpoint + a tab in the frontend.
+- **Exposure:** `eujeno rewards [--node <id>]` + a `/rewards` endpoint + a tab in the frontend.
 - **Future tokenization:** the formula and the units (points) stay stable; only the *settlement layer* (on-chain tokens, per-epoch claim) is added later, without touching the accounting.
 
 ## 4. CLI surface
 
 | Command | Status |
 |---|---|
-| `axyn fit --model <id> --ram <GB> [--dtype]` | ✅ Done (manual calculation, reused by the allocator) |
-| `axyn serve --auto` | 🔜 Self-assignment instead of `--stages` |
-| `axyn rewards [--node <id>]` | 🔜 Shows the ledger |
-| `axyn model --info` | ✅ Provides the dimensions for the calculation |
+| `eujeno fit --model <id> --ram <GB> [--dtype]` | ✅ Done (manual calculation, reused by the allocator) |
+| `eujeno serve --auto` | 🔜 Self-assignment instead of `--stages` |
+| `eujeno rewards [--node <id>]` | 🔜 Shows the ledger |
+| `eujeno model --info` | ✅ Provides the dimensions for the calculation |
 
 ### 4.1 Starting point
-`axyn fit` (already on `main`) computes `ram_per_layer ≈ params_layer × bytes` with `params_layer ≈ 2·hidden² + 2·hidden·kv_dim + 3·hidden·intermediate`, and suggests a stage spec. The same function becomes `capacity.fit_layers` and feeds step 1 of the self-assignment loop.
+`eujeno fit` (already on `main`) computes `ram_per_layer ≈ params_layer × bytes` with `params_layer ≈ 2·hidden² + 2·hidden·kv_dim + 3·hidden·intermediate`, and suggests a stage spec. The same function becomes `capacity.fit_layers` and feeds step 1 of the self-assignment loop.
 
 ## 5. Incremental plan (slices → will become a `writing-plans` plan)
 
@@ -124,7 +124,7 @@ reward(node) +=  hosted_layers × ram_per_layer_bytes      # resources committed
 2. **Advertisement + gaps** — add `capacity` to the record; `coverage_gaps()` in `discovery.py`.
 3. **Allocator** — `allocator.py` (loop, claim, tie-break, hysteresis); `serve --auto`. Test on 2-3 simulated nodes.
 4. **Redundancy + failover** — target=2; primary+backup in `build_chain`; idempotent hop retry.
-5. **Reward** — `rewards.py` (ledger + `(job_id,stage)` attribution); `axyn rewards` + endpoint + UI tab.
+5. **Reward** — `rewards.py` (ledger + `(job_id,stage)` attribution); `eujeno rewards` + endpoint + UI tab.
 
 ## 6. Consequences
 

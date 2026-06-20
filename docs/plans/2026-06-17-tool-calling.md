@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`).
 
-**Goal:** Make Axyn's OpenAI API usable by agents/MCP hosts: (1) generation **stops at EOS/end-of-turn** and the output is clean (no special tokens, no post-EOS text); (2) `/v1/chat/completions` accepts `tools` and returns `tool_calls` (function calling), so an agent can have the model call MCP tools.
+**Goal:** Make Eujeno's OpenAI API usable by agents/MCP hosts: (1) generation **stops at EOS/end-of-turn** and the output is clean (no special tokens, no post-EOS text); (2) `/v1/chat/completions` accepts `tools` and returns `tool_calls` (function calling), so an agent can have the model call MCP tools.
 
-**Architecture:** The MCP tools are executed by the agent/host; Axyn only needs to be a backend with tool-calling. The coordinator computes the `stop_ids` from the tokenizer and stops generation; it applies the chat template with `tools` (Qwen2.5 has the native tool-use template); it parses the `<tool_call>{...}</tool_call>` output into OpenAI-format `tool_calls`. Decodes with `skip_special_tokens=True`.
+**Architecture:** The MCP tools are executed by the agent/host; Eujeno only needs to be a backend with tool-calling. The coordinator computes the `stop_ids` from the tokenizer and stops generation; it applies the chat template with `tools` (Qwen2.5 has the native tool-use template); it parses the `<tool_call>{...}</tool_call>` output into OpenAI-format `tool_calls`. Decodes with `skip_special_tokens=True`.
 
-**Tech Stack:** Python · the existing `axyn/net/coordinator.py` · transformers (chat template with tools) · regex/json.
+**Tech Stack:** Python · the existing `eujeno/net/coordinator.py` · transformers (chat template with tools) · regex/json.
 
 **Reality note:** the 0.5B model does not emit reliable tool-calls — the *parser* tests are deterministic (logic), while the e2e with `tools` only verifies that the endpoint accepts the tools and responds well-formed. For real tool-calling a 7B+ model is needed (identical infra).
 
@@ -16,8 +16,8 @@
 
 ## File Structure
 ```
-axyn/net/tools.py            # NEW: extract_tool_calls() (pure)
-axyn/net/coordinator.py      # MOD: stop_ids + finish_reason + skip_special_tokens + tools in chat_completions
+eujeno/net/tools.py            # NEW: extract_tool_calls() (pure)
+eujeno/net/coordinator.py      # MOD: stop_ids + finish_reason + skip_special_tokens + tools in chat_completions
 tests/test_tools.py             # NEW: parser (fast)
 tests/test_openai_e2e.py        # MOD: clean stop + smoke tools (slow)
 docs/examples/agents.md         # MOD: tool/MCP section
@@ -28,7 +28,7 @@ docs/ROADMAP.md
 
 ## Task 1: stop at EOS + clean decode
 
-**Files:** modify `axyn/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
+**Files:** modify `eujeno/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
 
 - [ ] **Step 1: test (append to `tests/test_openai_e2e.py`)**
 ```python
@@ -38,7 +38,7 @@ def test_chat_output_has_no_special_tokens(full_model):
     try:
         with httpx.Client(timeout=60.0) as c:
             r = c.post(f"{base}/v1/chat/completions", json={
-                "model": "axyn",
+                "model": "eujeno",
                 "messages": [{"role": "user", "content": "Say hi."}],
                 "max_tokens": 64,
             }).json()
@@ -49,9 +49,9 @@ def test_chat_output_has_no_special_tokens(full_model):
         srv.should_exit = True
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_openai_e2e.py::test_chat_output_has_no_special_tokens -m slow -v`. (May fail because the output contains special tokens / there is no correct finish_reason.)
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_openai_e2e.py::test_chat_output_has_no_special_tokens -m slow -v`. (May fail because the output contains special tokens / there is no correct finish_reason.)
 
-- [ ] **Step 3: modify `axyn/net/coordinator.py`**
+- [ ] **Step 3: modify `eujeno/net/coordinator.py`**
 
 (a) Right after receiving `tokenizer` in `create_coordinator_app`, compute the stop ids:
 ```python
@@ -105,19 +105,19 @@ def test_chat_output_has_no_special_tokens(full_model):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test_openai_e2e.py && git commit -m "fix(net): stop at end-of-turn (EOS) + decode skip_special_tokens + finish_reason"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/coordinator.py tests/test_openai_e2e.py && git commit -m "fix(net): stop at end-of-turn (EOS) + decode skip_special_tokens + finish_reason"
 ```
 
 ---
 
 ## Task 2: parser `extract_tool_calls`
 
-**Files:** create `axyn/net/tools.py`, `tests/test_tools.py`.
+**Files:** create `eujeno/net/tools.py`, `tests/test_tools.py`.
 
 - [ ] **Step 1: test `tests/test_tools.py`**
 ```python
 import json
-from axyn.net.tools import extract_tool_calls
+from eujeno.net.tools import extract_tool_calls
 
 
 def test_single_tool_call():
@@ -150,7 +150,7 @@ def test_malformed_tool_call_ignored():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_tools.py -v` → ImportError.
 
-- [ ] **Step 3: implement `axyn/net/tools.py`**
+- [ ] **Step 3: implement `eujeno/net/tools.py`**
 ```python
 import json
 import re
@@ -183,14 +183,14 @@ def extract_tool_calls(text: str):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/tools.py tests/test_tools.py && git commit -m "feat(net): extract_tool_calls (Qwen2.5 tool-call parsing -> OpenAI format)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/tools.py tests/test_tools.py && git commit -m "feat(net): extract_tool_calls (Qwen2.5 tool-call parsing -> OpenAI format)"
 ```
 
 ---
 
 ## Task 3: `tools` in `/v1/chat/completions`
 
-**Files:** modify `axyn/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
+**Files:** modify `eujeno/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
 
 - [ ] **Step 1: test (append to `tests/test_openai_e2e.py`)**
 ```python
@@ -206,7 +206,7 @@ def test_chat_completions_accepts_tools(full_model):
     try:
         with httpx.Client(timeout=60.0) as c:
             r = c.post(f"{base}/v1/chat/completions", json={
-                "model": "axyn",
+                "model": "eujeno",
                 "messages": [{"role": "user", "content": "What's the weather in Rome?"}],
                 "tools": tools, "max_tokens": 64,
             }).json()
@@ -224,9 +224,9 @@ def test_chat_completions_accepts_tools(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_openai_e2e.py::test_chat_completions_accepts_tools -m slow -v` (the `tools` parameter is not handled; it could break in the template or ignore it).
 
-- [ ] **Step 3: modify `chat_completions` in `axyn/net/coordinator.py`**
+- [ ] **Step 3: modify `chat_completions` in `eujeno/net/coordinator.py`**
 
-Add `from axyn.net.tools import extract_tool_calls` at the top. Replace the body of `chat_completions` with:
+Add `from eujeno.net.tools import extract_tool_calls` at the top. Replace the body of `chat_completions` with:
 ```python
     @app.post("/v1/chat/completions")
     async def chat_completions(request: Request):
@@ -266,7 +266,7 @@ Add `from axyn.net.tools import extract_tool_calls` at the top. Replace the body
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): /v1/chat/completions accepts tools and returns tool_calls (function calling)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): /v1/chat/completions accepts tools and returns tool_calls (function calling)"
 ```
 
 ---
@@ -285,7 +285,7 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test
 tools = [{"type":"function","function":{
   "name":"get_weather","description":"Weather for a city",
   "parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}}}]
-r = client.chat.completions.create(model="axyn",
+r = client.chat.completions.create(model="eujeno",
       messages=[{"role":"user","content":"What's the weather in Rome?"}], tools=tools)
 # r.choices[0].message.tool_calls -> [{function:{name:"get_weather", arguments:'{"city":"Rome"}'}}]
 ```
@@ -299,7 +299,7 @@ Note: reliable tool-calling requires a capable model (7B+). With Qwen 0.5B it on
 
 - [ ] **Step 4: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add docs/examples/agents.md docs/ROADMAP.md && git commit -m "docs: tool calling / MCP in the OpenAI API; ROADMAP"
+cd /Users/alberto/Projects/AI/eujeno && git add docs/examples/agents.md docs/ROADMAP.md && git commit -m "docs: tool calling / MCP in the OpenAI API; ROADMAP"
 ```
 
 ---

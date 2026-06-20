@@ -3,7 +3,7 @@
 
 import torch
 
-from axyn.net.wire import encode_tensors, decode_tensors
+from eujeno.net.wire import encode_tensors, decode_tensors
 
 
 def distributed_generate(topology, prompt: str, max_new_tokens: int, client, tokenizer,

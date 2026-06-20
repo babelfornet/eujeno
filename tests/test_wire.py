@@ -1,5 +1,5 @@
 import torch
-from axyn.net.wire import encode_tensors, decode_tensors
+from eujeno.net.wire import encode_tensors, decode_tensors
 
 
 def test_roundtrip_preserves_tensors_and_dtype():

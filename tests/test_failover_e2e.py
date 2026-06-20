@@ -8,12 +8,12 @@ import httpx
 import uvicorn
 import websockets
 
-from axyn.net.coordinator import create_coordinator_app
-from axyn.net.node import run_node
-from axyn.net.node_exec import NodeState, handle_request
-from axyn.net.framing import pack, unpack
-from axyn.net.topology import StageSpec
-from axyn.model.generate import reference_generate
+from eujeno.net.coordinator import create_coordinator_app
+from eujeno.net.node import run_node
+from eujeno.net.node_exec import NodeState, handle_request
+from eujeno.net.framing import pack, unpack
+from eujeno.net.topology import StageSpec
+from eujeno.model.generate import reference_generate
 
 
 def _free_port():

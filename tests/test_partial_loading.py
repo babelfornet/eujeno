@@ -1,12 +1,12 @@
 import pytest
 import torch
 
-from axyn.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
-from axyn.model.loader import load_partial_model
-from axyn.net.topology import StageSpec
-from axyn.net.node_exec import NodeState, handle_request
-from axyn.net.wire import encode_tensors, decode_tensors
-from axyn.model.generate import reference_generate
+from eujeno.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
+from eujeno.model.loader import load_partial_model
+from eujeno.net.topology import StageSpec
+from eujeno.net.node_exec import NodeState, handle_request
+from eujeno.net.wire import encode_tensors, decode_tensors
+from eujeno.model.generate import reference_generate
 
 
 def _greedy_two_nodes(s1, s2, ids, max_new):

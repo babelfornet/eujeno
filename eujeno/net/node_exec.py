@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import torch
-from axyn.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
-from axyn.net.wire import encode_tensors, decode_tensors
+from eujeno.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
+from eujeno.net.wire import encode_tensors, decode_tensors
 
 
 class NodeState:

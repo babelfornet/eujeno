@@ -1,6 +1,6 @@
 import pytest
 import torch
-from axyn.model.blocks import prepare_decoder_block, DecoderBlock
+from eujeno.model.blocks import prepare_decoder_block, DecoderBlock
 
 
 @pytest.mark.slow

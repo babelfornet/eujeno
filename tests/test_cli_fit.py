@@ -1,6 +1,6 @@
 import json
 from typer.testing import CliRunner
-from axyn.cli import app
+from eujeno.cli import app
 
 runner = CliRunner()
 
@@ -12,7 +12,7 @@ STUB = {
 
 
 def test_fit_suggests_stage(monkeypatch):
-    import axyn.cli as cli
+    import eujeno.cli as cli
     monkeypatch.setattr(cli, "model_config_dims", lambda mid: STUB)
     r = runner.invoke(app, ["--json", "fit", "--model", "X", "--ram", "4", "--dtype", "bfloat16"])
     assert r.exit_code == 0
@@ -23,7 +23,7 @@ def test_fit_suggests_stage(monkeypatch):
 
 
 def test_fit_bf16_fits_more_than_fp32(monkeypatch):
-    import axyn.cli as cli
+    import eujeno.cli as cli
     monkeypatch.setattr(cli, "model_config_dims", lambda mid: STUB)
     fp32 = json.loads(runner.invoke(app, ["--json", "fit", "--model", "X", "--ram", "8", "--dtype", "float32"]).stdout)["data"]["max_decoder_layers"]
     bf16 = json.loads(runner.invoke(app, ["--json", "fit", "--model", "X", "--ram", "8", "--dtype", "bfloat16"]).stdout)["data"]["max_decoder_layers"]

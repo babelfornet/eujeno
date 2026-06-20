@@ -19,7 +19,7 @@
 
 ```
 pyproject.toml                 # project + pinned dependencies + pytest config
-axyn/
+eujeno/
   __init__.py
   config.py                    # DEFAULT_MODEL_ID, DTYPE, DEVICE
   model/
@@ -49,14 +49,14 @@ Responsibility per file (one each): `loader` loads · `masking` builds masks · 
 
 **Files:**
 - Create: `pyproject.toml`
-- Create: `axyn/__init__.py`, `axyn/model/__init__.py`
-- Create: `axyn/config.py`
+- Create: `eujeno/__init__.py`, `eujeno/model/__init__.py`
+- Create: `eujeno/config.py`
 
 - [ ] **Step 1: Create `pyproject.toml`**
 
 ```toml
 [project]
-name = "axyn"
+name = "eujeno"
 version = "0.0.1"
 description = "Decentralized peer-to-peer LLM inference network"
 requires-python = ">=3.11"
@@ -76,15 +76,15 @@ markers = ["slow: downloads/runs the model (slow)"]
 addopts = "-q"
 
 [tool.setuptools.packages.find]
-include = ["axyn*"]
+include = ["eujeno*"]
 ```
 
 - [ ] **Step 2: Create the package inits and `config.py`**
 
-`axyn/__init__.py`: empty file.
-`axyn/model/__init__.py`: empty file.
+`eujeno/__init__.py`: empty file.
+`eujeno/model/__init__.py`: empty file.
 
-`axyn/config.py`:
+`eujeno/config.py`:
 ```python
 import torch
 
@@ -104,8 +104,8 @@ Expected: installation completes without errors; `python -c "import transformers
 - [ ] **Step 4: Commit**
 
 ```bash
-git add pyproject.toml axyn/__init__.py axyn/model/__init__.py axyn/config.py
-git commit -m "chore: axyn package scaffolding + pinned dependencies"
+git add pyproject.toml eujeno/__init__.py eujeno/model/__init__.py eujeno/config.py
+git commit -m "chore: eujeno package scaffolding + pinned dependencies"
 ```
 
 ---
@@ -113,7 +113,7 @@ git commit -m "chore: axyn package scaffolding + pinned dependencies"
 ## Task 1: Model loader
 
 **Files:**
-- Create: `axyn/model/loader.py`
+- Create: `eujeno/model/loader.py`
 - Test: `tests/conftest.py`, `tests/test_loader.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -122,8 +122,8 @@ git commit -m "chore: axyn package scaffolding + pinned dependencies"
 ```python
 import pytest
 import torch
-from axyn.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
-from axyn.model.loader import load_full_model
+from eujeno.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
+from eujeno.model.loader import load_full_model
 
 @pytest.fixture(scope="session")
 def full_model():
@@ -136,7 +136,7 @@ def full_model():
 `tests/test_loader.py`:
 ```python
 import pytest
-from axyn.model.loader import model_dims
+from eujeno.model.loader import model_dims
 
 @pytest.mark.slow
 def test_loads_with_expected_dims(full_model):
@@ -150,7 +150,7 @@ def test_loads_with_expected_dims(full_model):
 - [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_loader.py -m slow -v`
-Expected: FAIL with `ModuleNotFoundError`/`ImportError` on `axyn.model.loader`.
+Expected: FAIL with `ModuleNotFoundError`/`ImportError` on `eujeno.model.loader`.
 
 - [ ] **Step 3: Implement `loader.py`**
 
@@ -186,7 +186,7 @@ Expected: PASS (the first run downloads ~1GB of the model).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add axyn/model/loader.py tests/conftest.py tests/test_loader.py
+git add eujeno/model/loader.py tests/conftest.py tests/test_loader.py
 git commit -m "feat(model): full model loader + dimension introspection"
 ```
 
@@ -195,7 +195,7 @@ git commit -m "feat(model): full model loader + dimension introspection"
 ## Task 2: Causal mask builder
 
 **Files:**
-- Create: `axyn/model/masking.py`
+- Create: `eujeno/model/masking.py`
 - Test: `tests/test_masking.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -203,7 +203,7 @@ git commit -m "feat(model): full model loader + dimension introspection"
 `tests/test_masking.py`:
 ```python
 import torch
-from axyn.model.masking import build_causal_mask
+from eujeno.model.masking import build_causal_mask
 
 
 def test_prefill_mask_is_lower_triangular():
@@ -229,7 +229,7 @@ def test_decode_step_attends_to_all_past():
 - [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_masking.py -v`
-Expected: FAIL with `ImportError` on `axyn.model.masking`.
+Expected: FAIL with `ImportError` on `eujeno.model.masking`.
 
 - [ ] **Step 3: Implement `masking.py`**
 
@@ -257,7 +257,7 @@ Expected: PASS (2 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add axyn/model/masking.py tests/test_masking.py
+git add eujeno/model/masking.py tests/test_masking.py
 git commit -m "feat(model): causal mask builder for block execution"
 ```
 
@@ -266,7 +266,7 @@ git commit -m "feat(model): causal mask builder for block execution"
 ## Task 3: KV-cache serialization (shared primitive #2/3)
 
 **Files:**
-- Create: `axyn/model/cache.py`
+- Create: `eujeno/model/cache.py`
 - Test: `tests/test_cache.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -275,7 +275,7 @@ git commit -m "feat(model): causal mask builder for block execution"
 ```python
 import torch
 from transformers import DynamicCache
-from axyn.model.cache import cache_to_bytes, cache_from_bytes
+from eujeno.model.cache import cache_to_bytes, cache_from_bytes
 
 
 def _make_cache(num_layers, seq=4, heads=2, head_dim=8):
@@ -306,7 +306,7 @@ def test_cache_roundtrip_preserves_seq_length():
 - [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_cache.py -v`
-Expected: FAIL with `ImportError` on `axyn.model.cache`.
+Expected: FAIL with `ImportError` on `eujeno.model.cache`.
 
 - [ ] **Step 3: Implement `cache.py`**
 
@@ -342,7 +342,7 @@ Expected: PASS (2 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add axyn/model/cache.py tests/test_cache.py
+git add eujeno/model/cache.py tests/test_cache.py
 git commit -m "feat(model): KV-cache serialization via safetensors (round-trip)"
 ```
 
@@ -351,7 +351,7 @@ git commit -m "feat(model): KV-cache serialization via safetensors (round-trip)"
 ## Task 4: Hop payload serialization (shared primitive #1 on the wire)
 
 **Files:**
-- Create: `axyn/model/payload.py`
+- Create: `eujeno/model/payload.py`
 - Test: `tests/test_payload.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -359,7 +359,7 @@ git commit -m "feat(model): KV-cache serialization via safetensors (round-trip)"
 `tests/test_payload.py`:
 ```python
 import torch
-from axyn.model.payload import HopPayload
+from eujeno.model.payload import HopPayload
 
 
 def test_payload_roundtrip():
@@ -385,7 +385,7 @@ def test_payload_roundtrip():
 - [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_payload.py -v`
-Expected: FAIL with `ImportError` on `axyn.model.payload`.
+Expected: FAIL with `ImportError` on `eujeno.model.payload`.
 
 - [ ] **Step 3: Implement `payload.py`**
 
@@ -445,7 +445,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add axyn/model/payload.py tests/test_payload.py
+git add eujeno/model/payload.py tests/test_payload.py
 git commit -m "feat(model): HopPayload serialization via safetensors (round-trip)"
 ```
 
@@ -454,7 +454,7 @@ git commit -m "feat(model): HopPayload serialization via safetensors (round-trip
 ## Task 5: BlockRunner + split_into_blocks
 
 **Files:**
-- Create: `axyn/model/blocks.py`
+- Create: `eujeno/model/blocks.py`
 - Test: `tests/test_blocks.py`
 
 > **Design note:** `split_into_blocks` **mutates** `layer.self_attn.layer_idx`, remapping it to local indices (0-based per block), so each block uses a local `DynamicCache` for its own layers only (forward-compatible with the distributed model). For this reason the tests and the golden test (Task 6) always capture the reference from the whole model **before** calling `split_into_blocks`.
@@ -465,7 +465,7 @@ git commit -m "feat(model): HopPayload serialization via safetensors (round-trip
 ```python
 import pytest
 import torch
-from axyn.model.blocks import split_into_blocks
+from eujeno.model.blocks import split_into_blocks
 
 
 @pytest.mark.slow
@@ -499,7 +499,7 @@ def test_decoder_blocks_cover_all_layers(full_model):
 - [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_blocks.py -m slow -v`
-Expected: FAIL with `ImportError` on `axyn.model.blocks`.
+Expected: FAIL with `ImportError` on `eujeno.model.blocks`.
 
 - [ ] **Step 3: Implement `blocks.py`**
 
@@ -589,7 +589,7 @@ Expected: PASS (3 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add axyn/model/blocks.py tests/test_blocks.py
+git add eujeno/model/blocks.py tests/test_blocks.py
 git commit -m "feat(model): BlockRunner (EMBED/DECODER/HEAD) + split_into_blocks"
 ```
 
@@ -598,7 +598,7 @@ git commit -m "feat(model): BlockRunner (EMBED/DECODER/HEAD) + split_into_blocks
 ## Task 6: Golden test — distributed pipeline vs whole model equivalence
 
 **Files:**
-- Create: `axyn/model/generate.py`
+- Create: `eujeno/model/generate.py`
 - Test: `tests/test_golden.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -607,8 +607,8 @@ git commit -m "feat(model): BlockRunner (EMBED/DECODER/HEAD) + split_into_blocks
 ```python
 import pytest
 import torch
-from axyn.model.generate import reference_generate, pipeline_generate
-from axyn.model.blocks import split_into_blocks
+from eujeno.model.generate import reference_generate, pipeline_generate
+from eujeno.model.blocks import split_into_blocks
 
 
 @pytest.mark.slow
@@ -629,7 +629,7 @@ def test_pipeline_matches_reference_generation(full_model):
 - [ ] **Step 2: Run the test to see it fail**
 
 Run: `pytest tests/test_golden.py -m slow -v`
-Expected: FAIL with `ImportError` on `axyn.model.generate`.
+Expected: FAIL with `ImportError` on `eujeno.model.generate`.
 
 - [ ] **Step 3: Implement `generate.py`**
 
@@ -686,7 +686,7 @@ Expected: PASS. If it fails with divergent tokens, it is the decoder layer signa
 - [ ] **Step 5: Commit**
 
 ```bash
-git add axyn/model/generate.py tests/test_golden.py
+git add eujeno/model/generate.py tests/test_golden.py
 git commit -m "feat(model): golden test distributed pipeline vs whole model equivalence"
 ```
 
@@ -697,7 +697,7 @@ git commit -m "feat(model): golden test distributed pipeline vs whole model equi
 > De-risks directly the ADR's **risk #1** ("KV-cache correctness across hops and restart/failover"): halfway through generation we serialize the per-block caches to bytes and reload them (simulating a holder handoff/restart), then continue and require the **same** sequence.
 
 **Files:**
-- Modify: `axyn/model/blocks.py` (add cache get/set)
+- Modify: `eujeno/model/blocks.py` (add cache get/set)
 - Test: `tests/test_resilience.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -706,9 +706,9 @@ git commit -m "feat(model): golden test distributed pipeline vs whole model equi
 ```python
 import pytest
 import torch
-from axyn.model.generate import reference_generate
-from axyn.model.blocks import split_into_blocks
-from axyn.model.cache import cache_to_bytes, cache_from_bytes
+from eujeno.model.generate import reference_generate
+from eujeno.model.blocks import split_into_blocks
+from eujeno.model.cache import cache_to_bytes, cache_from_bytes
 
 
 @pytest.mark.slow
@@ -762,7 +762,7 @@ Expected: PASS — generation is identical even after the cache's byte round-tri
 - [ ] **Step 5: Commit**
 
 ```bash
-git add axyn/model/blocks.py tests/test_resilience.py
+git add eujeno/model/blocks.py tests/test_resilience.py
 git commit -m "test(model): KV-cache survives mid-generation serialization"
 ```
 

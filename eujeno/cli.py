@@ -7,19 +7,19 @@ import sys
 
 import typer
 
-from axyn.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
-from axyn.model.blocks import compute_boundaries, split_into_blocks
-from axyn.model.loader import model_config_dims, load_full_model, load_partial_model, model_dims
-from axyn.model.generate import reference_generate, pipeline_generate
-from axyn.net.topology import parse_stages, load_topology, Topology
-from axyn.net.server import create_app
-from axyn.net.orchestrator import distributed_generate
-from axyn.net.discovery import build_chain
-from axyn.net.node_exec import NodeState
-from axyn.net.node import run_node
-from axyn.net.coordinator import create_coordinator_app
+from eujeno.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
+from eujeno.model.blocks import compute_boundaries, split_into_blocks
+from eujeno.model.loader import model_config_dims, load_full_model, load_partial_model, model_dims
+from eujeno.model.generate import reference_generate, pipeline_generate
+from eujeno.net.topology import parse_stages, load_topology, Topology
+from eujeno.net.server import create_app
+from eujeno.net.orchestrator import distributed_generate
+from eujeno.net.discovery import build_chain
+from eujeno.net.node_exec import NodeState
+from eujeno.net.node import run_node
+from eujeno.net.coordinator import create_coordinator_app
 
-app = typer.Typer(add_completion=False, no_args_is_help=True, help="Axyn — decentralized LLM inference network.")
+app = typer.Typer(add_completion=False, no_args_is_help=True, help="Eujeno — decentralized LLM inference network.")
 
 # Pre-import MCP stdio transport so its sys.stderr default is captured before any test
 # runner patches sys.stderr (otherwise stdio_client fails with 'fileno' inside CliRunner).
@@ -35,7 +35,7 @@ _state = {"json": False}
 def _json_enabled(flag: bool) -> bool:
     if flag:
         return True
-    return os.environ.get("AXYN_JSON", "").lower() in ("1", "true", "yes")
+    return os.environ.get("EUJENO_JSON", "").lower() in ("1", "true", "yes")
 
 
 @app.callback()
@@ -69,9 +69,9 @@ def _fail(command: str, code: str, message: str, exit_code: int = 1):
 def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
                      stages_by_url: dict, target: int) -> str:
     """Decide the stage spec to claim by combining capacity (fit) and coverage gaps."""
-    from axyn.net.capacity import fit_layers
-    from axyn.net.discovery import coverage_gaps
-    from axyn.net.allocator import choose_stages
+    from eujeno.net.capacity import fit_layers
+    from eujeno.net.discovery import coverage_gaps
+    from eujeno.net.allocator import choose_stages
     nl = dims["num_layers"]
     fit = fit_layers(dims, bytes_per, ram_gb, reserve)
     gaps = coverage_gaps(stages_by_url, nl, target=target)
@@ -84,10 +84,10 @@ def version():
     """Print the package version."""
     from importlib.metadata import version as _pkg_version
     try:
-        v = _pkg_version("axyn")
+        v = _pkg_version("eujeno")
     except Exception:
         v = "0.0.1"
-    _emit_ok("version", {"version": v}, human=f"axyn {v}")
+    _emit_ok("version", {"version": v}, human=f"eujeno {v}")
 
 
 @app.command()
@@ -105,7 +105,7 @@ def model(
         boundaries = compute_boundaries(dims["num_layers"], blocks)
     except ValueError as e:
         _fail("model", "INVALID_BOUNDARIES", str(e))
-    from axyn.config import SUPPORTED_ARCHS
+    from eujeno.config import SUPPORTED_ARCHS
     data = {"model": model_id, **dims, "blocks": blocks, "boundaries": boundaries}
     data["architecture"] = dims.get("model_type", "?")
     data["compatible"] = data["architecture"] in SUPPORTED_ARCHS
@@ -121,7 +121,7 @@ def model(
 @app.command()
 def models():
     """List compatible models/families (Llama/Qwen2 architecture)."""
-    from axyn.config import SUPPORTED_ARCHS
+    from eujeno.config import SUPPORTED_ARCHS
     examples = [
         "Qwen/Qwen2.5-0.5B-Instruct", "Qwen/Qwen2.5-1.5B-Instruct", "Qwen/Qwen2.5-3B-Instruct",
         "Qwen/Qwen2.5-7B-Instruct", "Qwen/Qwen2.5-14B-Instruct", "Qwen/Qwen2.5-32B-Instruct",
@@ -129,7 +129,7 @@ def models():
         "meta-llama/Llama-3.2-3B-Instruct", "meta-llama/Llama-3.1-8B-Instruct",
     ]
     data = {"supported_architectures": sorted(SUPPORTED_ARCHS), "examples": examples,
-            "note": "Llama/Qwen2 architecture (decoder-only). Check with 'axyn model --info --model <id>'. "
+            "note": "Llama/Qwen2 architecture (decoder-only). Check with 'eujeno model --info --model <id>'. "
                     "For large models use --dtype bfloat16 and/or split across more nodes."}
     human = "Compatible models (Llama/Qwen2):\n" + "\n".join(f"  - {m}" for m in examples)
     _emit_ok("models", data, human=human)
@@ -143,14 +143,14 @@ def fit(
     reserve: float = typer.Option(0.2, "--reserve", help="Fraction of RAM reserved for activations/KV-cache/OS (0-0.9)"),
 ):
     """How many layers can you host with the given RAM? Suggests a stage spec for --stages."""
-    from axyn.config import parse_dtype
+    from eujeno.config import parse_dtype
     try:
         _dt = parse_dtype(dtype)
     except ValueError as e:
         _fail("fit", "USAGE_ERROR", str(e), exit_code=2)
         return
     import torch
-    from axyn.net.capacity import fit_layers
+    from eujeno.net.capacity import fit_layers
     bytes_per = torch.finfo(_dt).bits // 8
     d = model_config_dims(model_id)
     nl = d["num_layers"]
@@ -279,8 +279,8 @@ def serve(
     if auto:
         import torch
         import httpx
-        from axyn.net.capacity import probe_capacity
-        from axyn.config import parse_dtype as _pdt
+        from eujeno.net.capacity import probe_capacity
+        from eujeno.config import parse_dtype as _pdt
         _bp = torch.finfo(_pdt(dtype)).bits // 8
         dims = model_config_dims(model_id)
         ram_gb = ram if ram is not None else (probe_capacity().get("ram_free_gb") or 4.0)
@@ -293,14 +293,14 @@ def serve(
         stages = plan_auto_stages(dims, _bp, ram_gb, reserve, learned, target)
         if not stages:
             _fail("serve", "NO_GAP", "no range to cover (coverage complete or insufficient RAM)", exit_code=2)
-        typer.echo(f"axyn serve --auto: claiming stages={stages} (ram={ram_gb}GB, target={target})", err=True)
+        typer.echo(f"eujeno serve --auto: claiming stages={stages} (ram={ram_gb}GB, target={target})", err=True)
     elif stages is None:
         _fail("serve", "USAGE_ERROR", "specify --stages or --auto", exit_code=2)
     try:
         spec = parse_stages(stages)
     except ValueError as e:
         _fail("serve", "USAGE_ERROR", str(e), exit_code=2)
-    from axyn.config import parse_dtype
+    from eujeno.config import parse_dtype
     try:
         _dtype = parse_dtype(dtype)
     except ValueError as e:
@@ -311,14 +311,14 @@ def serve(
         _fail("serve", "MODEL_LOAD_FAILED", str(e))
     if coordinator:
         import asyncio
-        typer.echo(f"axyn serve→coordinator {coordinator}: stages={stages} (model={model_id})", err=True)
+        typer.echo(f"eujeno serve→coordinator {coordinator}: stages={stages} (model={model_id})", err=True)
         asyncio.run(run_node(coordinator, NodeState(model, spec)))
         return
     own_url = advertise or f"http://{host}:{port}"
     seeds = [p.strip() for p in peers.split(",")] if peers else []
     nl = num_layers if num_layers is not None else model_config_dims(model_id)["num_layers"]
     fastapi_app = create_app(model, tokenizer, spec, node_url=own_url, peers=seeds, num_layers=nl)
-    typer.echo(f"axyn serve (P2P): stages={stages} on http://{host}:{port} advertise={own_url} peers={seeds}", err=True)
+    typer.echo(f"eujeno serve (P2P): stages={stages} on http://{host}:{port} advertise={own_url} peers={seeds}", err=True)
     uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
 
 
@@ -337,7 +337,7 @@ def coordinator(
     except Exception as e:
         _fail("coordinator", "MODEL_LOAD_FAILED", str(e))
     coord_app = create_coordinator_app(model_id, num_layers, tokenizer)
-    typer.echo(f"axyn coordinator: model={model_id} layers={num_layers} on http://{host}:{port}", err=True)
+    typer.echo(f"eujeno coordinator: model={model_id} layers={num_layers} on http://{host}:{port}", err=True)
     uvicorn.run(coord_app, host=host, port=port, log_level="info")
 
 
@@ -351,10 +351,10 @@ def up(
 ):
     """Bring up an operational single-node network in one shot (coordinator + a node covering the whole model)."""
     nl = model_config_dims(model_id)["num_layers"]
-    coord_cmd = [sys.executable, "-m", "axyn", "coordinator", "--model", model_id,
+    coord_cmd = [sys.executable, "-m", "eujeno", "coordinator", "--model", model_id,
                  "--host", host, "--port", str(port)]
     ws = f"ws://{host}:{port}/node"
-    serve_cmd = [sys.executable, "-m", "axyn", "serve", "--coordinator", ws,
+    serve_cmd = [sys.executable, "-m", "eujeno", "serve", "--coordinator", ws,
                  "--stages", f"embed,decoder:0-{nl},head", "--model", model_id, "--dtype", dtype]
     if dry_run:
         _emit_ok("up", {"commands": [coord_cmd, serve_cmd],
@@ -368,7 +368,7 @@ def up(
     _t.sleep(4)
     procs.append(subprocess.Popen(serve_cmd))
     base = f"http://{host}:{port}"
-    typer.echo(f"axyn up: starting network for {model_id} (dtype={dtype})…", err=True)
+    typer.echo(f"eujeno up: starting network for {model_id} (dtype={dtype})…", err=True)
     operational = False
     for _ in range(120):
         try:
@@ -380,8 +380,8 @@ def up(
             pass
         _t.sleep(2)
     if operational:
-        typer.echo(f"READY. Query it: axyn infer --coordinator {base} --prompt \"...\"", err=True)
-        typer.echo(f"Frontend:       axyn ui --coordinator {base}", err=True)
+        typer.echo(f"READY. Query it: eujeno infer --coordinator {base} --prompt \"...\"", err=True)
+        typer.echo(f"Frontend:       eujeno ui --coordinator {base}", err=True)
     else:
         typer.echo("network not operational yet (check the logs).", err=True)
     try:
@@ -402,8 +402,8 @@ def ui(
 ):
     """Start the local control frontend (network dashboard + chat)."""
     import uvicorn
-    from axyn.ui.server import create_ui_app
-    typer.echo(f"axyn ui: http://{host}:{port}  (coordinator={coordinator})", err=True)
+    from eujeno.ui.server import create_ui_app
+    typer.echo(f"eujeno ui: http://{host}:{port}  (coordinator={coordinator})", err=True)
     uvicorn.run(create_ui_app(coordinator), host=host, port=port, log_level="info")
 
 
@@ -423,9 +423,9 @@ def infer(
     prompt = _read_prompt(prompt)
     if mcp:
         import httpx as _httpx
-        from axyn.mcp_config import load_servers
-        from axyn.ui.mcp import McpRegistry
-        from axyn.ui.agent import run_tool_loop
+        from eujeno.mcp_config import load_servers
+        from eujeno.ui.mcp import McpRegistry
+        from eujeno.ui.agent import run_tool_loop
         target = coordinator or peer
         if not target:
             _fail("infer", "USAGE_ERROR", "--mcp requires --coordinator or --peer", exit_code=2)
@@ -434,7 +434,7 @@ def infer(
         for name, cfg in load_servers().items():
             reg.add(name, cfg["command"], cfg.get("args", []))
         if not reg.list_servers():
-            _fail("infer", "USAGE_ERROR", "no MCP server configured (use 'axyn mcp --add')", exit_code=2)
+            _fail("infer", "USAGE_ERROR", "no MCP server configured (use 'eujeno mcp --add')", exit_code=2)
         try:
             tools = reg.list_tools()
         except Exception as e:
@@ -452,7 +452,7 @@ def infer(
                                 call_model, lambda n, a: reg.call_tool(n, a), 6)
         except Exception as e:
             _fail("infer", "GENERATION_FAILED", str(e))
-        _emit_ok("infer", {"model": "axyn", "prompt": prompt, "text": out["content"],
+        _emit_ok("infer", {"model": "eujeno", "prompt": prompt, "text": out["content"],
                            "tool_runs": out["tool_runs"]}, human=out["content"])
         return
     if coordinator:
@@ -512,8 +512,8 @@ def mcp(
     args: str = typer.Option(None, "--args", help="Command arguments, space-separated"),
     remove: str = typer.Option(None, "--remove", help="Name of an MCP server to remove"),
 ):
-    """Configure the MCP servers (tools) usable by 'axyn infer --mcp'. Without switches: list them."""
-    from axyn.mcp_config import load_servers, add_server, remove_server
+    """Configure the MCP servers (tools) usable by 'eujeno infer --mcp'. Without switches: list them."""
+    from eujeno.mcp_config import load_servers, add_server, remove_server
     if add:
         if not command:
             _fail("mcp", "USAGE_ERROR", "--command is required with --add", exit_code=2)
@@ -527,7 +527,7 @@ def mcp(
     servers = load_servers()
     tools = []
     if servers:
-        from axyn.ui.mcp import McpRegistry
+        from eujeno.ui.mcp import McpRegistry
         reg = McpRegistry()
         for name, cfg in servers.items():
             reg.add(name, cfg["command"], cfg.get("args", []))

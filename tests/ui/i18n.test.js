@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const htmlPath = path.join(__dirname, '../../axyn/ui/static/index.html');
+const htmlPath = path.join(__dirname, '../../eujeno/ui/static/index.html');
 const html = fs.readFileSync(htmlPath, 'utf8');
 
 // Extract TRANSLATIONS object between markers

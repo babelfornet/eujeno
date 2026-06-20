@@ -6,7 +6,7 @@ import os
 
 
 def _home() -> str:
-    return os.environ.get("AXYN_HOME") or os.path.join(os.path.expanduser("~"), ".axyn")
+    return os.environ.get("EUJENO_HOME") or os.path.join(os.path.expanduser("~"), ".eujeno")
 
 
 def _path() -> str:

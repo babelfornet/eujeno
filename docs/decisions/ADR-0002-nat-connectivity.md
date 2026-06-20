@@ -17,24 +17,24 @@ Part 2 must provide **automatic discovery** (no more static topology files). Exp
 
 ## Decision — two selectable modes
 
-Axyn supports **two connectivity modes**, chosen by the user; the coordinator is **opt-in**, never mandatory.
+Eujeno supports **two connectivity modes**, chosen by the user; the coordinator is **opt-in**, never mandatory.
 
 ### Mode A — pure P2P (decentralized, default)
 
-**No central server.** Each node is a symmetric `axyn serve` that:
+**No central server.** Each node is a symmetric `eujeno serve` that:
 - performs **automatic gossip-based discovery**: it knows one or more *seed peers*, periodically exchanges its own registry (who-serves-which-block) with neighbors, with TTL/refresh for liveness; a new node learns the whole network transitively from a seed;
 - receives activations via **direct node-to-node transport** (Part 1 HTTP).
 
-`axyn infer --peer <any-node>` queries a peer, receives the gossiped registry, builds the topology itself (coverage gate), and runs. **It works where nodes are mutually reachable** (LAN, VPN, or public IPs/port-forwarding). For pure P2P **even behind NAT without a VPN** a transport with NAT traversal is needed (**native libp2p**: hole-punching + relay between peers) — that is the future path, behind the same interface.
+`eujeno infer --peer <any-node>` queries a peer, receives the gossiped registry, builds the topology itself (coverage gate), and runs. **It works where nodes are mutually reachable** (LAN, VPN, or public IPs/port-forwarding). For pure P2P **even behind NAT without a VPN** a transport with NAT traversal is needed (**native libp2p**: hole-punching + relay between peers) — that is the future path, behind the same interface.
 
 ### Mode B — coordinator-relay (opt-in, for internet-without-VPN right now)
 
 A lightweight **coordinator-relay** as the Milestone 0 connectivity layer:
 
-- A publicly reachable **`axyn coordinator`** process (on the internet: a machine with a public IP or a VPS, or a single port-forward; on a LAN: any node).
-- Each **`axyn serve`** opens an **outbound WebSocket connection** to the coordinator, **announces its stages** (embed / decoder:lo-hi / head), and then serves relayed hop requests. Outbound ⇒ works behind any NAT, **with no port-forwarding on the workers**.
+- A publicly reachable **`eujeno coordinator`** process (on the internet: a machine with a public IP or a VPS, or a single port-forward; on a LAN: any node).
+- Each **`eujeno serve`** opens an **outbound WebSocket connection** to the coordinator, **announces its stages** (embed / decoder:lo-hi / head), and then serves relayed hop requests. Outbound ⇒ works behind any NAT, **with no port-forwarding on the workers**.
 - The coordinator maintains the **registry** (which node serves which block), computes **coverage**, and **routes** each activation hop to the right node over its WS connection, driving the generation loop (the Milestone 0 orchestrator moved into the coordinator).
-- **`axyn infer`** becomes a thin client: it sends `{prompt, max_new_tokens}` to the coordinator and receives `{text, tokens}`.
+- **`eujeno infer`** becomes a thin client: it sends `{prompt, max_new_tokens}` to the coordinator and receives `{text, tokens}`.
 
 Required connectivity: **only the coordinator** must be reachable; workers and the entry need **only outbound connectivity** → works on a LAN and over the internet without a VPN. With a VPN, even the coordinator can sit on a private IP.
 

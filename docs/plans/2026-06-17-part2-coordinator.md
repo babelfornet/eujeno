@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Distributed inference that works **on LAN and over the internet without a VPN**: worker nodes connect outbound to a publicly reachable **coordinator** that performs **automatic discovery** (block registry) and **routes** activations; `axyn infer` is a thin client.
+**Goal:** Distributed inference that works **on LAN and over the internet without a VPN**: worker nodes connect outbound to a publicly reachable **coordinator** that performs **automatic discovery** (block registry) and **routes** activations; `eujeno infer` is a thin client.
 
 **Architecture:** See [ADR-0002](../decisions/ADR-0002-nat-connectivity.md). Milestone 0 coordinator-relay: outbound WebSocket node→coordinator (NAT-friendly); the coordinator holds the registry, computes coverage, and drives the generation loop by relaying each hop to the right node. It reuses the block execution and the safetensors wire from Part 1; only the *transport* changes (WS relay instead of direct POSTs).
 
-**Tech Stack:** Python · FastAPI WebSocket (coordinator) · `websockets` lib (node client) · httpx (infer client) · safetensors · asyncio · the existing `axyn/net/` and `axyn/model/`.
+**Tech Stack:** Python · FastAPI WebSocket (coordinator) · `websockets` lib (node client) · httpx (infer client) · safetensors · asyncio · the existing `eujeno/net/` and `eujeno/model/`.
 
 **Decisions:** binary framing `4-byte len + JSON header + safetensors payload`; request/response correlation via `req_id` + Future; greedy/argmax; the coordinator owns the tokenizer; coverage = the announced decoder ranges tile `[0, num_layers)`.
 
@@ -18,19 +18,19 @@
 
 ```
 pyproject.toml                  # + websockets
-axyn/net/
+eujeno/net/
   framing.py                    # pack()/unpack() — header+payload in one frame
   node_exec.py                  # NodeState + handle_request() (hop execution, testable)
   node.py                       # run_node() — WS client toward the coordinator
   discovery.py                  # build_chain() — topology+coverage from the registry
   coordinator.py                # create_coordinator_app() — WS /node, /registry, POST /infer
-axyn/cli.py                  # + coordinator ; serve --coordinator ; infer --coordinator
+eujeno/cli.py                  # + coordinator ; serve --coordinator ; infer --coordinator
 tests/
   test_framing.py               # round-trip (fast)
   test_discovery.py             # build_chain (fast)
   test_node_exec.py             # handle_request greedy == reference (slow)
   test_coordinator_e2e.py       # coordinator + 2 real nodes, /infer == reference (slow)
-  test_cli_coordinator.py       # `axyn infer --coordinator` end-to-end (slow)
+  test_cli_coordinator.py       # `eujeno infer --coordinator` end-to-end (slow)
 docs/
   examples/coordinator.md       # NAT/internet quickstart
 ```
@@ -39,11 +39,11 @@ docs/
 
 ## Task 1: framing (header + payload in one frame)
 
-**Files:** create `axyn/net/framing.py`, `tests/test_framing.py`.
+**Files:** create `eujeno/net/framing.py`, `tests/test_framing.py`.
 
 - [ ] **Step 1: test `tests/test_framing.py`**
 ```python
-from axyn.net.framing import pack, unpack
+from eujeno.net.framing import pack, unpack
 
 
 def test_roundtrip_header_and_payload():
@@ -60,9 +60,9 @@ def test_roundtrip_empty_payload():
     assert payload2 == b""
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_framing.py -v` → ImportError.
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_framing.py -v` → ImportError.
 
-- [ ] **Step 3: implement `axyn/net/framing.py`**
+- [ ] **Step 3: implement `eujeno/net/framing.py`**
 ```python
 import json
 import struct
@@ -85,18 +85,18 @@ def unpack(data: bytes):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/framing.py tests/test_framing.py && git commit -m "feat(net): framing header+payload for the WebSocket relay"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/framing.py tests/test_framing.py && git commit -m "feat(net): framing header+payload for the WebSocket relay"
 ```
 
 ---
 
 ## Task 2: discovery `build_chain` (topology + coverage from the registry)
 
-**Files:** create `axyn/net/discovery.py`, `tests/test_discovery.py`.
+**Files:** create `eujeno/net/discovery.py`, `tests/test_discovery.py`.
 
 - [ ] **Step 1: test `tests/test_discovery.py`**
 ```python
-from axyn.net.discovery import build_chain
+from eujeno.net.discovery import build_chain
 
 
 def _reg(**nodes):
@@ -128,7 +128,7 @@ def test_build_chain_missing_embed_returns_none():
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_discovery.py -v` → ImportError.
 
-- [ ] **Step 3: implement `axyn/net/discovery.py`**
+- [ ] **Step 3: implement `eujeno/net/discovery.py`**
 ```python
 def build_chain(registry: dict, num_layers: int):
     """From the registry {conn_id: {'embed','head','decoders':[block_key]}} builds
@@ -161,23 +161,23 @@ def build_chain(registry: dict, num_layers: int):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): build_chain (topology + coverage from the coordinator registry)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/discovery.py tests/test_discovery.py && git commit -m "feat(net): build_chain (topology + coverage from the coordinator registry)"
 ```
 
 ---
 
 ## Task 3: `NodeState` + `handle_request` (hop execution)
 
-**Files:** create `axyn/net/node_exec.py`, `tests/test_node_exec.py`.
+**Files:** create `eujeno/net/node_exec.py`, `tests/test_node_exec.py`.
 
 - [ ] **Step 1: test `tests/test_node_exec.py`**
 ```python
 import pytest
 import torch
-from axyn.net.node_exec import NodeState, handle_request
-from axyn.net.wire import encode_tensors, decode_tensors
-from axyn.net.topology import StageSpec
-from axyn.model.generate import reference_generate
+from eujeno.net.node_exec import NodeState, handle_request
+from eujeno.net.wire import encode_tensors, decode_tensors
+from eujeno.net.topology import StageSpec
+from eujeno.model.generate import reference_generate
 
 
 @pytest.mark.slow
@@ -207,10 +207,10 @@ def test_handle_request_greedy_matches_reference(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_node_exec.py -m slow -v` → ImportError.
 
-- [ ] **Step 3: implement `axyn/net/node_exec.py`**
+- [ ] **Step 3: implement `eujeno/net/node_exec.py`**
 ```python
-from axyn.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
-from axyn.net.wire import encode_tensors, decode_tensors
+from eujeno.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
+from eujeno.net.wire import encode_tensors, decode_tensors
 
 
 class NodeState:
@@ -259,16 +259,16 @@ def handle_request(state: NodeState, header: dict, payload: bytes):
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/node_exec.py tests/test_node_exec.py && git commit -m "feat(net): NodeState + handle_request (hop execution for the relay)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/node_exec.py tests/test_node_exec.py && git commit -m "feat(net): NodeState + handle_request (hop execution for the relay)"
 ```
 
 ---
 
 ## Task 4: coordinator + node client + distributed golden via relay
 
-**Files:** modify `pyproject.toml`; create `axyn/net/coordinator.py`, `axyn/net/node.py`, `tests/test_coordinator_e2e.py`.
+**Files:** modify `pyproject.toml`; create `eujeno/net/coordinator.py`, `eujeno/net/node.py`, `tests/test_coordinator_e2e.py`.
 
-- [ ] **Step 1: add `websockets` to `pyproject.toml`** (`dependencies` list): `"websockets>=12"`. Then `cd /Users/alberto/Projects/AI/axyn && .venv/bin/pip install -e ".[dev]"`. (If the network is down and `websockets` is not importable, BLOCKED.)
+- [ ] **Step 1: add `websockets` to `pyproject.toml`** (`dependencies` list): `"websockets>=12"`. Then `cd /Users/alberto/Projects/AI/eujeno && .venv/bin/pip install -e ".[dev]"`. (If the network is down and `websockets` is not importable, BLOCKED.)
 
 - [ ] **Step 2: test `tests/test_coordinator_e2e.py`**
 ```python
@@ -281,11 +281,11 @@ import pytest
 import httpx
 import uvicorn
 
-from axyn.net.coordinator import create_coordinator_app
-from axyn.net.node import run_node
-from axyn.net.node_exec import NodeState
-from axyn.net.topology import StageSpec
-from axyn.model.generate import reference_generate
+from eujeno.net.coordinator import create_coordinator_app
+from eujeno.net.node import run_node
+from eujeno.net.node_exec import NodeState
+from eujeno.net.topology import StageSpec
+from eujeno.model.generate import reference_generate
 
 
 def _free_port():
@@ -342,16 +342,16 @@ def test_two_nodes_via_coordinator_match_reference(full_model):
 
 - [ ] **Step 3: run FAIL** — `... pytest tests/test_coordinator_e2e.py -m slow -v` → ImportError.
 
-- [ ] **Step 4: implement `axyn/net/coordinator.py`**
+- [ ] **Step 4: implement `eujeno/net/coordinator.py`**
 ```python
 import asyncio
 
 import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 
-from axyn.net.framing import pack, unpack
-from axyn.net.wire import encode_tensors, decode_tensors
-from axyn.net.discovery import build_chain
+from eujeno.net.framing import pack, unpack
+from eujeno.net.wire import encode_tensors, decode_tensors
+from eujeno.net.discovery import build_chain
 
 
 def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
@@ -435,14 +435,14 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
     return app
 ```
 
-- [ ] **Step 5: implement `axyn/net/node.py`**
+- [ ] **Step 5: implement `eujeno/net/node.py`**
 ```python
 import asyncio
 
 import websockets
 
-from axyn.net.framing import pack, unpack
-from axyn.net.node_exec import handle_request
+from eujeno.net.framing import pack, unpack
+from eujeno.net.node_exec import handle_request
 
 
 async def run_node(coordinator_ws_url: str, state):
@@ -462,14 +462,14 @@ async def run_node(coordinator_ws_url: str, state):
 
 - [ ] **Step 7: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add pyproject.toml axyn/net/coordinator.py axyn/net/node.py tests/test_coordinator_e2e.py && git commit -m "feat(net): coordinator-relay + node WS client (distributed golden via relay)"
+cd /Users/alberto/Projects/AI/eujeno && git add pyproject.toml eujeno/net/coordinator.py eujeno/net/node.py tests/test_coordinator_e2e.py && git commit -m "feat(net): coordinator-relay + node WS client (distributed golden via relay)"
 ```
 
 ---
 
 ## Task 5: CLI `coordinator` + `serve --coordinator` + `infer --coordinator`
 
-**Files:** modify `axyn/cli.py`; create `tests/test_cli_coordinator.py`.
+**Files:** modify `eujeno/cli.py`; create `tests/test_cli_coordinator.py`.
 
 - [ ] **Step 1: test `tests/test_cli_coordinator.py`**
 ```python
@@ -483,12 +483,12 @@ import pytest
 import uvicorn
 
 from typer.testing import CliRunner
-from axyn.cli import app as cli_app
-from axyn.net.coordinator import create_coordinator_app
-from axyn.net.node import run_node
-from axyn.net.node_exec import NodeState
-from axyn.net.topology import StageSpec
-from axyn.model.generate import reference_generate
+from eujeno.cli import app as cli_app
+from eujeno.net.coordinator import create_coordinator_app
+from eujeno.net.node import run_node
+from eujeno.net.node_exec import NodeState
+from eujeno.net.topology import StageSpec
+from eujeno.model.generate import reference_generate
 
 runner = CliRunner()
 
@@ -544,14 +544,14 @@ def test_cli_infer_via_coordinator(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_cli_coordinator.py -m slow -v` → FAIL (`--coordinator` missing).
 
-- [ ] **Step 3: modify `axyn/cli.py`**
+- [ ] **Step 3: modify `eujeno/cli.py`**
 
-Add imports near the other `from axyn.net...`:
+Add imports near the other `from eujeno.net...`:
 ```python
-from axyn.net.node_exec import NodeState
-from axyn.net.node import run_node
-from axyn.net.coordinator import create_coordinator_app
-from axyn.model.loader import model_config_dims
+from eujeno.net.node_exec import NodeState
+from eujeno.net.node import run_node
+from eujeno.net.coordinator import create_coordinator_app
+from eujeno.model.loader import model_config_dims
 ```
 (if `model_config_dims` is already imported, do not duplicate it.)
 
@@ -572,7 +572,7 @@ def coordinator(
     except Exception as e:
         _fail("coordinator", "MODEL_LOAD_FAILED", str(e))
     coord_app = create_coordinator_app(model_id, num_layers, tokenizer)
-    typer.echo(f"axyn coordinator: model={model_id} layers={num_layers} on http://{host}:{port}", err=True)
+    typer.echo(f"eujeno coordinator: model={model_id} layers={num_layers} on http://{host}:{port}", err=True)
     uvicorn.run(coord_app, host=host, port=port, log_level="info")
 ```
 
@@ -601,12 +601,12 @@ def serve(
     if coordinator:
         import asyncio
         state = NodeState(model, spec)
-        typer.echo(f"axyn serve→coordinator {coordinator}: stages={stages} (model={model_id})", err=True)
+        typer.echo(f"eujeno serve→coordinator {coordinator}: stages={stages} (model={model_id})", err=True)
         asyncio.run(run_node(coordinator, state))
     else:
         import uvicorn
         fastapi_app = create_app(model, tokenizer, spec)
-        typer.echo(f"axyn serve (direct): stages={stages} on http://{host}:{port}", err=True)
+        typer.echo(f"eujeno serve (direct): stages={stages} on http://{host}:{port}", err=True)
         uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
 ```
 
@@ -638,7 +638,7 @@ def infer(
         _fail("infer", "USAGE_ERROR", "specify --coordinator or --topology", exit_code=2)
     # ---- static topology mode (Part 1) ----
     from transformers import AutoTokenizer
-    from axyn.net.orchestrator import distributed_generate
+    from eujeno.net.orchestrator import distributed_generate
     try:
         with open(topology) as f:
             topo = load_topology(_json.loads(f.read()))
@@ -657,14 +657,14 @@ def infer(
 ```
 > Note: this replaces the Part 1 `infer` command while preserving its `--topology` mode. Make sure the duplicate imports (`AutoTokenizer`, `distributed_generate`) are not already at module level in a conflicting way; they are fine as local imports.
 
-- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_coordinator.py -m slow -v` → PASS. Also verify that `cd /Users/alberto/Projects/AI/axyn && .venv/bin/axyn --help` lists `coordinator`.
+- [ ] **Step 4: run PASS** — `... pytest tests/test_cli_coordinator.py -m slow -v` → PASS. Also verify that `cd /Users/alberto/Projects/AI/eujeno && .venv/bin/eujeno --help` lists `coordinator`.
 
 - [ ] **Step 5: ensure the Part 1 tests (`tests/test_cli_infer.py`) still pass** (`--topology` mode unchanged):
 `... pytest tests/test_cli_infer.py -m slow -v` → PASS.
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli_coordinator.py && git commit -m "feat(cli): coordinator command + serve/infer in coordinator mode (NAT-friendly)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/cli.py tests/test_cli_coordinator.py && git commit -m "feat(cli): coordinator command + serve/infer in coordinator mode (NAT-friendly)"
 ```
 
 ---
@@ -681,16 +681,16 @@ Worker nodes connect **outbound** to the coordinator: they work behind NAT witho
 
 ```bash
 # 1) Coordinator (on a machine reachable by the others; e.g. public IP 203.0.113.5)
-axyn coordinator --model Qwen/Qwen2.5-0.5B-Instruct --port 9000
+eujeno coordinator --model Qwen/Qwen2.5-0.5B-Instruct --port 9000
 
 # 2) Node A (any network, behind NAT) — embedding + first 12 layers
-axyn serve --coordinator ws://203.0.113.5:9000/node --stages "embed,decoder:0-12"
+eujeno serve --coordinator ws://203.0.113.5:9000/node --stages "embed,decoder:0-12"
 
 # 3) Node B (another network) — last 12 layers + head
-axyn serve --coordinator ws://203.0.113.5:9000/node --stages "decoder:12-24,head"
+eujeno serve --coordinator ws://203.0.113.5:9000/node --stages "decoder:12-24,head"
 
 # 4) Inference (thin client, from any network)
-axyn --json infer --coordinator http://203.0.113.5:9000 --prompt "The capital of Italy is"
+eujeno --json infer --coordinator http://203.0.113.5:9000 --prompt "The capital of Italy is"
 ```
 
 The coordinator computes coverage: until embed + all decoder ranges + head are covered, `infer` responds `NOT_OPERATIONAL`. On a LAN, put the coordinator on a local IP. With a VPN, use the VPN IP.
@@ -700,11 +700,11 @@ The coordinator computes coverage: until embed + all decoder ranges + head are c
 
 - [ ] **Step 3: update `docs/ROADMAP.md`** — under "Discovery & Routing" mark automatic discovery via coordinator-relay as done (link to [ADR-0002](../decisions/ADR-0002-nat-connectivity.md) and to this plan), and update the "Last updated" line. Note: failover and native libp2p remain to be done.
 
-- [ ] **Step 4: full suite** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q -p no:warnings` → all PASS.
+- [ ] **Step 4: full suite** — `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest -q -p no:warnings` → all PASS.
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add docs/examples/coordinator.md README.md docs/ROADMAP.md && git commit -m "docs: coordinator quickstart (LAN/internet without a VPN); ROADMAP discovery"
+cd /Users/alberto/Projects/AI/eujeno && git add docs/examples/coordinator.md README.md docs/ROADMAP.md && git commit -m "docs: coordinator quickstart (LAN/internet without a VPN); ROADMAP discovery"
 ```
 
 ---

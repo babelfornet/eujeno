@@ -2,7 +2,7 @@ import socket, threading, time
 import pytest, uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from axyn.ui.server import create_ui_app
+from eujeno.ui.server import create_ui_app
 
 
 def _free_port():
@@ -44,7 +44,7 @@ def test_serves_index_html():
     app = create_ui_app("http://example:9000")
     r = TestClient(app).get("/")
     assert r.status_code == 200
-    assert "Axyn" in r.text
+    assert "Eujeno" in r.text
 
 
 @pytest.mark.slow
@@ -87,7 +87,7 @@ def test_mcp_add_list_remove():
 
 
 def test_node_status_after_join_p2p(monkeypatch):
-    import axyn.ui.server as srv
+    import eujeno.ui.server as srv
     started = {}
 
     class FakeMgr:

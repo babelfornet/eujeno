@@ -1,4 +1,4 @@
-from axyn.net.discovery import coverage_gaps
+from eujeno.net.discovery import coverage_gaps
 
 A = {"embed": True, "head": False, "decoders": ["0-12"]}
 B = {"embed": False, "head": True, "decoders": ["12-24"]}

@@ -1,7 +1,7 @@
 import pytest
 import torch
-from axyn.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
-from axyn.model.loader import load_full_model
+from eujeno.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
+from eujeno.model.loader import load_full_model
 
 
 @pytest.fixture(scope="session")

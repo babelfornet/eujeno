@@ -4,7 +4,7 @@
 
 ## 1. Purpose
 
-The **Peer Node** is the executable unit of Axyn: a process that (1) downloads a model from Hugging Face, (2) materializes **only** the layer blocks it has committed to serving, (3) exposes a pure `run_block(...)` function that transforms hidden states, and (4) manages the KV-cache as a serializable object that we own. Everything else (discovery, queue, reputation) are other subsystems *of the same process*, documented in Parts 2-5.
+The **Peer Node** is the executable unit of Eujeno: a process that (1) downloads a model from Hugging Face, (2) materializes **only** the layer blocks it has committed to serving, (3) exposes a pure `run_block(...)` function that transforms hidden states, and (4) manages the KV-cache as a serializable object that we own. Everything else (discovery, queue, reputation) are other subsystems *of the same process*, documented in Parts 2-5.
 
 ## 2. In scope (PoC) / Out of scope
 

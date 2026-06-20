@@ -10,11 +10,11 @@ import torch
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from axyn.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
-from axyn.net.wire import encode_tensors, decode_tensors
-from axyn.net.discovery import Registry, build_chain
-from axyn.net.generation import generate_tokens
-from axyn.net.tools import extract_tool_calls
+from eujeno.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
+from eujeno.net.wire import encode_tensors, decode_tensors
+from eujeno.net.discovery import Registry, build_chain
+from eujeno.net.generation import generate_tokens
+from eujeno.net.tools import extract_tool_calls
 
 _OCTET = "application/octet-stream"
 
@@ -28,7 +28,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
     prepared = {f"{lo}-{hi}": prepare_decoder_block(model, lo, hi) for (lo, hi) in stages.decoders}
     jobs = {}
     own_stages = {"embed": stages.embed, "head": stages.head, "decoders": list(prepared.keys())}
-    from axyn.net.capacity import probe_capacity
+    from eujeno.net.capacity import probe_capacity
     own_stages["capacity"] = probe_capacity()
     registry = Registry()
     if node_url:
@@ -42,7 +42,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
             _i = tokenizer.convert_tokens_to_ids(_t)
             if isinstance(_i, int) and _i >= 0 and _i != tokenizer.unk_token_id:
                 stop_ids.add(int(_i))
-    _model_id = getattr(model.config, "_name_or_path", "axyn")
+    _model_id = getattr(model.config, "_name_or_path", "eujeno")
     _entry_job = {"n": 0}
 
     async def _gossip_loop():
@@ -125,8 +125,8 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
 
     @app.get("/v1/models")
     async def v1_models():
-        return {"object": "list", "data": [{"id": "axyn", "object": "model", "owned_by": "axyn"},
-                                            {"id": _model_id, "object": "model", "owned_by": "axyn"}]}
+        return {"object": "list", "data": [{"id": "eujeno", "object": "model", "owned_by": "eujeno"},
+                                            {"id": _model_id, "object": "model", "owned_by": "eujeno"}]}
 
     @app.post("/v1/chat/completions")
     async def v1_chat(request: Request):

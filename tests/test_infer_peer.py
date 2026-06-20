@@ -7,10 +7,10 @@ import pytest
 import uvicorn
 
 from typer.testing import CliRunner
-from axyn.cli import app as cli_app
-from axyn.net.topology import StageSpec
-from axyn.net.server import create_app
-from axyn.model.generate import reference_generate
+from eujeno.cli import app as cli_app
+from eujeno.net.topology import StageSpec
+from eujeno.net.server import create_app
+from eujeno.model.generate import reference_generate
 
 runner = CliRunner()
 

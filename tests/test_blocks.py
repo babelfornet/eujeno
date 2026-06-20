@@ -1,6 +1,6 @@
 import pytest
 import torch
-from axyn.model.blocks import split_into_blocks
+from eujeno.model.blocks import split_into_blocks
 
 
 @pytest.mark.slow

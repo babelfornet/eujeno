@@ -5,7 +5,7 @@ import random
 
 import torch
 
-from axyn.net.sampling import sample_token
+from eujeno.net.sampling import sample_token
 
 
 async def generate_tokens(tokenizer, prompt, max_new, sampling, stop_ids,

@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Run the split inference pipeline **across multiple processes/machines via HTTP**, exactly reproducing the generation of the whole model, launchable from the `axyn` CLI (`serve` + `infer`) on 2-3 nodes.
+**Goal:** Run the split inference pipeline **across multiple processes/machines via HTTP**, exactly reproducing the generation of the whole model, launchable from the `eujeno` CLI (`serve` + `infer`) on 2-3 nodes.
 
 **Architecture:** Milestone 0 of [ADR-0001](../decisions/ADR-0001-implementation-forks.md): an **orchestrator** (entry node) drives autoregressive generation by calling **BlockServers** (FastAPI) via HTTP; activations travel as **safetensors bytes**. Each BlockServer hosts one or more *stages* (`embed`, `decoder:lo-hi`, `head`), keeps the **per-job KV-cache in memory**, and exposes stateless endpoints for embed/head and stateful ones for decode. The topology (which URL serves which stage) is a **static JSON file** in this slice; the DHT discovery that self-organizes the nodes comes in Part 2.
 
-**Tech Stack:** Python · FastAPI + uvicorn (server) · httpx (client) · safetensors (wire) · the existing `axyn/model/` (loader, blocks, generate) · pytest.
+**Tech Stack:** Python · FastAPI + uvicorn (server) · httpx (client) · safetensors (wire) · the existing `eujeno/model/` (loader, blocks, generate) · pytest.
 
 **Decisions in this slice:**
 - **Loading:** each node loads the whole model but serves only its stages (simple and correct for the small PoC model). Real partial-loading = a later optimization.
@@ -21,7 +21,7 @@
 
 ```
 pyproject.toml                  # MODIFY: + fastapi, uvicorn, httpx
-axyn/
+eujeno/
   model/blocks.py               # MODIFY: + prepare_decoder_block()
   net/
     __init__.py                 # NEW (empty)
@@ -36,7 +36,7 @@ tests/
   test_prepare_block.py         # prepare_decoder_block (slow)
   test_server.py                # one app with all stages via TestClient (slow)
   test_orchestrator.py          # 2 servers in thread, distributed == reference (slow)
-  test_cli_infer.py             # `axyn infer` against 2 servers (slow)
+  test_cli_infer.py             # `eujeno infer` against 2 servers (slow)
 docs/
   examples/topology.localhost.json   # NEW: example topology
 ```
@@ -45,7 +45,7 @@ docs/
 
 ## Task 1: dependencies + `net` package + wire
 
-**Files:** modify `pyproject.toml`; create `axyn/net/__init__.py`, `axyn/net/wire.py`, `tests/test_wire.py`.
+**Files:** modify `pyproject.toml`; create `eujeno/net/__init__.py`, `eujeno/net/wire.py`, `tests/test_wire.py`.
 
 - [ ] **Step 1: add dependencies in `pyproject.toml`**
 
@@ -57,17 +57,17 @@ In the `[project] dependencies` list add:
 ```
 Then reinstall:
 ```bash
-cd /Users/alberto/Projects/AI/axyn && .venv/bin/pip install -e ".[dev]"
+cd /Users/alberto/Projects/AI/eujeno && .venv/bin/pip install -e ".[dev]"
 ```
 (If the network is blocked and the packages cannot be installed, report BLOCKED.)
 
-- [ ] **Step 2: create `axyn/net/__init__.py`** (empty file).
+- [ ] **Step 2: create `eujeno/net/__init__.py`** (empty file).
 
 - [ ] **Step 3: write the test `tests/test_wire.py`**
 
 ```python
 import torch
-from axyn.net.wire import encode_tensors, decode_tensors
+from eujeno.net.wire import encode_tensors, decode_tensors
 
 
 def test_roundtrip_preserves_tensors_and_dtype():
@@ -83,10 +83,10 @@ def test_roundtrip_preserves_tensors_and_dtype():
 
 - [ ] **Step 4: run it to see it fail**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_wire.py -v`
-Expected: ImportError on `axyn.net.wire`.
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_wire.py -v`
+Expected: ImportError on `eujeno.net.wire`.
 
-- [ ] **Step 5: implement `axyn/net/wire.py`**
+- [ ] **Step 5: implement `eujeno/net/wire.py`**
 
 ```python
 import safetensors.torch
@@ -104,26 +104,26 @@ def decode_tensors(data: bytes) -> dict:
 
 - [ ] **Step 6: run it to see it pass**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_wire.py -v`
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_wire.py -v`
 Expected: 1 passed.
 
 - [ ] **Step 7: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add pyproject.toml axyn/net/__init__.py axyn/net/wire.py tests/test_wire.py && git commit -m "feat(net): HTTP dependencies + safetensors wire for activations"
+cd /Users/alberto/Projects/AI/eujeno && git add pyproject.toml eujeno/net/__init__.py eujeno/net/wire.py tests/test_wire.py && git commit -m "feat(net): HTTP dependencies + safetensors wire for activations"
 ```
 
 ---
 
 ## Task 2: topology (`parse_stages` + `Topology`)
 
-**Files:** create `axyn/net/topology.py`, `tests/test_topology.py`.
+**Files:** create `eujeno/net/topology.py`, `tests/test_topology.py`.
 
 - [ ] **Step 1: write `tests/test_topology.py`**
 
 ```python
 import pytest
-from axyn.net.topology import parse_stages, StageSpec, Topology, load_topology
+from eujeno.net.topology import parse_stages, StageSpec, Topology, load_topology
 
 
 def test_parse_stages_all_kinds():
@@ -160,10 +160,10 @@ def test_load_topology_resolves_stages():
 
 - [ ] **Step 2: run it to see it fail**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_topology.py -v`
-Expected: ImportError on `axyn.net.topology`.
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_topology.py -v`
+Expected: ImportError on `eujeno.net.topology`.
 
-- [ ] **Step 3: implement `axyn/net/topology.py`**
+- [ ] **Step 3: implement `eujeno/net/topology.py`**
 
 ```python
 from dataclasses import dataclass, field
@@ -171,7 +171,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class StageSpec:
-    """Which stages a node serves (for `axyn serve`)."""
+    """Which stages a node serves (for `eujeno serve`)."""
     embed: bool = False
     head: bool = False
     decoders: list = field(default_factory=list)   # list[tuple[int, int]]
@@ -202,7 +202,7 @@ def parse_stages(spec: str) -> StageSpec:
 
 @dataclass
 class Topology:
-    """stage->URL map for distributed inference (for `axyn infer`)."""
+    """stage->URL map for distributed inference (for `eujeno infer`)."""
     model: str
     embed: str
     head: str
@@ -224,13 +224,13 @@ def load_topology(data: dict) -> Topology:
 
 - [ ] **Step 4: run it to see it pass**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_topology.py -v`
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_topology.py -v`
 Expected: 4 passed.
 
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/topology.py tests/test_topology.py && git commit -m "feat(net): stage parsing + Topology model for distributed inference"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/topology.py tests/test_topology.py && git commit -m "feat(net): stage parsing + Topology model for distributed inference"
 ```
 
 ---
@@ -239,14 +239,14 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/net/topology.py tests/test_to
 
 > The server shares the layer modules across jobs but keeps a separate KV-cache per job. We therefore need a way to prepare the layers (slice + remap `layer_idx` to local indices) ONCE, and then create a per-job `DecoderBlock` (with its own cache) on top of those layers.
 
-**Files:** modify `axyn/model/blocks.py`; create `tests/test_prepare_block.py`.
+**Files:** modify `eujeno/model/blocks.py`; create `tests/test_prepare_block.py`.
 
 - [ ] **Step 1: write `tests/test_prepare_block.py`**
 
 ```python
 import pytest
 import torch
-from axyn.model.blocks import prepare_decoder_block, DecoderBlock
+from eujeno.model.blocks import prepare_decoder_block, DecoderBlock
 
 
 @pytest.mark.slow
@@ -264,10 +264,10 @@ def test_prepare_returns_local_indexed_layers(full_model):
 
 - [ ] **Step 2: run it to see it fail**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_prepare_block.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_prepare_block.py -m slow -v`
 Expected: ImportError/AttributeError on `prepare_decoder_block`.
 
-- [ ] **Step 3: implement in `axyn/model/blocks.py`**
+- [ ] **Step 3: implement in `eujeno/model/blocks.py`**
 
 Add at the end of the file:
 ```python
@@ -287,20 +287,20 @@ def prepare_decoder_block(model, lo: int, hi: int):
 
 - [ ] **Step 4: run it to see it pass**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_prepare_block.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_prepare_block.py -m slow -v`
 Expected: PASS.
 
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/model/blocks.py tests/test_prepare_block.py && git commit -m "feat(model): prepare_decoder_block (shared layers, per-job DecoderBlock cache)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/model/blocks.py tests/test_prepare_block.py && git commit -m "feat(model): prepare_decoder_block (shared layers, per-job DecoderBlock cache)"
 ```
 
 ---
 
 ## Task 4: `BlockServer` (FastAPI)
 
-**Files:** create `axyn/net/server.py`, `tests/test_server.py`.
+**Files:** create `eujeno/net/server.py`, `tests/test_server.py`.
 
 - [ ] **Step 1: write `tests/test_server.py`**
 
@@ -308,10 +308,10 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/model/blocks.py tests/test_pr
 import pytest
 import torch
 from fastapi.testclient import TestClient
-from axyn.net.wire import encode_tensors, decode_tensors
-from axyn.net.topology import StageSpec
-from axyn.net.server import create_app
-from axyn.model.generate import reference_generate
+from eujeno.net.wire import encode_tensors, decode_tensors
+from eujeno.net.topology import StageSpec
+from eujeno.net.server import create_app
+from eujeno.model.generate import reference_generate
 
 
 @pytest.mark.slow
@@ -346,17 +346,17 @@ def test_single_node_serving_all_stages_matches_reference(full_model):
 
 - [ ] **Step 2: run it to see it fail**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_server.py -m slow -v`
-Expected: ImportError on `axyn.net.server`.
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_server.py -m slow -v`
+Expected: ImportError on `eujeno.net.server`.
 
-- [ ] **Step 3: implement `axyn/net/server.py`**
+- [ ] **Step 3: implement `eujeno/net/server.py`**
 
 ```python
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from axyn.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
-from axyn.net.wire import encode_tensors, decode_tensors
+from eujeno.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_decoder_block
+from eujeno.net.wire import encode_tensors, decode_tensors
 
 _OCTET = "application/octet-stream"
 
@@ -420,20 +420,20 @@ def create_app(model, tokenizer, stages):
 
 - [ ] **Step 4: run it to see it pass**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_server.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_server.py -m slow -v`
 Expected: PASS (the tokens generated via HTTP match the reference).
 
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/server.py tests/test_server.py && git commit -m "feat(net): FastAPI BlockServer (embed/decode/head, per-job KV-cache)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/server.py tests/test_server.py && git commit -m "feat(net): FastAPI BlockServer (embed/decode/head, per-job KV-cache)"
 ```
 
 ---
 
 ## Task 5: orchestrator + distributed golden on 2 nodes
 
-**Files:** create `axyn/net/orchestrator.py`, `tests/test_orchestrator.py`.
+**Files:** create `eujeno/net/orchestrator.py`, `tests/test_orchestrator.py`.
 
 - [ ] **Step 1: write `tests/test_orchestrator.py`**
 
@@ -446,10 +446,10 @@ import pytest
 import httpx
 import uvicorn
 
-from axyn.net.topology import StageSpec, Topology
-from axyn.net.server import create_app
-from axyn.net.orchestrator import distributed_generate
-from axyn.model.generate import reference_generate
+from eujeno.net.topology import StageSpec, Topology
+from eujeno.net.server import create_app
+from eujeno.net.orchestrator import distributed_generate
+from eujeno.model.generate import reference_generate
 
 
 def _free_port():
@@ -501,15 +501,15 @@ def test_two_node_distributed_matches_reference(full_model):
 
 - [ ] **Step 2: run it to see it fail**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_orchestrator.py -m slow -v`
-Expected: ImportError on `axyn.net.orchestrator`.
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_orchestrator.py -m slow -v`
+Expected: ImportError on `eujeno.net.orchestrator`.
 
-- [ ] **Step 3: implement `axyn/net/orchestrator.py`**
+- [ ] **Step 3: implement `eujeno/net/orchestrator.py`**
 
 ```python
 import torch
 
-from axyn.net.wire import encode_tensors, decode_tensors
+from eujeno.net.wire import encode_tensors, decode_tensors
 
 
 def distributed_generate(topology, prompt: str, max_new_tokens: int, client, tokenizer,
@@ -554,20 +554,20 @@ def distributed_generate(topology, prompt: str, max_new_tokens: int, client, tok
 
 - [ ] **Step 4: run it to see it pass**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_orchestrator.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_orchestrator.py -m slow -v`
 Expected: PASS — distributed inference on 2 real nodes (uvicorn) matches the reference.
 
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/orchestrator.py tests/test_orchestrator.py && git commit -m "feat(net): distributed orchestrator (golden on 2 real nodes)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/orchestrator.py tests/test_orchestrator.py && git commit -m "feat(net): distributed orchestrator (golden on 2 real nodes)"
 ```
 
 ---
 
 ## Task 6: CLI commands `serve` and `infer`
 
-**Files:** modify `axyn/cli.py`; create `tests/test_cli_infer.py`.
+**Files:** modify `eujeno/cli.py`; create `tests/test_cli_infer.py`.
 
 - [ ] **Step 1: write `tests/test_cli_infer.py`**
 
@@ -581,10 +581,10 @@ import pytest
 import uvicorn
 
 from typer.testing import CliRunner
-from axyn.cli import app as cli_app
-from axyn.net.topology import StageSpec
-from axyn.net.server import create_app
-from axyn.model.generate import reference_generate
+from eujeno.cli import app as cli_app
+from eujeno.net.topology import StageSpec
+from eujeno.net.server import create_app
+from eujeno.model.generate import reference_generate
 
 runner = CliRunner()
 
@@ -638,17 +638,17 @@ def test_cli_infer_against_two_nodes(full_model, tmp_path):
 
 - [ ] **Step 2: run it to see it fail**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli_infer.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_cli_infer.py -m slow -v`
 Expected: FAIL (`infer` command does not exist).
 
-- [ ] **Step 3: implement in `axyn/cli.py`**
+- [ ] **Step 3: implement in `eujeno/cli.py`**
 
-Add the imports near the other `from axyn...` ones:
+Add the imports near the other `from eujeno...` ones:
 ```python
 import json as _json2   # (if _json already exists as json, reuse _json; do NOT redefine)
-from axyn.net.topology import parse_stages, load_topology
-from axyn.net.server import create_app
-from axyn.net.orchestrator import distributed_generate
+from eujeno.net.topology import parse_stages, load_topology
+from eujeno.net.server import create_app
+from eujeno.net.orchestrator import distributed_generate
 ```
 > Note: the `cli.py` module already imports `json` as `_json`. To read the topology file use `_json.loads(...)`. Do NOT add a second json import; remove the `import json as _json2` line if you already have `_json`.
 
@@ -673,7 +673,7 @@ def serve(
     except Exception as e:
         _fail("serve", "MODEL_LOAD_FAILED", str(e))
     fastapi_app = create_app(model, tokenizer, spec)
-    typer.echo(f"axyn serve: stages={stages} on http://{host}:{port}  (model={model_id})", err=True)
+    typer.echo(f"eujeno serve: stages={stages} on http://{host}:{port}  (model={model_id})", err=True)
     uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
 
 
@@ -708,13 +708,13 @@ def infer(
 
 - [ ] **Step 4: run it to see it pass**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_cli_infer.py -m slow -v`
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_cli_infer.py -m slow -v`
 Expected: PASS.
 
 - [ ] **Step 5: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/cli.py tests/test_cli_infer.py && git commit -m "feat(cli): serve (BlockServer) and infer (distributed inference) commands"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/cli.py tests/test_cli_infer.py && git commit -m "feat(cli): serve (BlockServer) and infer (distributed inference) commands"
 ```
 
 ---
@@ -749,16 +749,16 @@ Distributed inference of a model across 2 nodes (here on localhost; on a LAN rep
 pip install -e .
 
 # Node A (serves the embedding + first 12 layers)
-axyn serve --stages "embed,decoder:0-12" --port 8001
+eujeno serve --stages "embed,decoder:0-12" --port 8001
 
 # Node B (serves the last 12 layers + the head) — another terminal/machine
-axyn serve --stages "decoder:12-24,head" --port 8002
+eujeno serve --stages "decoder:12-24,head" --port 8002
 
 # Entry: runs inference across the two nodes
-axyn --json infer --topology docs/examples/topology.localhost.json --prompt "The capital of Italy is"
+eujeno --json infer --topology docs/examples/topology.localhost.json --prompt "The capital of Italy is"
 ```
 
-On 3 machines: start one `axyn serve` per node with different layer ranges, copy `topology.localhost.json` filling in the **real IP:port** of each node, and run `axyn infer` pointing at that file. All machines must be able to reach each other over the network (LAN/VPN) and will have downloaded the model from Hugging Face on first start.
+On 3 machines: start one `eujeno serve` per node with different layer ranges, copy `topology.localhost.json` filling in the **real IP:port** of each node, and run `eujeno infer` pointing at that file. All machines must be able to reach each other over the network (LAN/VPN) and will have downloaded the model from Hugging Face on first start.
 ```
 
 - [ ] **Step 3: update `docs/ROADMAP.md`**
@@ -771,17 +771,17 @@ and update the "Last updated" line with the date and a note.
 
 - [ ] **Step 4: run the ENTIRE suite**
 
-Run: `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest -q`
+Run: `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest -q`
 Expected: all tests PASS (foundation + CLI + net).
 
 - [ ] **Step 5: manual 2-node smoke test (localhost)**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn
-.venv/bin/axyn serve --stages "embed,decoder:0-12" --port 8001 &
-.venv/bin/axyn serve --stages "decoder:12-24,head" --port 8002 &
+cd /Users/alberto/Projects/AI/eujeno
+.venv/bin/eujeno serve --stages "embed,decoder:0-12" --port 8001 &
+.venv/bin/eujeno serve --stages "decoder:12-24,head" --port 8002 &
 sleep 60   # wait for the model to load on both
-.venv/bin/axyn --json infer --topology docs/examples/topology.localhost.json --prompt "The capital of Italy is" --max-new-tokens 8
+.venv/bin/eujeno --json infer --topology docs/examples/topology.localhost.json --prompt "The capital of Italy is" --max-new-tokens 8
 kill %1 %2
 ```
 Expected: JSON envelope with a plausible `data.text` (e.g. mentions Roma).
@@ -789,7 +789,7 @@ Expected: JSON envelope with a plausible `data.text` (e.g. mentions Roma).
 - [ ] **Step 6: commit**
 
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add docs/examples/topology.localhost.json README.md docs/ROADMAP.md && git commit -m "docs: multi-node quickstart + example topology; ROADMAP network transport"
+cd /Users/alberto/Projects/AI/eujeno && git add docs/examples/topology.localhost.json README.md docs/ROADMAP.md && git commit -m "docs: multi-node quickstart + example topology; ROADMAP network transport"
 ```
 
 ---

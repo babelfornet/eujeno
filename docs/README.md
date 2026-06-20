@@ -1,8 +1,8 @@
-# Axyn — Documentation
+# Eujeno — Documentation
 
-**Axyn** is a **fully decentralized, peer-to-peer** inference network for Large Language Models: no central server, every node is a symmetric peer that hosts and runs one or more *blocks* of layers of an open-source model (downloaded from Hugging Face). User queries are routed as **durable jobs** through the network of nodes responsible for the various blocks.
+**Eujeno** is a **fully decentralized, peer-to-peer** inference network for Large Language Models: no central server, every node is a symmetric peer that hosts and runs one or more *blocks* of layers of an open-source model (downloaded from Hugging Face). User queries are routed as **durable jobs** through the network of nodes responsible for the various blocks.
 
-> **Guiding idea:** Axyn is not "real-time Petals". It is **"BOINC / SETI@home for the layers of an LLM"** — it tolerates extremely high latencies (hours, days, weeks) and treats inference as an asynchronous job that advances hop-by-hop in *store-and-forward* fashion.
+> **Guiding idea:** Eujeno is not "real-time Petals". It is **"BOINC / SETI@home for the layers of an LLM"** — it tolerates extremely high latencies (hours, days, weeks) and treats inference as an asynchronous job that advances hop-by-hop in *store-and-forward* fashion.
 
 ## Document map
 
@@ -11,7 +11,7 @@
 | [ROADMAP.md](./ROADMAP.md) | **Project status**: steps done / to do, milestones, backlog. The starting point for understanding "where we are". |
 | [00-vision-architecture.md](./00-vision-architecture.md) | **Part 0** — Vision, goals, principles, component map, data flow. The approved architectural skeleton. |
 | [decisions/](./decisions/) | **ADRs** (Architecture Decision Records): motivated technical decisions (e.g. which P2P substrate, which runtime). |
-| [prd/](./prd/) | **PRDs** for each subsystem (Parts 1–5): Peer Node, Discovery & Routing, Queue & Load Balancing, Incentives & Reputation, Security & BFT. Plus the **[`axyn` CLI](./prd/cli.md)** (AI-native), the entry point for all operations. |
+| [prd/](./prd/) | **PRDs** for each subsystem (Parts 1–5): Peer Node, Discovery & Routing, Queue & Load Balancing, Incentives & Reputation, Security & BFT. Plus the **[`eujeno` CLI](./prd/cli.md)** (AI-native), the entry point for all operations. |
 
 ## How the work is organized
 

@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development. Steps use checkbox (`- [ ]`) syntax.
 
-**Goal:** Expose an **OpenAI-compatible** endpoint on the coordinator (`/v1/chat/completions` + `/v1/models`) so that any OpenAI-compatible client/agent can query Axyn. Includes a **chat template** (messages → prompt) and **sampling** (temperature/top_p/repetition_penalty), which also fix the quality issues of greedy decoding.
+**Goal:** Expose an **OpenAI-compatible** endpoint on the coordinator (`/v1/chat/completions` + `/v1/models`) so that any OpenAI-compatible client/agent can query Eujeno. Includes a **chat template** (messages → prompt) and **sampling** (temperature/top_p/repetition_penalty), which also fix the quality issues of greedy decoding.
 
 **Architecture:** The `head` node exposes the **top-k** logits (in addition to the argmax, for greedy backward compatibility). The coordinator samples (pure helper `sample_token`) and drives generation with the decoding parameters; it applies the tokenizer's chat template to the `messages`; it reuses the existing failover loop. The `/v1/*` endpoints map request/response to the OpenAI format.
 
-**Tech Stack:** Python · FastAPI · torch · transformers (chat template) · the existing `axyn/net/{coordinator,node_exec,framing,wire,discovery}.py`.
+**Tech Stack:** Python · FastAPI · torch · transformers (chat template) · the existing `eujeno/net/{coordinator,node_exec,framing,wire,discovery}.py`.
 
 **Out of scope (follow-up):** SSE streaming; Anthropic `/v1/messages` endpoint / LiteLLM config for Claude Code; queue & load balancing for many concurrent agents.
 
@@ -15,9 +15,9 @@
 ## File Structure
 
 ```
-axyn/net/sampling.py         # NEW: sample_token() (pure, testable)
-axyn/net/node_exec.py        # MOD: head also returns topk_ids/topk_logits
-axyn/net/coordinator.py      # MOD: generation refactor + sampling + chat template + /v1 endpoints
+eujeno/net/sampling.py         # NEW: sample_token() (pure, testable)
+eujeno/net/node_exec.py        # MOD: head also returns topk_ids/topk_logits
+eujeno/net/coordinator.py      # MOD: generation refactor + sampling + chat template + /v1 endpoints
 tests/
   test_sampling.py              # deterministic sample_token (fast)
   test_openai_e2e.py            # /v1/chat/completions over 2 nodes (slow)
@@ -29,12 +29,12 @@ docs/ROADMAP.md
 
 ## Task 1: `sample_token` + head top-k
 
-**Files:** create `axyn/net/sampling.py`; modify `axyn/net/node_exec.py`; create `tests/test_sampling.py`; (head already covered by test_node_exec — stays green).
+**Files:** create `eujeno/net/sampling.py`; modify `eujeno/net/node_exec.py`; create `tests/test_sampling.py`; (head already covered by test_node_exec — stays green).
 
 - [ ] **Step 1: test `tests/test_sampling.py`**
 ```python
 import torch
-from axyn.net.sampling import sample_token
+from eujeno.net.sampling import sample_token
 
 
 def test_greedy_returns_argmax_when_temperature_zero():
@@ -64,9 +64,9 @@ def test_repetition_penalty_demotes_generated_tokens():
     assert out == 20
 ```
 
-- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/axyn/.venv/bin/python -m pytest tests/test_sampling.py -v` → ImportError.
+- [ ] **Step 2: run FAIL** — `/Users/alberto/Projects/AI/eujeno/.venv/bin/python -m pytest tests/test_sampling.py -v` → ImportError.
 
-- [ ] **Step 3: implement `axyn/net/sampling.py`**
+- [ ] **Step 3: implement `eujeno/net/sampling.py`**
 ```python
 import torch
 
@@ -96,7 +96,7 @@ def sample_token(topk_ids, topk_logits, generated_ids, temperature, top_p,
     return ids[int(si[choice])]
 ```
 
-- [ ] **Step 4: modify the `head` branch of `handle_request` in `axyn/net/node_exec.py`**
+- [ ] **Step 4: modify the `head` branch of `handle_request` in `eujeno/net/node_exec.py`**
 
 Replace the `if op == "head":` block with the following (it also returns the top-k, keeping `token_id` for greedy backward compatibility):
 ```python
@@ -116,23 +116,23 @@ Add `import torch` at the top of `node_exec.py` if not already present.
 
 - [ ] **Step 6: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/sampling.py axyn/net/node_exec.py tests/test_sampling.py && git commit -m "feat(net): sample_token + head exposes top-k logits (sampling)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/sampling.py eujeno/net/node_exec.py tests/test_sampling.py && git commit -m "feat(net): sample_token + head exposes top-k logits (sampling)"
 ```
 
 ---
 
 ## Task 2: coordinator — parametric generation + sampling in /infer
 
-**Files:** modify `axyn/net/coordinator.py`; create test in `tests/test_openai_e2e.py` (sampling part).
+**Files:** modify `eujeno/net/coordinator.py`; create test in `tests/test_openai_e2e.py` (sampling part).
 
 - [ ] **Step 1: add a deterministic sampling test to `tests/test_openai_e2e.py`**
 ```python
 import socket, threading, time, asyncio
 import pytest, httpx, uvicorn
-from axyn.net.coordinator import create_coordinator_app
-from axyn.net.node import run_node
-from axyn.net.node_exec import NodeState
-from axyn.net.topology import StageSpec
+from eujeno.net.coordinator import create_coordinator_app
+from eujeno.net.node import run_node
+from eujeno.net.node_exec import NodeState
+from eujeno.net.topology import StageSpec
 
 
 def _free_port():
@@ -184,9 +184,9 @@ def test_infer_sampling_seeded_is_reproducible(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_openai_e2e.py::test_infer_sampling_seeded_is_reproducible -m slow -v` → fails (sampling not implemented; the output may not be reproducible or the parameters are ignored).
 
-- [ ] **Step 3: refactor in `axyn/net/coordinator.py`**
+- [ ] **Step 3: refactor in `eujeno/net/coordinator.py`**
 
-Add at the top of the module: `import random` and `from axyn.net.sampling import sample_token`.
+Add at the top of the module: `import random` and `from eujeno.net.sampling import sample_token`.
 
 Replace `_run_generation` with a version that accepts the decoding parameters and samples via the head node:
 ```python
@@ -273,14 +273,14 @@ Replace the `/infer` endpoint with:
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): coordinator with parametric sampling + refactored failover"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): coordinator with parametric sampling + refactored failover"
 ```
 
 ---
 
 ## Task 3: endpoint OpenAI `/v1/models` + `/v1/chat/completions`
 
-**Files:** modify `axyn/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
+**Files:** modify `eujeno/net/coordinator.py`; modify `tests/test_openai_e2e.py`.
 
 - [ ] **Step 1: add to `tests/test_openai_e2e.py`**
 ```python
@@ -292,7 +292,7 @@ def test_openai_chat_completions(full_model):
             models = c.get(f"{base}/v1/models").json()
             assert models["object"] == "list" and len(models["data"]) >= 1
             r = c.post(f"{base}/v1/chat/completions", json={
-                "model": "axyn",
+                "model": "eujeno",
                 "messages": [{"role": "user", "content": "Say hello in one word"}],
                 "max_tokens": 8,
             })
@@ -307,15 +307,15 @@ def test_openai_chat_completions(full_model):
 
 - [ ] **Step 2: run FAIL** — `... pytest tests/test_openai_e2e.py::test_openai_chat_completions -m slow -v` → 404 (endpoint does not exist).
 
-- [ ] **Step 3: add the endpoints in `axyn/net/coordinator.py`**
+- [ ] **Step 3: add the endpoints in `eujeno/net/coordinator.py`**
 
 Add `import time` at the top. Add before `return app`:
 ```python
     @app.get("/v1/models")
     async def list_models():
         return {"object": "list",
-                "data": [{"id": "axyn", "object": "model", "owned_by": "axyn"},
-                         {"id": model_id, "object": "model", "owned_by": "axyn"}]}
+                "data": [{"id": "eujeno", "object": "model", "owned_by": "eujeno"},
+                         {"id": model_id, "object": "model", "owned_by": "eujeno"}]}
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: Request):
@@ -349,7 +349,7 @@ Add `import time` at the top. Add before `return app`:
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): endpoint OpenAI /v1/models + /v1/chat/completions (chat template + sampling)"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/net/coordinator.py tests/test_openai_e2e.py && git commit -m "feat(net): endpoint OpenAI /v1/models + /v1/chat/completions (chat template + sampling)"
 ```
 
 ---
@@ -360,7 +360,7 @@ cd /Users/alberto/Projects/AI/axyn && git add axyn/net/coordinator.py tests/test
 
 - [ ] **Step 1: create `docs/examples/agents.md`** with:
 ```markdown
-# Connecting AI agents to Axyn (OpenAI-compatible API)
+# Connecting AI agents to Eujeno (OpenAI-compatible API)
 
 When the model is OPERATIONAL, the coordinator exposes an OpenAI-compatible API: point any OpenAI client/SDK to `http://THE_COORDINATOR:9000/v1`.
 
@@ -369,7 +369,7 @@ When the model is OPERATIONAL, the coordinator exposes an OpenAI-compatible API:
 from openai import OpenAI
 client = OpenAI(base_url="http://127.0.0.1:9000/v1", api_key="anything")
 r = client.chat.completions.create(
-    model="axyn",
+    model="eujeno",
     messages=[{"role": "user", "content": "Write a haiku about the sea"}],
     temperature=0.8, top_p=0.9, max_tokens=80,
 )
@@ -379,7 +379,7 @@ print(r.choices[0].message.content)
 ## curl
 ```bash
 curl -s http://127.0.0.1:9000/v1/chat/completions -H 'content-type: application/json' -d '{
-  "model": "axyn",
+  "model": "eujeno",
   "messages": [{"role":"user","content":"Hi!"}],
   "temperature": 0.7, "max_tokens": 64
 }'
@@ -404,7 +404,7 @@ Every request is a job on the network. For many concurrent agents it is worth ad
 
 - [ ] **Step 5: commit**
 ```bash
-cd /Users/alberto/Projects/AI/axyn && git add docs/examples/agents.md README.md docs/ROADMAP.md && git commit -m "docs: connecting agents via the OpenAI API; ROADMAP /v1"
+cd /Users/alberto/Projects/AI/eujeno && git add docs/examples/agents.md README.md docs/ROADMAP.md && git commit -m "docs: connecting agents via the OpenAI API; ROADMAP /v1"
 ```
 
 ---
