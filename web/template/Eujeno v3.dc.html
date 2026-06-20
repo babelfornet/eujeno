@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  ::selection{ background:#4f46e5; color:#fff; }
+  @keyframes flow { 0%{ transform:translateX(-120%);} 100%{ transform:translateX(900%);} }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.15;} }
+  ::-webkit-scrollbar{width:11px;height:11px;} ::-webkit-scrollbar-track{background:transparent;} ::-webkit-scrollbar-thumb{background:#9aa3b277;border-radius:6px;}
+</style>
+</helmet>
+
+<div style="--accent: {{ accent }}; --page-bg: {{ pageBg }}; --card-bg: {{ cardBg }}; --text: {{ text }}; --muted: {{ muted }}; --muted2: {{ muted2 }}; --border: {{ border }}; --border-strong: {{ borderStrong }}; --nav-bg: {{ navBg }}; --section-bg: {{ sectionBg }}; --canvas-bg: {{ canvasBg }}; --radius: {{ radius }}; --radius-sm: {{ radiusSm }}; --radius-tile: {{ radiusTile }}; --radius-pill: {{ radiusPill }}; --section-pad: {{ sectionPad }}; --gap: {{ gap }}; --scale: {{ scale }}; --card-shadow: {{ cardShadow }}; --float-shadow: {{ floatShadow }}; --hero-align: {{ heroAlign }}; --hero-mx: {{ heroMx }}; --hero-justify: {{ heroJustify }}; --label-transform: {{ labelTransform }}; --badge-anim: {{ badgeAnim }}; --cta-bg: {{ ctaBg }}; --cta-text: {{ ctaText }}; --cta-heading: {{ ctaHeading }}; --cta-btn-bg: {{ ctaBtnBg }}; --cta-btn-text: {{ ctaBtnText }}; --cta-btn2-border: {{ ctaBtn2Border }}; --cta-btn2-text: {{ ctaBtn2Text }}; --cta-border: {{ ctaBorder }}; background:var(--page-bg,#fff); color:var(--text,#0e1116); font-family:'Hanken Grotesk',system-ui,sans-serif; min-height:100vh; -webkit-font-smoothing:antialiased; overflow-x:hidden;">
+
+  <!-- ================= NAV ================= -->
+  <header style="position:sticky; top:0; z-index:70; backdrop-filter:blur(12px); background:var(--nav-bg,rgba(255,255,255,0.78)); border-bottom:1px solid var(--border,#ebedf1);">
+    <div style="max-width:1120px; margin:0 auto; padding:14px 28px; display:flex; align-items:center; justify-content:space-between; gap:24px;">
+      <a href="#top" style="display:flex; align-items:center; gap:10px; text-decoration:none; color:var(--text,#0e1116);">
+        <span style="width:24px; height:24px; border-radius:calc(var(--radius-tile,10px) * 0.7); background:var(--accent,#4f46e5); display:grid; place-items:center;">
+          <span style="display:grid; grid-template-columns:repeat(2,4px); gap:2.5px;">
+            <span style="width:4px;height:4px;background:#fff;border-radius:1px;"></span><span style="width:4px;height:4px;background:rgba(255,255,255,0.5);border-radius:1px;"></span>
+            <span style="width:4px;height:4px;background:rgba(255,255,255,0.5);border-radius:1px;"></span><span style="width:4px;height:4px;background:#fff;border-radius:1px;"></span>
+          </span>
+        </span>
+        <span style="font-weight:700; letter-spacing:-0.01em; font-size:18px;">Eujeno</span>
+      </a>
+      <nav style="display:flex; align-items:center; gap:28px; font-size:14.5px; font-weight:500;">
+        <a href="#how" style="color:var(--muted,#5b6471); text-decoration:none;" style-hover="color:var(--text,#0e1116);">How it works</a>
+        <a href="#why" style="color:var(--muted,#5b6471); text-decoration:none;" style-hover="color:var(--text,#0e1116);">Why P2P</a>
+        <a href="#cases" style="color:var(--muted,#5b6471); text-decoration:none;" style-hover="color:var(--text,#0e1116);">Use cases</a>
+        <a href="#run" style="display:inline-flex; align-items:center; gap:7px; color:#fff; background:var(--accent,#4f46e5); text-decoration:none; font-weight:600; font-size:14px; padding:9px 16px; border-radius:var(--radius-sm,9px);">Run a node</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ================= HERO ================= -->
+  <section id="top" style="position:relative; max-width:1120px; margin:0 auto; padding:84px 28px 56px; text-align:var(--hero-align,center);">
+    <sc-if value="{{ heroGrid }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute; inset:0; z-index:0; pointer-events:none; background-image:radial-gradient(color-mix(in srgb, var(--accent,#4f46e5) 22%, transparent) 1px, transparent 1px); background-size:24px 24px; -webkit-mask-image:radial-gradient(ellipse 70% 55% at 50% 38%, #000, transparent); mask-image:radial-gradient(ellipse 70% 55% at 50% 38%, #000, transparent); opacity:0.5;"></div>
+    </sc-if>
+    <div style="position:relative; z-index:1;">
+    <div style="display:inline-flex; align-items:center; gap:9px; font-size:13px; font-weight:600; color:var(--accent,#4f46e5); border:1px solid color-mix(in srgb, var(--accent,#4f46e5) 26%, transparent); background:color-mix(in srgb, var(--accent,#4f46e5) 7%, transparent); padding:6px 13px; border-radius:var(--radius-pill,999px);">
+      <span style="width:7px; height:7px; background:var(--accent,#4f46e5); border-radius:50%; animation:var(--badge-anim, blink 1.6s steps(2) infinite);"></span>
+      Peer-to-peer AI layer network
+    </div>
+    <h1 style="margin:26px var(--hero-mx,auto) 0; font-size:calc(66px * var(--scale,1)); line-height:1.02; font-weight:800; letter-spacing:-0.03em; color:var(--text,#0e1116); max-width:880px;">
+      One model, split across<br>the <span style="color:var(--accent,#4f46e5);">network.</span>
+    </h1>
+    <p style="margin:24px var(--hero-mx,auto) 0; font-size:19px; line-height:1.6; color:var(--muted,#5b6471); max-width:600px; font-weight:400;">
+      Eujeno shards a large language model layer by layer across independent nodes. No machine holds the whole model — together they run it, and anyone on the network can query it.
+    </p>
+    <div style="margin-top:32px; display:flex; gap:12px; justify-content:var(--hero-justify,center); flex-wrap:wrap;">
+      <a href="#run" style="display:inline-flex; align-items:center; gap:8px; background:var(--accent,#4f46e5); color:#fff; font-weight:600; font-size:15.5px; text-decoration:none; padding:13px 24px; border-radius:var(--radius-sm,11px); box-shadow:0 8px 20px -8px color-mix(in srgb, var(--accent,#4f46e5) 55%, transparent);">Run a node</a>
+      <a href="#how" style="display:inline-flex; align-items:center; gap:8px; color:var(--text,#0e1116); font-weight:600; font-size:15.5px; text-decoration:none; padding:13px 24px; border-radius:var(--radius-sm,11px); border:1px solid var(--border-strong,#d9dce2); background:var(--card-bg,#fff);" style-hover="border-color:var(--text,#0e1116);">See how it works</a>
+    </div>
+
+    <!-- network card -->
+    <sc-if value="{{ showCanvas }}" hint-placeholder-val="{{ true }}">
+    <div style="margin-top:56px; border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,18px); overflow:hidden; box-shadow:var(--float-shadow, 0 24px 60px -32px rgba(16,24,40,0.22)); text-align:left;">
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 18px; border-bottom:1px solid var(--border,#eef0f3);">
+        <div style="display:flex; align-items:center; gap:10px; font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted2,#7a828e); letter-spacing:0.02em;">
+          <span style="display:flex; gap:5px;"><span style="width:9px;height:9px;border-radius:50%;background:var(--border-strong,#e2e5ea);"></span><span style="width:9px;height:9px;border-radius:50%;background:var(--border-strong,#e2e5ea);"></span><span style="width:9px;height:9px;border-radius:50%;background:var(--border-strong,#e2e5ea);"></span></span>
+          swarm.topology
+        </div>
+        <span style="display:inline-flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:11.5px; font-weight:500; color:var(--accent,#4f46e5);"><span style="width:7px;height:7px;background:var(--accent,#4f46e5);border-radius:50%;"></span>LIVE</span>
+      </div>
+      <canvas ref="{{ canvasRef }}" style="display:block; width:100%; height:380px; background:var(--canvas-bg,#fafbfc);"></canvas>
+      <div style="display:flex; gap:20px; padding:13px 18px; border-top:1px solid var(--border,#eef0f3); font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--muted2,#7a828e);">
+        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent,#4f46e5);"></span>token in transit</span>
+        <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:#aab0bb;"></span>peer node</span>
+        <span style="margin-left:auto;">forward pass →</span>
+      </div>
+    </div>
+    </sc-if>
+    </div>
+  </section>
+
+  <!-- ================= HOW IT WORKS ================= -->
+  <section id="how" style="max-width:1120px; margin:0 auto; padding:var(--section-pad,72px) 28px;">
+    <div style="font-family:'JetBrains Mono',monospace; font-size:12.5px; letter-spacing:0.06em; color:var(--accent,#4f46e5); text-transform:var(--label-transform,uppercase); font-weight:500;">How it works</div>
+    <h2 style="margin:12px 0 0; font-size:calc(40px * var(--scale,1)); font-weight:800; letter-spacing:-0.025em; color:var(--text,#0e1116); max-width:600px; line-height:1.06;">A model assembled from machines that never meet.</h2>
+
+    <div style="margin-top:44px; display:grid; grid-template-columns:repeat(3,1fr); gap:var(--gap,18px);">
+      <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:26px; box-shadow:var(--card-shadow,0 1px 2px rgba(16,24,40,0.04));">
+        <div style="width:38px; height:38px; border-radius:var(--radius-tile,10px); background:color-mix(in srgb, var(--accent,#4f46e5) 13%, transparent); color:var(--accent,#4f46e5); display:grid; place-items:center; font-family:'JetBrains Mono',monospace; font-weight:600; font-size:15px;">1</div>
+        <h3 style="margin:18px 0 8px; font-size:19px; font-weight:700; color:var(--text,#0e1116);">The model is sharded</h3>
+        <p style="margin:0; font-size:14.5px; line-height:1.6; color:var(--muted,#5b6471);">A model's transformer blocks are split into contiguous layer ranges. Each range is a self-contained stage of the forward pass.</p>
+      </div>
+      <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:26px; box-shadow:var(--card-shadow,0 1px 2px rgba(16,24,40,0.04));">
+        <div style="width:38px; height:38px; border-radius:var(--radius-tile,10px); background:color-mix(in srgb, var(--accent,#4f46e5) 13%, transparent); color:var(--accent,#4f46e5); display:grid; place-items:center; font-family:'JetBrains Mono',monospace; font-weight:600; font-size:15px;">2</div>
+        <h3 style="margin:18px 0 8px; font-size:19px; font-weight:700; color:var(--text,#0e1116);">Nodes claim layers</h3>
+        <p style="margin:0; font-size:14.5px; line-height:1.6; color:var(--muted,#5b6471);">Each peer hosts whatever layers it can fit in VRAM and announces them. The swarm self-organizes into a full end-to-end chain.</p>
+      </div>
+      <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:26px; box-shadow:var(--card-shadow,0 1px 2px rgba(16,24,40,0.04));">
+        <div style="width:38px; height:38px; border-radius:var(--radius-tile,10px); background:color-mix(in srgb, var(--accent,#4f46e5) 13%, transparent); color:var(--accent,#4f46e5); display:grid; place-items:center; font-family:'JetBrains Mono',monospace; font-weight:600; font-size:15px;">3</div>
+        <h3 style="margin:18px 0 8px; font-size:19px; font-weight:700; color:var(--text,#0e1116);">Anyone queries it</h3>
+        <p style="margin:0; font-size:14.5px; line-height:1.6; color:var(--muted,#5b6471);">A request routes hop-by-hop through the chain — activations passed peer to peer — and the final node streams tokens back.</p>
+      </div>
+    </div>
+
+    <!-- pipeline -->
+    <sc-if value="{{ showPipeline }}" hint-placeholder-val="{{ true }}">
+    <div style="margin-top:20px; border:1px solid var(--border,#e9ebef); background:var(--section-bg,#f7f8fa); border-radius:var(--radius,16px); padding:30px 26px; position:relative; overflow:hidden;">
+      <div style="position:absolute; top:0; bottom:0; left:0; width:90px; background:linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent,#4f46e5) 14%, transparent), transparent); animation:flow 5s linear infinite; pointer-events:none;"></div>
+      <div style="position:relative; display:flex; align-items:stretch; flex-wrap:nowrap; overflow-x:auto;">
+        <div style="flex:none; align-self:center; font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:500; color:var(--muted,#5b6471); padding:13px 15px; border:1px dashed var(--border-strong,#c7ccd4); border-radius:var(--radius-sm,10px); background:var(--card-bg,#fff);">prompt</div>
+        <div style="flex:none; align-self:center; color:var(--muted2,#b4bac3); padding:0 8px;">→</div>
+        <div style="flex:1 1 0; min-width:140px; border:1px solid color-mix(in srgb, var(--accent,#4f46e5) 40%, transparent); background:color-mix(in srgb, var(--accent,#4f46e5) 7%, transparent); border-radius:var(--radius-sm,12px); padding:15px;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted2,#7a828e);">node·7f3a</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:15px; color:var(--accent,#4f46e5); font-weight:600; margin-top:5px;">L0–15</div>
+          <div style="font-size:12px; color:var(--muted2,#7a828e); margin-top:6px;">embed + attn</div>
+        </div>
+        <div style="flex:none; align-self:center; color:var(--muted2,#b4bac3); padding:0 8px;">→</div>
+        <div style="flex:1 1 0; min-width:140px; border:1px solid var(--border,#e2e5ea); background:var(--card-bg,#fff); border-radius:var(--radius-sm,12px); padding:15px;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted2,#7a828e);">node·a19c</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:15px; color:var(--text,#0e1116); font-weight:600; margin-top:5px;">L16–31</div>
+          <div style="font-size:12px; color:var(--muted2,#7a828e); margin-top:6px;">transformer</div>
+        </div>
+        <div style="flex:none; align-self:center; color:var(--muted2,#b4bac3); padding:0 8px;">→</div>
+        <div style="flex:1 1 0; min-width:140px; border:1px solid var(--border,#e2e5ea); background:var(--card-bg,#fff); border-radius:var(--radius-sm,12px); padding:15px;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted2,#7a828e);">node·c4e1</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:15px; color:var(--text,#0e1116); font-weight:600; margin-top:5px;">L32–47</div>
+          <div style="font-size:12px; color:var(--muted2,#7a828e); margin-top:6px;">transformer</div>
+        </div>
+        <div style="flex:none; align-self:center; color:var(--muted2,#b4bac3); padding:0 8px;">→</div>
+        <div style="flex:1 1 0; min-width:140px; border:1px solid color-mix(in srgb, var(--accent,#4f46e5) 40%, transparent); background:color-mix(in srgb, var(--accent,#4f46e5) 7%, transparent); border-radius:var(--radius-sm,12px); padding:15px;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted2,#7a828e);">node·d8b0</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:15px; color:var(--accent,#4f46e5); font-weight:600; margin-top:5px;">L48–63</div>
+          <div style="font-size:12px; color:var(--muted2,#7a828e); margin-top:6px;">norm + head</div>
+        </div>
+        <div style="flex:none; align-self:center; color:var(--muted2,#b4bac3); padding:0 8px;">→</div>
+        <div style="flex:none; align-self:center; font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:600; color:#fff; background:var(--accent,#4f46e5); padding:13px 15px; border-radius:var(--radius-sm,10px);">tokens</div>
+      </div>
+    </div>
+    </sc-if>
+  </section>
+
+  <!-- ================= WHY P2P ================= -->
+  <section id="why" style="background:var(--section-bg,#f7f8fa); border-top:1px solid var(--border,#ebedf1); border-bottom:1px solid var(--border,#ebedf1);">
+    <div style="max-width:1120px; margin:0 auto; padding:var(--section-pad,72px) 28px;">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:12.5px; letter-spacing:0.06em; color:var(--accent,#4f46e5); text-transform:var(--label-transform,uppercase); font-weight:500;">Why peer-to-peer</div>
+      <h2 style="margin:12px 0 0; font-size:calc(40px * var(--scale,1)); font-weight:800; letter-spacing:-0.025em; color:var(--text,#0e1116); max-width:560px; line-height:1.06;">No data center. No single owner. No off switch.</h2>
+
+      <div style="margin-top:44px; display:grid; grid-template-columns:repeat(3,1fr); gap:var(--gap,18px);">
+        <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:24px; box-shadow:var(--card-shadow,none);">
+          <div style="width:36px;height:36px;border-radius:var(--radius-tile,9px);background:color-mix(in srgb, var(--accent,#4f46e5) 13%, transparent);color:var(--accent,#4f46e5);display:grid;place-items:center;font-size:17px;font-family:'JetBrains Mono',monospace;">⌗</div>
+          <h3 style="margin:16px 0 7px; font-size:17.5px; font-weight:700; color:var(--text,#0e1116);">Run models you can't host</h3>
+          <p style="margin:0; font-size:14px; line-height:1.6; color:var(--muted,#5b6471);">A 70B model needs no 70B machine. Contribute the layers your GPU can fit and reach the whole thing through the swarm.</p>
+        </div>
+        <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:24px; box-shadow:var(--card-shadow,none);">
+          <div style="width:36px;height:36px;border-radius:var(--radius-tile,9px);background:color-mix(in srgb, var(--accent,#4f46e5) 13%, transparent);color:var(--accent,#4f46e5);display:grid;place-items:center;font-size:17px;font-family:'JetBrains Mono',monospace;">⟳</div>
+          <h3 style="margin:16px 0 7px; font-size:17.5px; font-weight:700; color:var(--text,#0e1116);">Self-healing routes</h3>
+          <p style="margin:0; font-size:14px; line-height:1.6; color:var(--muted,#5b6471);">Nodes join and drop constantly. When a peer disappears, requests reroute through another holding the same layers. No downtime.</p>
+        </div>
+        <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:24px; box-shadow:var(--card-shadow,none);">
+          <div style="width:36px;height:36px;border-radius:var(--radius-tile,9px);background:color-mix(in srgb, var(--accent,#4f46e5) 13%, transparent);color:var(--accent,#4f46e5);display:grid;place-items:center;font-size:17px;font-family:'JetBrains Mono',monospace;">⚇</div>
+          <h3 style="margin:16px 0 7px; font-size:17.5px; font-weight:700; color:var(--text,#0e1116);">Permissionless</h3>
+          <p style="margin:0; font-size:14px; line-height:1.6; color:var(--muted,#5b6471);">Anyone can join, host layers, or query the model. No accounts, no gatekeepers, no central API to revoke your access.</p>
+        </div>
+        <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:24px; box-shadow:var(--card-shadow,none);">
+          <div style="width:36px;height:36px;border-radius:var(--radius-tile,9px);background:color-mix(in srgb, var(--accent,#4f46e5) 13%, transparent);color:var(--accent,#4f46e5);display:grid;place-items:center;font-size:17px;font-family:'JetBrains Mono',monospace;">≋</div>
+          <h3 style="margin:16px 0 7px; font-size:17.5px; font-weight:700; color:var(--text,#0e1116);">Idle compute, reused</h3>
+          <p style="margin:0; font-size:14px; line-height:1.6; color:var(--muted,#5b6471);">Built from spare consumer and prosumer GPUs — inference at a fraction of cloud cost, paid in contributed compute.</p>
+        </div>
+        <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:24px; box-shadow:var(--card-shadow,none);">
+          <div style="width:36px;height:36px;border-radius:var(--radius-tile,9px);background:color-mix(in srgb, var(--accent,#4f46e5) 13%, transparent);color:var(--accent,#4f46e5);display:grid;place-items:center;font-size:17px;font-family:'JetBrains Mono',monospace;">◇</div>
+          <h3 style="margin:16px 0 7px; font-size:17.5px; font-weight:700; color:var(--text,#0e1116);">One shared model</h3>
+          <p style="margin:0; font-size:14px; line-height:1.6; color:var(--muted,#5b6471);">Every node points at the same weights. Upgrade once and the whole network serves the new model — no redeploy, no fork.</p>
+        </div>
+        <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:24px; box-shadow:var(--card-shadow,none);">
+          <div style="width:36px;height:36px;border-radius:var(--radius-tile,9px);background:color-mix(in srgb, var(--accent,#4f46e5) 13%, transparent);color:var(--accent,#4f46e5);display:grid;place-items:center;font-size:17px;font-family:'JetBrains Mono',monospace;">⊞</div>
+          <h3 style="margin:16px 0 7px; font-size:17.5px; font-weight:700; color:var(--text,#0e1116);">Scales sideways</h3>
+          <p style="margin:0; font-size:14px; line-height:1.6; color:var(--muted,#5b6471);">More peers means more replicas per layer, more parallel requests, more throughput. Capacity grows with the crowd.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= RUN A NODE ================= -->
+  <section id="run" style="max-width:1120px; margin:0 auto; padding:var(--section-pad,72px) 28px;">
+    <div style="display:grid; grid-template-columns:0.9fr 1.1fr; gap:48px; align-items:center;">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:12.5px; letter-spacing:0.06em; color:var(--accent,#4f46e5); text-transform:var(--label-transform,uppercase); font-weight:500;">Join the swarm</div>
+        <h2 style="margin:12px 0 0; font-size:calc(40px * var(--scale,1)); font-weight:800; letter-spacing:-0.025em; color:var(--text,#0e1116); line-height:1.06;">Run a node in one command.</h2>
+        <p style="margin:18px 0 0; font-size:16px; line-height:1.6; color:var(--muted,#5b6471); max-width:420px;">Point it at the network, let it claim the layers your GPU can hold, and start serving. The swarm handles discovery, routing, and failover.</p>
+        <div style="margin-top:28px; display:flex; flex-direction:column; gap:14px;">
+          <div style="display:flex; gap:13px; align-items:flex-start;">
+            <span style="width:22px;height:22px;border-radius:50%;background:color-mix(in srgb, var(--accent,#4f46e5) 15%, transparent);color:var(--accent,#4f46e5);display:grid;place-items:center;font-size:12px;font-weight:700;flex:none;">✓</span>
+            <div><div style="font-size:15.5px; color:var(--text,#0e1116); font-weight:600;">Any modern GPU</div><div style="font-size:14px; color:var(--muted2,#7a828e);">8 GB VRAM is enough to host a few layers.</div></div>
+          </div>
+          <div style="display:flex; gap:13px; align-items:flex-start;">
+            <span style="width:22px;height:22px;border-radius:50%;background:color-mix(in srgb, var(--accent,#4f46e5) 15%, transparent);color:var(--accent,#4f46e5);display:grid;place-items:center;font-size:12px;font-weight:700;flex:none;">✓</span>
+            <div><div style="font-size:15.5px; color:var(--text,#0e1116); font-weight:600;">A public port</div><div style="font-size:14px; color:var(--muted2,#7a828e);">So neighbours can pass activations to you.</div></div>
+          </div>
+          <div style="display:flex; gap:13px; align-items:flex-start;">
+            <span style="width:22px;height:22px;border-radius:50%;background:color-mix(in srgb, var(--accent,#4f46e5) 15%, transparent);color:var(--accent,#4f46e5);display:grid;place-items:center;font-size:12px;font-weight:700;flex:none;">✓</span>
+            <div><div style="font-size:15.5px; color:var(--text,#0e1116); font-weight:600;">That's it</div><div style="font-size:14px; color:var(--muted2,#7a828e);">No registration. The node auto-joins on boot.</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- code card (slate, fixed dark) -->
+      <div style="border:1px solid #1c2230; background:#0f1320; border-radius:var(--radius,16px); overflow:hidden; box-shadow:var(--float-shadow, 0 24px 60px -34px rgba(16,24,40,0.5));">
+        <div style="display:flex; align-items:center; gap:8px; padding:13px 16px; border-bottom:1px solid #1c2230;">
+          <span style="width:10px;height:10px;border-radius:50%;background:#2a3344;"></span>
+          <span style="width:10px;height:10px;border-radius:50%;background:#2a3344;"></span>
+          <span style="width:10px;height:10px;border-radius:50%;background:#2a3344;"></span>
+          <span style="margin-left:6px; font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#6b7689;">eujeno — node</span>
+          <button onClick="{{ copyCmd }}" style="margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:11px; color:#aab4c5; background:transparent; border:1px solid #2a3344; border-radius:7px; padding:4px 10px; cursor:pointer;" style-hover="border-color:var(--accent,#4f46e5); color:#fff;">{{ copyLabel }}</button>
+        </div>
+        <div style="padding:20px 18px; font-family:'JetBrains Mono',monospace; font-size:13px; line-height:1.9; color:#dce3ee;">
+          <div><span style="color:var(--accent,#8b86ff);">$</span> curl -fsSL https://get.eujeno.net | sh</div>
+          <div><span style="color:var(--accent,#8b86ff);">$</span> eujeno up --model swarm/llama-70b --layers auto</div>
+          <div style="height:10px;"></div>
+          <div style="color:#6b7689;">  resolving peers ..... <span style="color:#6ee7a8;">142 found</span></div>
+          <div style="color:#6b7689;">  claiming layers ..... <span style="color:#dce3ee;">L24–L31</span></div>
+          <div style="color:#6b7689;">  loading weights ..... <span style="color:#6ee7a8;">ok</span></div>
+          <div style="color:#6b7689;">  joining chain ....... <span style="color:#6ee7a8;">ok</span></div>
+          <div style="height:10px;"></div>
+          <div><span style="color:#6ee7a8;">●</span> serving <span style="color:#6b7689;">· 0 errors · 38 tok/s out</span> <span style="display:inline-block;width:7px;height:14px;background:var(--accent,#8b86ff);vertical-align:middle;animation:blink 1s steps(2) infinite;"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= USE CASES ================= -->
+  <section id="cases" style="background:var(--section-bg,#f7f8fa); border-top:1px solid var(--border,#ebedf1);">
+    <div style="max-width:1120px; margin:0 auto; padding:var(--section-pad,72px) 28px;">
+      <div style="font-family:'JetBrains Mono',monospace; font-size:12.5px; letter-spacing:0.06em; color:var(--accent,#4f46e5); text-transform:var(--label-transform,uppercase); font-weight:500;">Use cases</div>
+      <h2 style="margin:12px 0 0; font-size:calc(40px * var(--scale,1)); font-weight:800; letter-spacing:-0.025em; color:var(--text,#0e1116); max-width:600px; line-height:1.06;">What you build on a model with no landlord.</h2>
+
+      <div style="margin-top:44px; display:grid; grid-template-columns:repeat(4,1fr); gap:var(--gap,18px);">
+        <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:24px; min-height:190px; display:flex; flex-direction:column; box-shadow:var(--card-shadow,none);">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent,#4f46e5); text-transform:uppercase; letter-spacing:0.04em; font-weight:500;">01 · inference</div>
+          <h3 style="margin:auto 0 8px; font-size:18px; font-weight:700; color:var(--text,#0e1116);">Apps without infra</h3>
+          <p style="margin:0; font-size:13.5px; line-height:1.55; color:var(--muted,#5b6471);">Ship an AI product without renting a single GPU. Query the swarm directly from your backend.</p>
+        </div>
+        <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:24px; min-height:190px; display:flex; flex-direction:column; box-shadow:var(--card-shadow,none);">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent,#4f46e5); text-transform:uppercase; letter-spacing:0.04em; font-weight:500;">02 · research</div>
+          <h3 style="margin:auto 0 8px; font-size:18px; font-weight:700; color:var(--text,#0e1116);">Open-model science</h3>
+          <p style="margin:0; font-size:13.5px; line-height:1.55; color:var(--muted,#5b6471);">Probe, fine-tune adapters, and study large open models the community keeps online together.</p>
+        </div>
+        <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:24px; min-height:190px; display:flex; flex-direction:column; box-shadow:var(--card-shadow,none);">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent,#4f46e5); text-transform:uppercase; letter-spacing:0.04em; font-weight:500;">03 · community</div>
+          <h3 style="margin:auto 0 8px; font-size:18px; font-weight:700; color:var(--text,#0e1116);">Edge & local-first</h3>
+          <p style="margin:0; font-size:13.5px; line-height:1.55; color:var(--muted,#5b6471);">Pool GPUs across a lab, a co-op, or a region to keep a shared model running close to home.</p>
+        </div>
+        <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:var(--radius,16px); padding:24px; min-height:190px; display:flex; flex-direction:column; box-shadow:var(--card-shadow,none);">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent,#4f46e5); text-transform:uppercase; letter-spacing:0.04em; font-weight:500;">04 · resilience</div>
+          <h3 style="margin:auto 0 8px; font-size:18px; font-weight:700; color:var(--text,#0e1116);">Censorship-resistant AI</h3>
+          <p style="margin:0; font-size:13.5px; line-height:1.55; color:var(--muted,#5b6471);">A model with no central host can't be quietly shut off, throttled, or paywalled out from under you.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CTA ================= -->
+  <section style="max-width:1120px; margin:0 auto; padding:80px 28px;">
+    <div style="border-radius:calc(var(--radius,18px) + 6px); background:var(--cta-bg,#4f46e5); border:1px solid var(--cta-border,transparent); padding:64px 40px; text-align:center; position:relative; overflow:hidden; box-shadow:var(--float-shadow,none);">
+      <sc-if value="{{ ctaAccentStyle }}" hint-placeholder-val="{{ true }}">
+        <div style="position:absolute; inset:0; background-image:radial-gradient(rgba(255,255,255,0.16) 1px, transparent 1px); background-size:22px 22px; opacity:0.5; pointer-events:none;"></div>
+      </sc-if>
+      <h2 style="position:relative; margin:0 auto; font-size:calc(46px * var(--scale,1)); font-weight:800; letter-spacing:-0.025em; color:var(--cta-heading,#fff); max-width:600px; line-height:1.05;">Lend your GPU a few layers.<br>Get a whole model back.</h2>
+      <div style="position:relative; margin-top:30px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+        <a href="#run" style="display:inline-flex; align-items:center; gap:8px; background:var(--cta-btn-bg,#fff); color:var(--cta-btn-text,#4f46e5); font-weight:700; font-size:15.5px; text-decoration:none; padding:14px 28px; border-radius:var(--radius-sm,11px);">Run a node</a>
+        <a href="#how" style="display:inline-flex; align-items:center; gap:8px; background:transparent; color:var(--cta-btn2-text,#fff); font-weight:600; font-size:15.5px; text-decoration:none; padding:14px 26px; border-radius:var(--radius-sm,11px); border:1px solid var(--cta-btn2-border,rgba(255,255,255,0.45));">Read the protocol</a>
+      </div>
+    </div>
+  </section>
+
+  <footer style="border-top:1px solid var(--border,#ebedf1);">
+    <div style="max-width:1120px; margin:0 auto; padding:26px 28px; display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap; font-size:13.5px; color:var(--muted2,#7a828e);">
+      <div style="display:flex; align-items:center; gap:9px;">
+        <span style="width:22px; height:22px; border-radius:6px; background:var(--accent,#4f46e5); display:grid; place-items:center;">
+          <span style="display:grid; grid-template-columns:repeat(2,3.5px); gap:2px;">
+            <span style="width:3.5px;height:3.5px;background:#fff;border-radius:1px;"></span><span style="width:3.5px;height:3.5px;background:rgba(255,255,255,0.5);border-radius:1px;"></span>
+            <span style="width:3.5px;height:3.5px;background:rgba(255,255,255,0.5);border-radius:1px;"></span><span style="width:3.5px;height:3.5px;background:#fff;border-radius:1px;"></span>
+          </span>
+        </span>
+        <span style="color:var(--text,#0e1116); font-weight:700;">Eujeno</span>
+      </div>
+      <div style="display:flex; gap:24px; font-weight:500;">
+        <a href="#how" style="color:var(--muted2,#7a828e); text-decoration:none;" style-hover="color:var(--text,#0e1116);">Docs</a>
+        <a href="#run" style="color:var(--muted2,#7a828e); text-decoration:none;" style-hover="color:var(--text,#0e1116);">Run a node</a>
+        <a href="#why" style="color:var(--muted2,#7a828e); text-decoration:none;" style-hover="color:var(--text,#0e1116);">Protocol</a>
+      </div>
+      <span style="font-family:'JetBrains Mono',monospace; font-size:12px;">peer-to-peer model hosting</span>
+    </div>
+  </footer>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 1120 },
+  &quot;theme&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;light&quot;, &quot;options&quot;: [&quot;light&quot;, &quot;dark&quot;], &quot;tsType&quot;: &quot;string&quot; },
+  &quot;accentColor&quot;: { &quot;editor&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#4f46e5&quot;, &quot;options&quot;: [&quot;#4f46e5&quot;, &quot;#2563eb&quot;, &quot;#0d9488&quot;, &quot;#7c3aed&quot;, &quot;#e8590c&quot;, &quot;#e11d48&quot;], &quot;tsType&quot;: &quot;string&quot; },
+  &quot;cornerStyle&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;rounded&quot;, &quot;options&quot;: [&quot;rounded&quot;, &quot;soft&quot;, &quot;sharp&quot;], &quot;tsType&quot;: &quot;string&quot; },
+  &quot;density&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;comfortable&quot;, &quot;options&quot;: [&quot;comfortable&quot;, &quot;compact&quot;, &quot;spacious&quot;], &quot;tsType&quot;: &quot;string&quot; },
+  &quot;headingScale&quot;: { &quot;editor&quot;: &quot;float&quot;, &quot;default&quot;: 1, &quot;min&quot;: 0.85, &quot;max&quot;: 1.25, &quot;step&quot;: 0.05, &quot;tsType&quot;: &quot;number&quot; },
+  &quot;heroAlign&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;center&quot;, &quot;options&quot;: [&quot;center&quot;, &quot;left&quot;], &quot;tsType&quot;: &quot;string&quot; },
+  &quot;heroGrid&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: false, &quot;tsType&quot;: &quot;boolean&quot; },
+  &quot;sectionTint&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot; },
+  &quot;cardShadows&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;soft&quot;, &quot;options&quot;: [&quot;soft&quot;, &quot;flat&quot;, &quot;none&quot;], &quot;tsType&quot;: &quot;string&quot; },
+  &quot;ctaStyle&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;accent&quot;, &quot;options&quot;: [&quot;accent&quot;, &quot;outline&quot;, &quot;subtle&quot;], &quot;tsType&quot;: &quot;string&quot; },
+  &quot;uppercaseLabels&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot; },
+  &quot;badgePulse&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot; },
+  &quot;showCanvas&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot; },
+  &quot;showPipeline&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot; },
+  &quot;networkNodes&quot;: { &quot;editor&quot;: &quot;int&quot;, &quot;default&quot;: 32, &quot;min&quot;: 12, &quot;max&quot;: 48, &quot;step&quot;: 2, &quot;tsType&quot;: &quot;number&quot; },
+  &quot;networkSpeed&quot;: { &quot;editor&quot;: &quot;float&quot;, &quot;default&quot;: 1, &quot;min&quot;: 0.3, &quot;max&quot;: 2.5, &quot;step&quot;: 0.1, &quot;tsType&quot;: &quot;number&quot; },
+  &quot;nodeShape&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;dots&quot;, &quot;options&quot;: [&quot;dots&quot;, &quot;squares&quot;, &quot;rings&quot;], &quot;tsType&quot;: &quot;string&quot; },
+  &quot;pulseGlow&quot;: { &quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot; }
+}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.state = { copied:false };
+    this.canvasRef = React.createRef();
+    this._W = -1; this._H = -1; this._N = -1;
+    this._nodes = []; this._adj = []; this._pulses = [];
+  }
+
+  componentDidMount(){
+    this._raf = requestAnimationFrame(this._draw);
+  }
+
+  componentWillUnmount(){
+    cancelAnimationFrame(this._raf);
+    clearTimeout(this._ct);
+  }
+
+  _dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+
+  _init(N, W, H){
+    const nodes = [];
+    const pad = 26;
+    for(let i=0;i<N;i++){
+      nodes.push({
+        x: pad + Math.random()*(W-2*pad),
+        y: pad + Math.random()*(H-2*pad),
+        vx: (Math.random()-0.5)*0.11,
+        vy: (Math.random()-0.5)*0.11,
+        r: Math.random()*1.5 + 1.7,
+        pulse: 0
+      });
+    }
+    const adj = nodes.map(()=>[]);
+    for(let i=0;i<N;i++){
+      const order = nodes.map((n,j)=>({j, d: j===i?Infinity:this._dist(nodes[i],n)})).sort((a,b)=>a.d-b.d);
+      for(let k=0;k<2;k++){
+        const j = order[k].j;
+        if(!adj[i].includes(j)) adj[i].push(j);
+        if(!adj[j].includes(i)) adj[j].push(i);
+      }
+    }
+    const pulses = [];
+    const count = Math.max(3, Math.round(N/5));
+    for(let p=0;p<count;p++){
+      const a = Math.floor(Math.random()*N);
+      const nb = adj[a]; if(!nb.length) continue;
+      const b = nb[Math.floor(Math.random()*nb.length)];
+      pulses.push({ a, b, t: Math.random(), speed: 0.004 + Math.random()*0.005 });
+    }
+    this._nodes = nodes; this._adj = adj; this._pulses = pulses;
+  }
+
+  _draw = () => {
+    const canvas = this.canvasRef.current;
+    if(!canvas){ this._raf = requestAnimationFrame(this._draw); return; }
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    if(W < 2 || H < 2){ this._raf = requestAnimationFrame(this._draw); return; }
+
+    const p = this.props;
+    const N = Math.max(6, Math.round(p.networkNodes ?? 32));
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    if(W !== this._W || H !== this._H || N !== this._N){
+      this._W = W; this._H = H; this._N = N;
+      canvas.width = Math.max(1, W*dpr);
+      canvas.height = Math.max(1, H*dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      this._init(N, W, H);
+    }
+
+    const dark = (p.theme ?? 'light') === 'dark';
+    const accent = p.accentColor ?? '#4f46e5';
+    const edge = dark ? 'rgba(255,255,255,0.07)' : 'rgba(14,17,22,0.09)';
+    const idle = dark ? '#3a4150' : '#aab0bb';
+    const shape = p.nodeShape ?? 'dots';
+    const glow = p.pulseGlow ?? true;
+    const speedMult = p.networkSpeed ?? 1;
+
+    const nodes = this._nodes, adj = this._adj, pulses = this._pulses;
+    ctx.clearRect(0,0,W,H);
+
+    for(const n of nodes){
+      n.x += n.vx; n.y += n.vy;
+      if(n.x < 18 || n.x > W-18) n.vx *= -1;
+      if(n.y < 18 || n.y > H-18) n.vy *= -1;
+      if(n.pulse > 0) n.pulse -= 0.03;
+    }
+
+    // edges
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = edge;
+    for(let i=0;i<nodes.length;i++){
+      for(const j of adj[i]){
+        if(j<=i) continue;
+        ctx.beginPath();
+        ctx.moveTo(nodes[i].x, nodes[i].y);
+        ctx.lineTo(nodes[j].x, nodes[j].y);
+        ctx.stroke();
+      }
+    }
+
+    // pulses
+    for(const pl of pulses){
+      pl.t += pl.speed * speedMult;
+      if(pl.t >= 1){
+        nodes[pl.b].pulse = 1;
+        pl.a = pl.b;
+        const nb = adj[pl.a];
+        pl.b = nb.length ? nb[Math.floor(Math.random()*nb.length)] : pl.a;
+        pl.t = 0;
+      }
+      const A = nodes[pl.a], B = nodes[pl.b];
+      const x = A.x + (B.x-A.x)*pl.t;
+      const y = A.y + (B.y-A.y)*pl.t;
+      ctx.strokeStyle = accent;
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(A.x + (B.x-A.x)*Math.max(0,pl.t-0.18), A.y + (B.y-A.y)*Math.max(0,pl.t-0.18));
+      ctx.lineTo(x,y);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = accent;
+      if(glow){ ctx.shadowColor = accent; ctx.shadowBlur = 10; }
+      if(shape === 'squares'){ ctx.fillRect(x-2.6, y-2.6, 5.2, 5.2); }
+      else { ctx.beginPath(); ctx.arc(x,y,2.6,0,Math.PI*2); ctx.fill(); }
+      ctx.shadowBlur = 0;
+    }
+
+    // nodes
+    for(const n of nodes){
+      const active = n.pulse > 0.05;
+      const col = active ? accent : idle;
+      if(n.pulse > 0){
+        ctx.globalAlpha = n.pulse * 0.4;
+        ctx.fillStyle = accent;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r + 7*n.pulse, 0, Math.PI*2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      if(shape === 'squares'){
+        ctx.fillStyle = col;
+        const s = n.r*1.7;
+        ctx.fillRect(n.x-s/2, n.y-s/2, s, s);
+      } else if(shape === 'rings'){
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r+0.6, 0, Math.PI*2);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, n.r, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    this._raf = requestAnimationFrame(this._draw);
+  };
+
+  copyCmd = () => {
+    try { navigator.clipboard && navigator.clipboard.writeText('curl -fsSL https://get.eujeno.net | sh'); } catch(e){}
+    this.setState({ copied:true });
+    clearTimeout(this._ct);
+    this._ct = setTimeout(()=>this.setState({ copied:false }), 1500);
+  };
+
+  renderVals(){
+    const p = this.props;
+    const accent = p.accentColor ?? '#4f46e5';
+    const dark = (p.theme ?? 'light') === 'dark';
+
+    const T = dark ? {
+      pageBg:'#0b0d12', cardBg:'#14171f', text:'#f2f4f7', muted:'#9aa3b2', muted2:'#7a8494',
+      border:'#20242e', borderStrong:'#2a2f3b', navBg:'rgba(11,13,18,0.82)',
+      tint:'#0f1217', canvasBg:'#0e1117'
+    } : {
+      pageBg:'#ffffff', cardBg:'#ffffff', text:'#0e1116', muted:'#5b6471', muted2:'#7a828e',
+      border:'#e9ebef', borderStrong:'#d9dce2', navBg:'rgba(255,255,255,0.78)',
+      tint:'#f7f8fa', canvasBg:'#fafbfc'
+    };
+
+    const sectionTint = p.sectionTint ?? true;
+    const sectionBg = sectionTint ? T.tint : T.pageBg;
+
+    const corner = p.cornerStyle ?? 'rounded';
+    const radius = corner==='sharp' ? '3px' : corner==='soft' ? '12px' : '18px';
+    const radiusSm = corner==='sharp' ? '3px' : corner==='soft' ? '8px' : '11px';
+    const radiusTile = corner==='sharp' ? '3px' : corner==='soft' ? '8px' : '10px';
+    const radiusPill = corner==='sharp' ? '4px' : '999px';
+
+    const density = p.density ?? 'comfortable';
+    const sectionPad = density==='compact' ? '52px' : density==='spacious' ? '100px' : '72px';
+    const gap = density==='compact' ? '14px' : density==='spacious' ? '26px' : '18px';
+
+    const scale = p.headingScale ?? 1;
+
+    const shadows = p.cardShadows ?? 'soft';
+    const cardShadow = shadows==='soft' ? '0 1px 2px rgba(16,24,40,0.05)' : 'none';
+    const floatShadow = shadows==='none' ? 'none'
+      : shadows==='flat' ? ('0 0 0 1px ' + T.border)
+      : (dark ? '0 24px 60px -32px rgba(0,0,0,0.65)' : '0 24px 60px -32px rgba(16,24,40,0.22)');
+
+    const heroLeft = (p.heroAlign ?? 'center') === 'left';
+
+    const labelTransform = (p.uppercaseLabels ?? true) ? 'uppercase' : 'none';
+    const badgeAnim = (p.badgePulse ?? true) ? 'blink 1.6s steps(2) infinite' : 'none';
+
+    const ctaStyle = p.ctaStyle ?? 'accent';
+    let ctaBg, ctaText, ctaHeading, ctaBtnBg, ctaBtnText, ctaBtn2Border, ctaBtn2Text, ctaBorder;
+    if(ctaStyle==='accent'){
+      ctaBg=accent; ctaText='rgba(255,255,255,0.9)'; ctaHeading='#ffffff';
+      ctaBtnBg='#ffffff'; ctaBtnText=accent; ctaBtn2Border='rgba(255,255,255,0.45)'; ctaBtn2Text='#ffffff'; ctaBorder='transparent';
+    } else if(ctaStyle==='outline'){
+      ctaBg=T.cardBg; ctaText=T.muted; ctaHeading=T.text;
+      ctaBtnBg=accent; ctaBtnText='#ffffff'; ctaBtn2Border=T.borderStrong; ctaBtn2Text=T.text; ctaBorder=T.border;
+    } else {
+      ctaBg=T.tint; ctaText=T.muted; ctaHeading=T.text;
+      ctaBtnBg=accent; ctaBtnText='#ffffff'; ctaBtn2Border=T.borderStrong; ctaBtn2Text=T.text; ctaBorder=T.border;
+    }
+
+    return {
+      canvasRef: this.canvasRef,
+      copyCmd: this.copyCmd,
+      copyLabel: this.state.copied ? 'copied ✓' : 'copy',
+      accent,
+      pageBg:T.pageBg, cardBg:T.cardBg, text:T.text, muted:T.muted, muted2:T.muted2,
+      border:T.border, borderStrong:T.borderStrong, navBg:T.navBg, sectionBg, canvasBg:T.canvasBg,
+      radius, radiusSm, radiusTile, radiusPill, sectionPad, gap, scale, cardShadow, floatShadow,
+      heroAlign: heroLeft ? 'left' : 'center',
+      heroMx: heroLeft ? '0' : 'auto',
+      heroJustify: heroLeft ? 'flex-start' : 'center',
+      labelTransform, badgeAnim,
+      ctaBg, ctaText, ctaHeading, ctaBtnBg, ctaBtnText, ctaBtn2Border, ctaBtn2Text, ctaBorder,
+      ctaAccentStyle: ctaStyle==='accent',
+      heroGrid: p.heroGrid ?? false,
+      showCanvas: p.showCanvas ?? true,
+      showPipeline: p.showPipeline ?? true
+    };
+  }
+}
+</script>
+</body>
+</html>

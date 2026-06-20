@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+.vite/
+
+# template export artifacts (keep the .html/.js reference, drop the rest)
+*.zip
+.thumbnail
