@@ -99,7 +99,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
         return {"num_layers": num_layers,
                 "nodes": [{"conn": cid, "stages": c["stages"]} for cid, c in conns.items()]}
 
-    async def _run_generation(chain, prompt, max_new, sampling, job_id, on_token=None):
+    async def _run_generation(chain, prompt, max_new, sampling, job_id, on_token=None, resume_tokens=None):
         embed_c, decoders, head_c = chain
         temperature = float(sampling.get("temperature", 0.0) or 0.0)
         top_p = float(sampling.get("top_p", 1.0) or 1.0)
@@ -112,13 +112,18 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
             generator = torch.Generator().manual_seed(seed)
         topk = 100 if do_sample else 1
 
+        resume_tokens = list(resume_tokens or [])
         ids = tokenizer(prompt, return_tensors="pt").input_ids
         seq_len = ids.shape[1]
-        cache_position = torch.arange(seq_len)
-        cur = ids
-        tokens = []
+        if resume_tokens:
+            cur = torch.cat([ids, torch.tensor([resume_tokens], dtype=ids.dtype)], dim=1)
+            cache_position = torch.arange(seq_len + len(resume_tokens))
+        else:
+            cur = ids
+            cache_position = torch.arange(seq_len)
+        tokens = list(resume_tokens)
         finish_reason = "length"
-        for step in range(max_new):
+        for _ in range(max_new - len(resume_tokens)):
             _, p = await _call(embed_c, {"op": "embed", "job_id": job_id},
                                encode_tensors({"input_ids": cur}))
             h = decode_tensors(p)["hidden_states"]
@@ -136,7 +141,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
             if on_token is not None:
                 on_token(len(tokens) - 1, tok)
             cur = torch.tensor([[tok]])
-            cache_position = torch.tensor([seq_len + step])
+            cache_position = torch.tensor([seq_len + len(tokens) - 1])
         for cid in {embed_c, head_c, *(c for _, c in decoders)}:
             try:
                 await _call(cid, {"op": "end", "job_id": job_id})
@@ -147,20 +152,26 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
     async def _generate_with_failover(prompt, max_new, sampling, job_id):
         excluded = set()
         last_failed = None
+        resume_tokens = []
         for attempt in range(MAX_FAILOVERS + 1):
             stages = {cid: c["stages"] for cid, c in conns.items() if cid not in excluded}
             chain = build_chain(stages, num_layers)
             if chain is None:
                 return None, {"error": "model not operational: incomplete coverage", "excluded": sorted(excluded)}
-            _store_safe(store.reset_progress, job_id)
             try:
                 tokens, prompt_len, finish_reason = await _run_generation(
                     chain, prompt, max_new, sampling, _next_id("job"),
-                    on_token=lambda pos, tok: _store_safe(store.append_token, job_id, tok, pos))
+                    on_token=lambda pos, tok: _store_safe(store.append_token, job_id, tok, pos),
+                    resume_tokens=resume_tokens)
                 return {"tokens": tokens, "prompt_len": prompt_len, "failovers": attempt, "finish_reason": finish_reason}, None
             except _NodeFailure as e:
                 excluded.add(e.conn_id)
                 last_failed = e.conn_id
+                try:                                   # re-dispatch from the persisted progress
+                    j = store.get_job(job_id)
+                    resume_tokens = (j or {}).get("tokens", []) or []
+                except Exception:
+                    resume_tokens = []
         return None, {"error": f"too many failovers (last failed node: {last_failed})"}
 
     @app.post("/infer")
