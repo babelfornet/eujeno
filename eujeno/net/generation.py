@@ -8,6 +8,18 @@ import torch
 from eujeno.net.sampling import sample_token
 
 
+def stop_token_ids(tokenizer):
+    """EOS + chat-end special tokens to stop generation on."""
+    ids = set()
+    if tokenizer is not None and tokenizer.eos_token_id is not None:
+        ids.add(int(tokenizer.eos_token_id))
+    for t in ("<|im_end|>", "<|endoftext|>"):
+        i = tokenizer.convert_tokens_to_ids(t)
+        if isinstance(i, int) and i >= 0 and i != tokenizer.unk_token_id:
+            ids.add(int(i))
+    return ids
+
+
 async def generate_tokens(tokenizer, prompt, max_new, sampling, stop_ids,
                           run_embed, run_decoders, run_head):
     """Autoregressive loop with injected transport.
