@@ -56,7 +56,7 @@
   - [ ] direct-P2P failover · native libp2p for P2P-over-NAT (future)
 - [x] **OpenAI-compatible API** (`/v1/chat/completions` + `/v1/models`) on the coordinator: chat template + sampling (temperature/top_p/repetition_penalty/seed) — [plan](./plans/2026-06-17-openai-api.md) · [agents guide](./examples/agents.md). Connects OpenAI clients/agents.
 - [x] **Stop at EOS + tool/function calling** (`tools`/`tool_calls`) — [plan](./plans/2026-06-17-tool-calling.md). Foundation for MCP agents (the host runs the tools; the model decides). *(SSE streaming + Anthropic/LiteLLM for Claude Code = next steps)*
-- [~] **Queue & Load Balancing** (Part 3): durable job store + store-and-forward **done** (3a/3b/3c above). Remaining **(3d)**: `load` metric in the registry + scheduling across redundant holders (for many concurrent agents).
+- [x] **Queue & Load Balancing** (Part 3 complete): durable job store + store-and-forward (3a/3b/3c) **+ load-balancing (3d)** — the coordinator tracks per-connection `load`, exposes it in `/registry`, and `build_chain` routes concurrent requests to the least-loaded replica — [3d](./plans/2026-06-20-part3d-load-balancing.md).
 - [ ] Plan + build **Minimal reputation** (tokens ⏸ deferred)
 - [ ] End-to-end integration on 2–3 nodes + failover tests
 - [x] Private GitHub repo setup → [albertoferrazzoli/eujeno](https://github.com/albertoferrazzoli/eujeno) (public on first working build)
