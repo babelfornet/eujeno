@@ -327,6 +327,7 @@ def coordinator(
     model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="Model ID (for tokenizer + num_layers)"),
     host: str = typer.Option("0.0.0.0", "--host", help="Listen host"),
     port: int = typer.Option(9000, "--port", help="Listen port"),
+    db: str = typer.Option(None, "--db", help="SQLite job-log path (default ~/.eujeno/coordinator-jobs.db)"),
 ):
     """Start the coordinator-relay (must be reachable by the nodes)."""
     import uvicorn
@@ -336,7 +337,8 @@ def coordinator(
         num_layers = model_config_dims(model_id)["num_layers"]
     except Exception as e:
         _fail("coordinator", "MODEL_LOAD_FAILED", str(e))
-    coord_app = create_coordinator_app(model_id, num_layers, tokenizer)
+    db_path = db or os.path.expanduser("~/.eujeno/coordinator-jobs.db")
+    coord_app = create_coordinator_app(model_id, num_layers, tokenizer, db_path=db_path)
     typer.echo(f"eujeno coordinator: model={model_id} layers={num_layers} on http://{host}:{port}", err=True)
     uvicorn.run(coord_app, host=host, port=port, log_level="info")
 

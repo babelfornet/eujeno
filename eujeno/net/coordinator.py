@@ -14,6 +14,7 @@ from eujeno.net.wire import encode_tensors, decode_tensors
 from eujeno.net.discovery import build_chain
 from eujeno.net.sampling import sample_token
 from eujeno.net.tools import extract_tool_calls
+from eujeno.net.jobstore import JobStore
 
 
 MAX_FAILOVERS = 5
@@ -25,10 +26,13 @@ class _NodeFailure(Exception):
         self.conn_id = conn_id
 
 
-def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
+def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=None):
     """Coordinator-relay: nodes connect via WS and announce their stages; POST /infer
-    drives generation by relaying each hop to the right node."""
+    drives generation by relaying each hop to the right node. Jobs are persisted to a
+    durable SQLite job log (db_path=None -> in-memory, used by tests)."""
     app = FastAPI()
+    store = JobStore(db_path if db_path is not None else ":memory:")
+    store.recover()
     conns = {}        # conn_id -> {"ws", "stages", "pending": {req_id: Future}}
     counter = {"n": 0}
 
@@ -83,7 +87,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
         return {"num_layers": num_layers,
                 "nodes": [{"conn": cid, "stages": c["stages"]} for cid, c in conns.items()]}
 
-    async def _run_generation(chain, prompt, max_new, sampling, job_id):
+    async def _run_generation(chain, prompt, max_new, sampling, job_id, on_token=None):
         embed_c, decoders, head_c = chain
         temperature = float(sampling.get("temperature", 0.0) or 0.0)
         top_p = float(sampling.get("top_p", 1.0) or 1.0)
@@ -117,6 +121,8 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
                 finish_reason = "stop"
                 break
             tokens.append(tok)
+            if on_token is not None:
+                on_token(len(tokens) - 1, tok)
             cur = torch.tensor([[tok]])
             cache_position = torch.tensor([seq_len + step])
         for cid in {embed_c, head_c, *(c for _, c in decoders)}:
@@ -126,7 +132,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
                 pass
         return tokens, seq_len, finish_reason
 
-    async def _generate_with_failover(prompt, max_new, sampling):
+    async def _generate_with_failover(prompt, max_new, sampling, job_id):
         excluded = set()
         last_failed = None
         for attempt in range(MAX_FAILOVERS + 1):
@@ -134,8 +140,11 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
             chain = build_chain(stages, num_layers)
             if chain is None:
                 return None, {"error": "model not operational: incomplete coverage", "excluded": sorted(excluded)}
+            store.reset_progress(job_id)
             try:
-                tokens, prompt_len, finish_reason = await _run_generation(chain, prompt, max_new, sampling, _next_id("job"))
+                tokens, prompt_len, finish_reason = await _run_generation(
+                    chain, prompt, max_new, sampling, _next_id("job"),
+                    on_token=lambda pos, tok: store.append_token(job_id, tok, pos))
                 return {"tokens": tokens, "prompt_len": prompt_len, "failovers": attempt, "finish_reason": finish_reason}, None
             except _NodeFailure as e:
                 excluded.add(e.conn_id)
@@ -148,12 +157,17 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
         prompt = body["prompt"]
         max_new = int(body.get("max_new_tokens", 8))
         sampling = {k: body.get(k) for k in ("temperature", "top_p", "repetition_penalty", "seed")}
-        result, err = await _generate_with_failover(prompt, max_new, sampling)
+        job_id = _next_id("job")
+        prompt_len = int(tokenizer(prompt, return_tensors="pt").input_ids.shape[1])
+        store.create_job(job_id, model_id, prompt, sampling, prompt_len)
+        result, err = await _generate_with_failover(prompt, max_new, sampling, job_id)
         if err is not None:
+            store.fail(job_id, err["error"])
             return {"ok": False, **err}
+        text = tokenizer.decode(result["tokens"], skip_special_tokens=True)
+        store.finish(job_id, text, result["finish_reason"])
         return {"ok": True, "model": model_id, "prompt": prompt,
-                "text": tokenizer.decode(result["tokens"], skip_special_tokens=True), "tokens": result["tokens"],
-                "failovers": result["failovers"]}
+                "text": text, "tokens": result["tokens"], "failovers": result["failovers"]}
 
     @app.get("/v1/models")
     async def list_models():
@@ -173,10 +187,15 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
                                                    add_generation_prompt=True)
         except Exception:
             prompt = "\n".join((m.get("content") or "") for m in messages)
-        result, err = await _generate_with_failover(prompt, max_new, sampling)
+        job_id = _next_id("job")
+        prompt_len = int(tokenizer(prompt, return_tensors="pt").input_ids.shape[1])
+        store.create_job(job_id, model_id, prompt, sampling, prompt_len)
+        result, err = await _generate_with_failover(prompt, max_new, sampling, job_id)
         if err is not None:
+            store.fail(job_id, err["error"])
             return JSONResponse({"error": {"message": err["error"], "type": "not_operational"}}, status_code=503)
         text = tokenizer.decode(result["tokens"], skip_special_tokens=True)
+        store.finish(job_id, text, result["finish_reason"])
         content, tool_calls = extract_tool_calls(text)
         message = {"role": "assistant", "content": (content if content else None)}
         finish_reason = result["finish_reason"]
@@ -193,5 +212,16 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer):
                       "completion_tokens": len(result["tokens"]),
                       "total_tokens": result["prompt_len"] + len(result["tokens"])},
         }
+
+    @app.get("/jobs")
+    async def list_jobs(limit: int = 50):
+        return {"jobs": store.recent_jobs(limit)}
+
+    @app.get("/jobs/{job_id}")
+    async def get_job(job_id: str):
+        j = store.get_job(job_id)
+        if j is None:
+            return JSONResponse({"error": "job not found"}, status_code=404)
+        return j
 
     return app
