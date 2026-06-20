@@ -54,6 +54,10 @@ def test_job_is_persisted_and_reconstructible(full_model, tmp_path):
     assert one["status"] == "DONE"
     assert one["tokens"] == tokens
 
+    reg = httpx.get(f"http://127.0.0.1:{port}/registry").json()
+    assert all("load" in n for n in reg["nodes"]), reg
+    assert all(n["load"] == 0 for n in reg["nodes"]), reg   # decremented back after completion
+
     # reconstructible from a freshly-opened DB (durability)
     s2 = JobStore(db)
     assert s2.get_job(jid)["tokens"] == tokens

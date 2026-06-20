@@ -79,7 +79,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
         await ws.accept()
         announce, _ = unpack(await ws.receive_bytes())
         conn_id = _next_id("c")
-        conns[conn_id] = {"ws": ws, "stages": announce["stages"], "pending": {}}
+        conns[conn_id] = {"ws": ws, "stages": announce["stages"], "pending": {}, "load": 0}
         try:
             while True:
                 rh, rp = unpack(await ws.receive_bytes())
@@ -98,7 +98,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
     @app.get("/registry")
     async def registry():
         return {"num_layers": num_layers,
-                "nodes": [{"conn": cid, "stages": c["stages"]} for cid, c in conns.items()]}
+                "nodes": [{"conn": cid, "stages": c["stages"], "load": c["load"]} for cid, c in conns.items()]}
 
     async def _run_generation(chain, prompt, max_new, sampling, job_id, on_token=None, resume_tokens=None):
         embed_c, decoders, head_c = chain
@@ -157,7 +157,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
         marked = False
         while True:
             stages = {cid: c["stages"] for cid, c in conns.items() if cid not in excluded}
-            chain = build_chain(stages, num_layers)
+            chain = build_chain(stages, num_layers, load={cid: c["load"] for cid, c in conns.items()})
             if chain is not None:
                 if marked:
                     _store_safe(store.set_status, job_id, "RUNNING")
@@ -177,6 +177,11 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
             chain = await _await_coverage(excluded, job_id)
             if chain is None:
                 return None, {"error": "coverage timeout: model not operational", "excluded": sorted(excluded)}
+            embed_c, decoders, head_c = chain
+            chain_conns = {embed_c, head_c, *(cid for _, cid in decoders)}
+            for cid in chain_conns:
+                if cid in conns:
+                    conns[cid]["load"] += 1
             try:
                 tokens, prompt_len, finish_reason = await _run_generation(
                     chain, prompt, max_new, sampling, _next_id("job"),
@@ -186,11 +191,15 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
             except _NodeFailure as e:
                 excluded.add(e.conn_id)
                 last_failed = e.conn_id
-                try:                                   # re-dispatch from the persisted progress
+                try:
                     j = store.get_job(job_id)
                     resume_tokens = (j or {}).get("tokens", []) or []
                 except Exception:
                     resume_tokens = []
+            finally:
+                for cid in chain_conns:
+                    if cid in conns:
+                        conns[cid]["load"] = max(0, conns[cid]["load"] - 1)
         return None, {"error": f"too many failovers (last failed node: {last_failed})"}
 
     @app.post("/infer")
