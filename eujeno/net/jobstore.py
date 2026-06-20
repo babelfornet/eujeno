@@ -4,9 +4,12 @@
 generation jobs. Single responsibility, no network/torch deps."""
 
 import json
+import logging
 import os
 import sqlite3
 import time
+
+log = logging.getLogger("eujeno.jobstore")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -57,7 +60,11 @@ class JobStore:
             return
         toks = json.loads(row["tokens_json"] or "[]")
         if position < len(toks):
-            toks[position] = int(token_id)        # re-apply same position -> idempotent, no double
+            if toks[position] == int(token_id):
+                return                            # strict idempotent no-op: same token, same position
+            log.warning("append_token: job %s position %d rewritten %s -> %s",
+                        job_id, position, toks[position], int(token_id))
+            toks[position] = int(token_id)
         elif position == len(toks):
             toks.append(int(token_id))
         else:

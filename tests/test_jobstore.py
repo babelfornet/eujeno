@@ -74,3 +74,25 @@ def test_recent_jobs_orders_newest_first(tmp_path):
 def test_get_missing_job_returns_none(tmp_path):
     s = JobStore(str(tmp_path / "j.db"))
     assert s.get_job("nope") is None
+
+
+def test_append_same_token_same_position_is_strict_noop(tmp_path):
+    s = JobStore(str(tmp_path / "j.db"))
+    s.create_job("j1", "m", "p", {}, 1)
+    s.append_token("j1", 10, 0)
+    before = s.get_job("j1")["updated_at"]
+    s.append_token("j1", 10, 0)        # exact same -> no-op
+    j = s.get_job("j1")
+    assert j["tokens"] == [10]
+    assert j["updated_at"] == before   # no write happened
+
+
+def test_append_different_token_at_existing_position_warns(tmp_path, caplog):
+    import logging
+    s = JobStore(str(tmp_path / "j.db"))
+    s.create_job("j1", "m", "p", {}, 1)
+    s.append_token("j1", 10, 0)
+    with caplog.at_level(logging.WARNING, logger="eujeno.jobstore"):
+        s.append_token("j1", 99, 0)
+    assert s.get_job("j1")["tokens"] == [99]
+    assert any("rewritten" in r.message for r in caplog.records)
