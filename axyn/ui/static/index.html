@@ -147,6 +147,12 @@ const TRANSLATIONS = {
     'copy.small_copied': 'copiato',
     'copy.chip_copy': 'copia',
     'copy.chip_copied': 'copiato',
+    'rete.memory': 'MEMORIA',
+    'model.unknown': 'modello sconosciuto',
+    'err.http': 'errore',
+    'p2p.advertise_label': 'advertise url (il tuo nodo)',
+    'p2p.peers_label': 'peers (url di un nodo seed)',
+    'app.title': 'Axyn · rete di inferenza LLM decentralizzata',
   },
   en: {
     'tab.network': 'Network',
@@ -258,6 +264,12 @@ const TRANSLATIONS = {
     'copy.small_copied': 'copied',
     'copy.chip_copy': 'copy',
     'copy.chip_copied': 'copied',
+    'rete.memory': 'MEMORY',
+    'model.unknown': 'unknown model',
+    'err.http': 'error',
+    'p2p.advertise_label': 'advertise url (this node)',
+    'p2p.peers_label': 'peers (a seed node url)',
+    'app.title': 'Axyn · decentralized LLM inference network',
   },
   fr: {
     'tab.network': 'Réseau',
@@ -369,6 +381,12 @@ const TRANSLATIONS = {
     'copy.small_copied': 'copié',
     'copy.chip_copy': 'copier',
     'copy.chip_copied': 'copié',
+    'rete.memory': 'MÉMOIRE',
+    'model.unknown': 'modèle inconnu',
+    'err.http': 'erreur',
+    'p2p.advertise_label': 'url advertise (ce nœud)',
+    'p2p.peers_label': "peers (url d'un nœud seed)",
+    'app.title': "Axyn · réseau d'inférence LLM décentralisé",
   },
   de: {
     'tab.network': 'Netzwerk',
@@ -480,6 +498,12 @@ const TRANSLATIONS = {
     'copy.small_copied': 'kopiert',
     'copy.chip_copy': 'kopieren',
     'copy.chip_copied': 'kopiert',
+    'rete.memory': 'SPEICHER',
+    'model.unknown': 'unbekanntes Modell',
+    'err.http': 'Fehler',
+    'p2p.advertise_label': 'advertise-URL (dieser Knoten)',
+    'p2p.peers_label': 'peers (URL eines Seed-Knotens)',
+    'app.title': 'Axyn · dezentrales LLM-Inferenznetzwerk',
   },
   es: {
     'tab.network': 'Red',
@@ -591,6 +615,12 @@ const TRANSLATIONS = {
     'copy.small_copied': 'copiado',
     'copy.chip_copy': 'copiar',
     'copy.chip_copied': 'copiado',
+    'rete.memory': 'MEMORIA',
+    'model.unknown': 'modelo desconocido',
+    'err.http': 'error',
+    'p2p.advertise_label': 'url advertise (este nodo)',
+    'p2p.peers_label': 'peers (url de un nodo seed)',
+    'app.title': 'Axyn · red de inferencia LLM descentralizada',
   },
 };
 // END_TRANSLATIONS
@@ -603,12 +633,6 @@ function getInitialLang(){
   const browser = (navigator.language || '').slice(0, 2).toLowerCase();
   return LANGS.includes(browser) ? browser : 'en';
 }
-function tf(t, key, vars){
-  let s = (TRANSLATIONS[t.lang] && TRANSLATIONS[t.lang][key]) || TRANSLATIONS.en[key] || key;
-  if (vars) Object.keys(vars).forEach(k => { s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]); });
-  return s;
-}
-
 /* ---------- pure helpers (mirror backend build_chain) ---------- */
 function parseRanges(decoders){
   const out = [];
@@ -632,7 +656,7 @@ function buildChain(reg){
   reg = reg || {};
   const N = typeof reg.num_layers === 'number' ? reg.num_layers : 0;
   const nodes = Array.isArray(reg.nodes) ? reg.nodes : [];
-  const model = reg.model || 'modello sconosciuto';
+  const model = reg.model || null;
 
   const colorOf = {};
   nodes.forEach((n, i) => { colorOf[cidOf(n, i)] = PALETTE[i % PALETTE.length]; });
@@ -993,7 +1017,7 @@ function ReteView({ m, coordinatorUrl, command }){
           ),
           h('div', { style: { textAlign: 'right' }},
             h('div', { style: { fontSize: '18px', fontWeight: 600, color: '#cdd7e5', lineHeight: 1, whiteSpace: 'nowrap' }}, m.totalMem),
-            h('div', { style: { fontSize: '9.5px', color: '#566679', marginTop: '3px', letterSpacing: '.4px' }}, 'MEMORIA'),
+            h('div', { style: { fontSize: '9.5px', color: '#566679', marginTop: '3px', letterSpacing: '.4px' }}, t('rete.memory')),
           ),
         ),
       ),
@@ -1164,7 +1188,7 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, s
           ? h('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '50px 0 30px' }},
               h('div', { style: { width: '60px', height: '60px', borderRadius: '50%', border: '2px solid #2dd4bf', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2dd4bf', fontSize: '26px', boxShadow: '0 0 30px rgba(45,212,191,.25)', marginBottom: '16px' }}, '⌘'),
               h('div', { style: { fontSize: '20px', fontWeight: 700, color: '#eaf2fb' }}, t('chat.query_model')),
-              h('div', { style: { fontSize: '13px', color: '#8b9bb0', marginTop: '7px', fontFamily: "'IBM Plex Mono',monospace" }}, t('chat.assembled_on').replace('{model}', m.model).replace('{n}', m.totalNodes)),
+              h('div', { style: { fontSize: '13px', color: '#8b9bb0', marginTop: '7px', fontFamily: "'IBM Plex Mono',monospace" }}, t('chat.assembled_on').replace('{model}', m.model || t('model.unknown')).replace('{n}', m.totalNodes)),
               h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '9px', justifyContent: 'center', marginTop: '22px', maxWidth: '560px' }},
                 suggestions.map((t, i) => h('button', { key: i, onClick: () => send(t), style: {
                   cursor: 'pointer', fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '12.5px', color: '#aebccd',
@@ -1325,7 +1349,7 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
     return { res, data };
   };
   const errText = (data, res, fallback) =>
-    (data && (data.error || data.detail)) || (fallback + ' (errore ' + res.status + ')');
+    (data && (data.error || data.detail)) || (fallback + ' (' + t('err.http') + ' ' + res.status + ')');
 
   const applyTarget = async () => {
     const url = target.trim();
@@ -1594,12 +1618,12 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
       h(GCard, { title: t('settings.join_p2p'), subtitle: t('settings.join_p2p.subtitle') },
         h('div', { style: { display: 'flex', flexDirection: 'column', gap: '13px' }},
           h('div', null,
-            GLabel('advertise url (il tuo nodo)'),
+            GLabel(t('p2p.advertise_label')),
             h('input', { type: 'text', value: jpAdvertise, spellCheck: false,
               onChange: e => setJpAdvertise(e.target.value), placeholder: 'http://127.0.0.1:8002', style: gInputStyle }),
           ),
           h('div', null,
-            GLabel('peers (url di un nodo seed)'),
+            GLabel(t('p2p.peers_label')),
             h('input', { type: 'text', value: jpPeers, spellCheck: false,
               onChange: e => setJpPeers(e.target.value), placeholder: 'http://127.0.0.1:8001', style: gInputStyle }),
           ),
@@ -1698,7 +1722,7 @@ function McpView({ mcp, refreshMcp, useMcp, setUseMcp }){
     return { res, data };
   };
   const errText = (data, res, fallback) =>
-    (data && (data.error || data.detail)) || (fallback + ' (errore ' + res.status + ')');
+    (data && (data.error || data.detail)) || (fallback + ' (' + t('err.http') + ' ' + res.status + ')');
 
   const addServer = async () => {
     const nm = name.trim();
@@ -1986,6 +2010,7 @@ function App(){
   }, []);
 
   useEffect(() => { document.documentElement.lang = lang; }, [lang]);
+  useEffect(() => { document.title = t('app.title'); }, [lang]);
 
   // refresh MCP servers/tools on entering the MCP view; also load once for the chat badge
   useEffect(() => { refreshMcp(); }, [refreshMcp]);
