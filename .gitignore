@@ -43,3 +43,4 @@ frontend/_mock/
 .idea/
 .vscode/
 *.swp
+frontend/
