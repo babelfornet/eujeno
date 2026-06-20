@@ -97,5 +97,5 @@ eujeno ui --coordinator http://IP:9000      # then open http://127.0.0.1:8500
 ## Operational notes
 - **Memory:** a 7B in float32 ≈ 28GB; in bfloat16 ≈ 14GB. Split across more nodes or use `--dtype bfloat16`.
 - **NAT without VPN:** use coordinator mode (nodes connect outbound). On LAN/VPN/public IPs, pure P2P (`--peer`) is fine.
-- **Operationality:** until coverage is complete, `infer` responds `NOT_OPERATIONAL`. Add nodes with the missing ranges.
+- **Operationality:** until coverage is complete, `infer` **parks the request** (job status `WAITING_COVERAGE`) and waits for a node to cover the missing range, up to the coordinator's `coverage_timeout` (default 120s), then resumes from where it left off; on timeout it errors. Jobs are persisted in a durable SQLite log (`coordinator --db`, default `~/.eujeno/coordinator-jobs.db`); inspect them at `GET /jobs[/{id}]`. Add nodes with the missing ranges to unblock parked jobs.
 - **OpenAI/Anthropic client models:** the coordinator exposes `/v1/chat/completions` (OpenAI). For Claude Code, put **LiteLLM** in front (see `docs/examples/agents.md`).

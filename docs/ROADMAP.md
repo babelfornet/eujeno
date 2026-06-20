@@ -52,10 +52,11 @@
   - [x] **Pure P2P**: discovery via **gossip** (decentralized registry + coverage), `serve --peers/--advertise` + `infer --peer` — [plan](./plans/2026-06-17-part2a-p2p-gossip.md). No central server; for LAN/VPN/public IPs.
   - [x] **Coordinator-relay** (opt-in, NAT-without-VPN) — [plan](./plans/2026-06-17-part2-coordinator.md) · [quickstart](./examples/coordinator.md). Nodes via outbound WebSocket; golden via relay green. `coordinator`, `serve --coordinator`, `infer --coordinator` commands.
   - [x] **Automatic failover** on a node going down (coordinator): redundancy + re-routing to a redundant holder — [plan](./plans/2026-06-17-part3-failover.md). e2e: a node crashing mid-hop → the job completes via the redundant holder.
-  - [ ] Per-hop failover with prefix replay + durable SQLite store-and-forward (full Part 3) · direct-P2P failover · native libp2p for P2P-over-NAT (future)
+  - [x] **Durable store-and-forward + resume failover + WAITING_COVERAGE** (Part 3a/3b/3c): SQLite(WAL) job log (`coordinator --db`, idempotent on `(job_id,position)`, restart-safe, `GET /jobs[/{id}]`) — [3a](./plans/2026-06-20-part3a-durable-job-log.md); failover **resumes from persisted tokens** via prefix replay instead of restarting — [3b](./plans/2026-06-20-part3b-failover-resume.md); uncovered jobs **park** as `WAITING_COVERAGE` and resume when a node covers the gap (TTL) — [3c](./plans/2026-06-20-part3c-waiting-coverage.md).
+  - [ ] direct-P2P failover · native libp2p for P2P-over-NAT (future)
 - [x] **OpenAI-compatible API** (`/v1/chat/completions` + `/v1/models`) on the coordinator: chat template + sampling (temperature/top_p/repetition_penalty/seed) — [plan](./plans/2026-06-17-openai-api.md) · [agents guide](./examples/agents.md). Connects OpenAI clients/agents.
 - [x] **Stop at EOS + tool/function calling** (`tools`/`tool_calls`) — [plan](./plans/2026-06-17-tool-calling.md). Foundation for MCP agents (the host runs the tools; the model decides). *(SSE streaming + Anthropic/LiteLLM for Claude Code = next steps)*
-- [ ] Plan + build **Queue & Load Balancing**: durable job store, store-and-forward, scheduling across redundant holders (for many concurrent agents)
+- [~] **Queue & Load Balancing** (Part 3): durable job store + store-and-forward **done** (3a/3b/3c above). Remaining **(3d)**: `load` metric in the registry + scheduling across redundant holders (for many concurrent agents).
 - [ ] Plan + build **Minimal reputation** (tokens ⏸ deferred)
 - [ ] End-to-end integration on 2–3 nodes + failover tests
 - [x] Private GitHub repo setup → [albertoferrazzoli/eujeno](https://github.com/albertoferrazzoli/eujeno) (public on first working build)
