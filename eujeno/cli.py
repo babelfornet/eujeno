@@ -470,22 +470,29 @@ def infer(
         _emit_ok("infer", body, human=body["text"])
         return
     if peer:
+        peer = peer.rstrip("/")
         try:
             reg = httpx.get(f"{peer}/registry", timeout=30.0).json()
         except Exception as e:
             _fail("infer", "USAGE_ERROR", f"peer unreachable: {e}", exit_code=2)
-        chain = build_chain(reg["nodes"], reg["num_layers"])
-        if chain is None:
-            _fail("infer", "NOT_OPERATIONAL", "incomplete coverage: the model is not operational on the network yet")
-        embed_url, decoders, head_url = chain
-        topo = Topology(model=reg["model"], embed=embed_url, head=head_url, decoders=decoders)
+        from eujeno.net.orchestrator import distributed_generate_resilient
+        from eujeno.net.generation import stop_token_ids
         try:
-            tokenizer = AutoTokenizer.from_pretrained(topo.model)
+            tokenizer = AutoTokenizer.from_pretrained(reg["model"])
+            stop_ids = stop_token_ids(tokenizer)
+            def _refresh():
+                return httpx.get(f"{peer}/registry", timeout=10.0).json()["nodes"]
             with httpx.Client(timeout=120.0) as client:
-                result = distributed_generate(topo, prompt, max_new_tokens, client, tokenizer)
+                result = distributed_generate_resilient(
+                    reg["nodes"], reg["num_layers"], prompt, max_new_tokens, client, tokenizer,
+                    stop_ids=stop_ids, refresh=_refresh)
         except Exception as e:
             _fail("infer", "GENERATION_FAILED", str(e))
-        _emit_ok("infer", {"model": topo.model, "prompt": prompt, **result}, human=result["text"])
+        if not result.get("ok"):
+            _fail("infer", "NOT_OPERATIONAL", result.get("error", "the model is not operational on the network yet"))
+        _emit_ok("infer", {"model": reg["model"], "prompt": prompt,
+                           "text": result["text"], "tokens": result["tokens"],
+                           "failovers": result["failovers"]}, human=result["text"])
         return
     if not topology:
         _fail("infer", "USAGE_ERROR", "specify --topology or --peer", exit_code=2)
