@@ -22,6 +22,12 @@ log = logging.getLogger("eujeno.coordinator")
 MAX_FAILOVERS = 5
 COVERAGE_POLL_INTERVAL = 0.5
 
+REP_INITIAL = 1.0
+REP_REWARD = 0.5
+REP_PENALTY = 2.0
+REP_MIN = 0.0
+REP_MAX = 10.0
+
 
 class _NodeFailure(Exception):
     def __init__(self, conn_id):
@@ -79,7 +85,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
         await ws.accept()
         announce, _ = unpack(await ws.receive_bytes())
         conn_id = _next_id("c")
-        conns[conn_id] = {"ws": ws, "stages": announce["stages"], "pending": {}, "load": 0}
+        conns[conn_id] = {"ws": ws, "stages": announce["stages"], "pending": {}, "load": 0, "reputation": REP_INITIAL}
         try:
             while True:
                 rh, rp = unpack(await ws.receive_bytes())
@@ -98,7 +104,8 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
     @app.get("/registry")
     async def registry():
         return {"num_layers": num_layers,
-                "nodes": [{"conn": cid, "stages": c["stages"], "load": c["load"]} for cid, c in conns.items()]}
+                "nodes": [{"conn": cid, "stages": c["stages"], "load": c["load"], "reputation": c["reputation"]}
+                          for cid, c in conns.items()]}
 
     async def _run_generation(chain, prompt, max_new, sampling, job_id, on_token=None, resume_tokens=None):
         embed_c, decoders, head_c = chain
@@ -157,7 +164,9 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
         marked = False
         while True:
             stages = {cid: c["stages"] for cid, c in conns.items() if cid not in excluded}
-            chain = build_chain(stages, num_layers, load={cid: c["load"] for cid, c in conns.items()})
+            chain = build_chain(stages, num_layers,
+                                load={cid: c["load"] for cid, c in conns.items()},
+                                reputation={cid: c["reputation"] for cid, c in conns.items()})
             if chain is not None:
                 if marked:
                     _store_safe(store.set_status, job_id, "RUNNING")
@@ -187,10 +196,15 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
                     chain, prompt, max_new, sampling, _next_id("job"),
                     on_token=lambda pos, tok: _store_safe(store.append_token, job_id, tok, pos),
                     resume_tokens=resume_tokens)
+                for cid in chain_conns:
+                    if cid in conns:
+                        conns[cid]["reputation"] = min(REP_MAX, conns[cid]["reputation"] + REP_REWARD)
                 return {"tokens": tokens, "prompt_len": prompt_len, "failovers": attempt, "finish_reason": finish_reason}, None
             except _NodeFailure as e:
                 excluded.add(e.conn_id)
                 last_failed = e.conn_id
+                if e.conn_id in conns:  # best-effort penalty hook (no-op when the node disconnected)
+                    conns[e.conn_id]["reputation"] = max(REP_MIN, conns[e.conn_id]["reputation"] - REP_PENALTY)
                 try:
                     j = store.get_job(job_id)
                     resume_tokens = (j or {}).get("tokens", []) or []
