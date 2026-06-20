@@ -107,8 +107,19 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
                 "nodes": [{"conn": cid, "stages": c["stages"], "load": c["load"], "reputation": c["reputation"]}
                           for cid, c in conns.items()]}
 
-    async def _run_generation(chain, prompt, max_new, sampling, job_id, on_token=None, resume_tokens=None):
+    async def _run_generation(chain, prompt, max_new, sampling, job_id, on_token=None, resume_tokens=None, receipts=None):
         embed_c, decoders, head_c = chain
+
+        async def _rc(cid, header, payload=b""):
+            t0 = time.monotonic()
+            rh, rp = await _call(cid, header, payload)
+            if receipts is not None:
+                r = receipts.setdefault(cid, {"hops": 0, "bytes": 0, "t_compute": 0.0})
+                r["hops"] += 1
+                r["bytes"] += len(payload) + (len(rp) if rp else 0)
+                r["t_compute"] += time.monotonic() - t0
+            return rh, rp
+
         temperature = float(sampling.get("temperature", 0.0) or 0.0)
         top_p = float(sampling.get("top_p", 1.0) or 1.0)
         rep = float(sampling.get("repetition_penalty", 1.0) or 1.0)
@@ -132,15 +143,15 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
         tokens = list(resume_tokens)
         finish_reason = "length"
         for _ in range(max_new - len(resume_tokens)):
-            _, p = await _call(embed_c, {"op": "embed", "job_id": job_id},
-                               encode_tensors({"input_ids": cur}))
+            _, p = await _rc(embed_c, {"op": "embed", "job_id": job_id},
+                             encode_tensors({"input_ids": cur}))
             h = decode_tensors(p)["hidden_states"]
             for block_key, cid in decoders:
-                _, p = await _call(cid, {"op": "decode", "block_key": block_key, "job_id": job_id},
-                                   encode_tensors({"hidden_states": h, "cache_position": cache_position}))
+                _, p = await _rc(cid, {"op": "decode", "block_key": block_key, "job_id": job_id},
+                                 encode_tensors({"hidden_states": h, "cache_position": cache_position}))
                 h = decode_tensors(p)["hidden_states"]
-            rh, _ = await _call(head_c, {"op": "head", "job_id": job_id, "topk": topk},
-                                encode_tensors({"hidden_states": h}))
+            rh, _ = await _rc(head_c, {"op": "head", "job_id": job_id, "topk": topk},
+                               encode_tensors({"hidden_states": h}))
             tok = sample_token(rh["topk_ids"], rh["topk_logits"], tokens, temperature, top_p, rep, generator) if do_sample else rh["token_id"]
             if tok in stop_ids:
                 finish_reason = "stop"
@@ -188,6 +199,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
                 return None, {"error": "coverage timeout: model not operational", "excluded": sorted(excluded)}
             embed_c, decoders, head_c = chain
             chain_conns = {embed_c, head_c, *(cid for _, cid in decoders)}
+            attempt_receipts = {}
             for cid in chain_conns:
                 if cid in conns:
                     conns[cid]["load"] += 1
@@ -195,10 +207,11 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
                 tokens, prompt_len, finish_reason = await _run_generation(
                     chain, prompt, max_new, sampling, _next_id("job"),
                     on_token=lambda pos, tok: _store_safe(store.append_token, job_id, tok, pos),
-                    resume_tokens=resume_tokens)
+                    resume_tokens=resume_tokens, receipts=attempt_receipts)
                 for cid in chain_conns:
                     if cid in conns:
                         conns[cid]["reputation"] = min(REP_MAX, conns[cid]["reputation"] + REP_REWARD)
+                _store_safe(store.add_receipts, job_id, attempt_receipts)
                 return {"tokens": tokens, "prompt_len": prompt_len, "failovers": attempt, "finish_reason": finish_reason}, None
             except _NodeFailure as e:
                 excluded.add(e.conn_id)
@@ -288,5 +301,9 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
         if j is None:
             return JSONResponse({"error": "job not found"}, status_code=404)
         return j
+
+    @app.get("/jobs/{job_id}/receipts")
+    async def get_receipts(job_id: str):
+        return {"receipts": store.get_receipts(job_id)}
 
     return app
