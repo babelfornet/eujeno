@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import logging
 import random
 import time
 
@@ -16,6 +17,7 @@ from eujeno.net.sampling import sample_token
 from eujeno.net.tools import extract_tool_calls
 from eujeno.net.jobstore import JobStore
 
+log = logging.getLogger("eujeno.coordinator")
 
 MAX_FAILOVERS = 5
 
@@ -32,7 +34,17 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
     durable SQLite job log (db_path=None -> in-memory, used by tests)."""
     app = FastAPI()
     store = JobStore(db_path if db_path is not None else ":memory:")
-    store.recover()
+    try:
+        store.recover()
+    except Exception as _e:
+        log.warning("jobstore recover failed (continuing): %s", _e)
+
+    def _store_safe(fn, *args):
+        try:
+            fn(*args)
+        except Exception as e:                      # durability is best-effort; never break inference
+            log.warning("jobstore write failed: %s", e)
+
     conns = {}        # conn_id -> {"ws", "stages", "pending": {req_id: Future}}
     counter = {"n": 0}
 
@@ -140,11 +152,11 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
             chain = build_chain(stages, num_layers)
             if chain is None:
                 return None, {"error": "model not operational: incomplete coverage", "excluded": sorted(excluded)}
-            store.reset_progress(job_id)
+            _store_safe(store.reset_progress, job_id)
             try:
                 tokens, prompt_len, finish_reason = await _run_generation(
                     chain, prompt, max_new, sampling, _next_id("job"),
-                    on_token=lambda pos, tok: store.append_token(job_id, tok, pos))
+                    on_token=lambda pos, tok: _store_safe(store.append_token, job_id, tok, pos))
                 return {"tokens": tokens, "prompt_len": prompt_len, "failovers": attempt, "finish_reason": finish_reason}, None
             except _NodeFailure as e:
                 excluded.add(e.conn_id)
@@ -159,13 +171,13 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
         sampling = {k: body.get(k) for k in ("temperature", "top_p", "repetition_penalty", "seed")}
         job_id = _next_id("job")
         prompt_len = int(tokenizer(prompt, return_tensors="pt").input_ids.shape[1])
-        store.create_job(job_id, model_id, prompt, sampling, prompt_len)
+        _store_safe(store.create_job, job_id, model_id, prompt, sampling, prompt_len)
         result, err = await _generate_with_failover(prompt, max_new, sampling, job_id)
         if err is not None:
-            store.fail(job_id, err["error"])
+            _store_safe(store.fail, job_id, err["error"])
             return {"ok": False, **err}
         text = tokenizer.decode(result["tokens"], skip_special_tokens=True)
-        store.finish(job_id, text, result["finish_reason"])
+        _store_safe(store.finish, job_id, text, result["finish_reason"])
         return {"ok": True, "model": model_id, "prompt": prompt,
                 "text": text, "tokens": result["tokens"], "failovers": result["failovers"]}
 
@@ -189,13 +201,13 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
             prompt = "\n".join((m.get("content") or "") for m in messages)
         job_id = _next_id("job")
         prompt_len = int(tokenizer(prompt, return_tensors="pt").input_ids.shape[1])
-        store.create_job(job_id, model_id, prompt, sampling, prompt_len)
+        _store_safe(store.create_job, job_id, model_id, prompt, sampling, prompt_len)
         result, err = await _generate_with_failover(prompt, max_new, sampling, job_id)
         if err is not None:
-            store.fail(job_id, err["error"])
+            _store_safe(store.fail, job_id, err["error"])
             return JSONResponse({"error": {"message": err["error"], "type": "not_operational"}}, status_code=503)
         text = tokenizer.decode(result["tokens"], skip_special_tokens=True)
-        store.finish(job_id, text, result["finish_reason"])
+        _store_safe(store.finish, job_id, text, result["finish_reason"])
         content, tool_calls = extract_tool_calls(text)
         message = {"role": "assistant", "content": (content if content else None)}
         finish_reason = result["finish_reason"]
