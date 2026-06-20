@@ -88,9 +88,15 @@ class JobStore:
                            ("FAILED", str(error), time.time(), job_id))
         self._conn.commit()
 
+    def set_status(self, job_id, status):
+        self._conn.execute("UPDATE jobs SET status=?, updated_at=? WHERE job_id=?",
+                           (status, time.time(), job_id))
+        self._conn.commit()
+
     def recover(self):
         cur = self._conn.execute(
-            "UPDATE jobs SET status='INTERRUPTED', updated_at=? WHERE status='RUNNING'", (time.time(),))
+            "UPDATE jobs SET status='INTERRUPTED', updated_at=? "
+            "WHERE status IN ('RUNNING', 'WAITING_COVERAGE')", (time.time(),))
         self._conn.commit()
         return cur.rowcount
 

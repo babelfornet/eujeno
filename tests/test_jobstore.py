@@ -96,3 +96,22 @@ def test_append_different_token_at_existing_position_warns(tmp_path, caplog):
         s.append_token("j1", 99, 0)
     assert s.get_job("j1")["tokens"] == [99]
     assert any("rewritten" in r.message for r in caplog.records)
+
+
+def test_set_status_changes_status(tmp_path):
+    s = JobStore(str(tmp_path / "j.db"))
+    s.create_job("j1", "m", "p", {}, 1)
+    s.set_status("j1", "WAITING_COVERAGE")
+    assert s.get_job("j1")["status"] == "WAITING_COVERAGE"
+
+
+def test_recover_marks_waiting_coverage_interrupted(tmp_path):
+    s = JobStore(str(tmp_path / "j.db"))
+    s.create_job("w", "m", "p", {}, 1); s.set_status("w", "WAITING_COVERAGE")
+    s.create_job("r", "m", "p", {}, 1)                       # RUNNING
+    s.create_job("d", "m", "p", {}, 1); s.finish("d", "x", "stop")
+    n = s.recover()
+    assert n == 2
+    assert s.get_job("w")["status"] == "INTERRUPTED"
+    assert s.get_job("r")["status"] == "INTERRUPTED"
+    assert s.get_job("d")["status"] == "DONE"
