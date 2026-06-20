@@ -57,7 +57,7 @@
 - [x] **OpenAI-compatible API** (`/v1/chat/completions` + `/v1/models`) on the coordinator: chat template + sampling (temperature/top_p/repetition_penalty/seed) — [plan](./plans/2026-06-17-openai-api.md) · [agents guide](./examples/agents.md). Connects OpenAI clients/agents.
 - [x] **Stop at EOS + tool/function calling** (`tools`/`tool_calls`) — [plan](./plans/2026-06-17-tool-calling.md). Foundation for MCP agents (the host runs the tools; the model decides). *(SSE streaming + Anthropic/LiteLLM for Claude Code = next steps)*
 - [x] **Queue & Load Balancing** (Part 3 complete): durable job store + store-and-forward (3a/3b/3c) **+ load-balancing (3d)** — the coordinator tracks per-connection `load`, exposes it in `/registry`, and `build_chain` routes concurrent requests to the least-loaded replica — [3d](./plans/2026-06-20-part3d-load-balancing.md).
-- [ ] Plan + build **Minimal reputation** (tokens ⏸ deferred)
+- [x] **Minimal reputation** (Part 4): per-connection `reputation` rises on success and biases routing toward high-reputation holders — [4a](./plans/2026-06-20-part4a-reputation.md); per-peer hop **receipts** (`hops/bytes/t_compute`) recorded in the job log as the ledger hook, at `GET /jobs/{id}/receipts` — [4b](./plans/2026-06-20-part4b-receipts.md). Tokens ⏸ deferred. *(Note: reputation/receipts are coordinator-side; the pure-P2P path is the release priority below.)*
 - [ ] End-to-end integration on 2–3 nodes + failover tests
 - [x] Private GitHub repo setup → [albertoferrazzoli/eujeno](https://github.com/albertoferrazzoli/eujeno) (public on first working build)
 
