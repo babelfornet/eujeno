@@ -21,7 +21,7 @@ class Registry:
         return {u: e["stages"] for u, e in self.entries.items() if e["expiry"] > now}
 
 
-def build_chain(stages_by_url: dict, num_layers: int, exclude=None):
+def build_chain(stages_by_url: dict, num_layers: int, exclude=None, load=None):
     """From {url: {'embed','head','decoders':[block_key]}} builds
     (embed_url, [(block_key, url)...], head_url) that tiles [0, num_layers),
     ignoring the ids in `exclude`. Returns None if coverage is incomplete."""
@@ -45,6 +45,14 @@ def build_chain(stages_by_url: dict, num_layers: int, exclude=None):
             cursor = hi
     if cursor != num_layers:
         return None
+    if load is not None:
+        order = {u: i for i, u in enumerate(items)}
+        def _least(cands):
+            return min(cands, key=lambda u: (load.get(u, 0), order[u]))
+        embed = _least([u for u, s in items.items() if s.get("embed")])
+        head = _least([u for u, s in items.items() if s.get("head")])
+        chain = [(bk, _least([u for u, s in items.items() if bk in s.get("decoders", [])]))
+                 for bk, u in chain]
     return embed, chain, head
 
 
