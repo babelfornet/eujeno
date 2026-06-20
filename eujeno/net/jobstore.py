@@ -27,6 +27,14 @@ CREATE TABLE IF NOT EXISTS jobs (
   created_at    REAL,
   updated_at    REAL
 );
+CREATE TABLE IF NOT EXISTS receipts (
+  job_id     TEXT,
+  peer_id    TEXT,
+  hops       INTEGER,
+  bytes      INTEGER,
+  t_compute  REAL,
+  PRIMARY KEY (job_id, peer_id)
+);
 """
 
 
@@ -108,6 +116,21 @@ class JobStore:
         rows = self._conn.execute(
             "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (int(limit),)).fetchall()
         return [self._row_to_dict(r) for r in rows]
+
+    def add_receipts(self, job_id, receipts):
+        for peer_id, r in (receipts or {}).items():
+            self._conn.execute(
+                "INSERT INTO receipts (job_id, peer_id, hops, bytes, t_compute) VALUES (?,?,?,?,?) "
+                "ON CONFLICT(job_id, peer_id) DO UPDATE SET hops=hops+excluded.hops, "
+                "bytes=bytes+excluded.bytes, t_compute=t_compute+excluded.t_compute",
+                (job_id, peer_id, int(r.get("hops", 0)), int(r.get("bytes", 0)), float(r.get("t_compute", 0.0))))
+        self._conn.commit()
+
+    def get_receipts(self, job_id):
+        rows = self._conn.execute(
+            "SELECT peer_id, hops, bytes, t_compute FROM receipts WHERE job_id=? ORDER BY peer_id",
+            (job_id,)).fetchall()
+        return [dict(r) for r in rows]
 
     @staticmethod
     def _row_to_dict(row):

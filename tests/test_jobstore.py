@@ -115,3 +115,26 @@ def test_recover_marks_waiting_coverage_interrupted(tmp_path):
     assert s.get_job("w")["status"] == "INTERRUPTED"
     assert s.get_job("r")["status"] == "INTERRUPTED"
     assert s.get_job("d")["status"] == "DONE"
+
+
+def test_add_and_get_receipts_roundtrip(tmp_path):
+    s = JobStore(str(tmp_path / "j.db"))
+    s.add_receipts("j1", {"c1": {"hops": 3, "bytes": 100, "t_compute": 0.5},
+                          "c2": {"hops": 1, "bytes": 40, "t_compute": 0.1}})
+    r = {x["peer_id"]: x for x in s.get_receipts("j1")}
+    assert r["c1"]["hops"] == 3 and r["c1"]["bytes"] == 100 and abs(r["c1"]["t_compute"] - 0.5) < 1e-9
+    assert r["c2"]["hops"] == 1
+
+
+def test_add_receipts_accumulates(tmp_path):
+    s = JobStore(str(tmp_path / "j.db"))
+    s.add_receipts("j1", {"c1": {"hops": 2, "bytes": 10, "t_compute": 0.2}})
+    s.add_receipts("j1", {"c1": {"hops": 3, "bytes": 5, "t_compute": 0.3}})
+    r = s.get_receipts("j1")
+    assert len(r) == 1
+    assert r[0]["hops"] == 5 and r[0]["bytes"] == 15 and abs(r[0]["t_compute"] - 0.5) < 1e-9
+
+
+def test_get_receipts_unknown_job_is_empty(tmp_path):
+    s = JobStore(str(tmp_path / "j.db"))
+    assert s.get_receipts("nope") == []
