@@ -35,6 +35,580 @@ const h = React.createElement;
 const TEAL = '#2dd4bf', AMBER = '#f59e0b', RED = '#f87171';
 const PALETTE = ['#2dd4bf','#38bdf8','#a78bfa','#f472b6','#fb923c','#facc15','#4ade80','#22d3ee','#818cf8','#fda4af','#c084fc','#fbbf24'];
 
+// BEGIN_TRANSLATIONS
+const TRANSLATIONS = {
+  it: {
+    'tab.network': 'Rete',
+    'tab.chat': 'Chat',
+    'tab.manage': 'Gestione',
+    'tab.mcp': 'MCP',
+    'header.subtitle': 'rete di inferenza LLM decentralizzata',
+    'status.operational': 'OPERATIVO',
+    'status.not_operational': 'NON OPERATIVO',
+    'status.updated_ago': 'aggiornato {n}s fa',
+    'panel.assembly': 'Assemblaggio del modello',
+    'panel.assembly.coverage': '{covered}/{total} layer · {pct}%',
+    'panel.network': 'La rete',
+    'panel.network.subtitle': '{n} nodi · coordinator {url}',
+    'panel.node_detail': 'Dettaglio nodi',
+    'panel.node_detail.none': 'nessun nodo connesso',
+    'node.embed_missing': 'mancante',
+    'node.head_missing': 'mancante',
+    'node.memory': 'memoria',
+    'node.awaiting': 'in attesa che i nodi si uniscano alla rete…',
+    'net.missing_title': '⚠ MANCANO ALLA RETE',
+    'net.missing_start': 'avvia il pezzo mancante:',
+    'btn.send': 'Invia',
+    'btn.apply': 'Applica',
+    'btn.create_network': 'Crea rete',
+    'btn.join': 'Aggiungiti',
+    'btn.join_p2p': 'Aggiungiti (P2P)',
+    'btn.create_p2p': 'Crea rete P2P',
+    'btn.stop': 'Stop',
+    'btn.add': 'Aggiungi',
+    'btn.remove': 'Rimuovi',
+    'chat.placeholder': 'Scrivi un messaggio…',
+    'chat.send_hint': 'Invio per inviare · Maiusc+Invio per andare a capo',
+    'chat.connect_client': 'CONNETTI UN CLIENT',
+    'chat.model_not_assembled': 'Il modello non è assemblato',
+    'chat.model_not_assembled.desc': 'La chat è disponibile solo quando la rete copre tutti i {n} layer con embed e head. Le richieste restano in coda finché la rete non è completa.',
+    'chat.missing': 'MANCANO',
+    'chat.assembled_on': '{model} · assemblato su {n} nodi',
+    'chat.query_model': 'Interroga il modello distribuito',
+    'chat.failovers': 'failovers: {n}',
+    'chat.mcp_active': 'MCP attivo · {n} tool',
+    'chat.suggestion1': "Spiega in una frase cos'è la sharded inference.",
+    'chat.suggestion2': 'Scrivi una funzione Python che inverte una stringa.',
+    'chat.suggestion3': 'Riassumi i vantaggi di una rete decentralizzata.',
+    'settings.language': 'Lingua / Language',
+    'settings.coordinator_target': 'Coordinator bersaglio',
+    'settings.coordinator_target.subtitle': "Il coordinator verso cui la UI inoltra registry, chat e inferenza. Cambialo per monitorare un'altra rete.",
+    'settings.coordinator_url': 'coordinator url',
+    'settings.net_mode': 'Modalità rete',
+    'settings.net_mode.subtitle': 'Scegli come avviare/unire i nodi: con un coordinator centrale, oppure in P2P dove i nodi si scoprono via gossip senza coordinator.',
+    'settings.net_mode.coordinator': 'Coordinator',
+    'settings.net_mode.p2p': 'P2P (senza coordinator)',
+    'settings.create_network': 'Crea una rete',
+    'settings.create_network.subtitle': 'Avvia un coordinator locale e imposta automaticamente il target su di esso.',
+    'settings.join_network': 'Aggiungiti a una rete',
+    'settings.join_network.subtitle': 'Avvia un nodo serve locale che si unisce al coordinator indicato servendo gli stage scelti.',
+    'settings.create_p2p': 'Crea rete P2P (primo nodo)',
+    'settings.create_p2p.subtitle': 'Avvia un nodo seed P2P (serve --advertise --stages, senza coordinator) e punta la dashboard al tuo nodo.',
+    'settings.create_p2p.advertise_hint': "l'URL con cui ti annunci, raggiungibile dagli altri nodi",
+    'settings.join_p2p': 'Aggiungiti a rete P2P',
+    'settings.join_p2p.subtitle': 'Avvia un nodo P2P locale che si unisce alla rete via gossip indicando uno o più peer seed.',
+    'settings.local_node': 'Nodo locale',
+    'settings.local_node.subtitle': 'Processi avviati da questa UI · aggiornato ogni 2s.',
+    'settings.local_node.none': 'nessun processo gestito da questa UI',
+    'settings.stages_label': 'stages (es. embed,decoder:0-12 · head)',
+    'settings.p2p_note': 'Nessun coordinator: i nodi si scoprono via gossip e ognuno è interrogabile (la chat funziona puntando la dashboard a un peer). Richiede che i nodi si raggiungano (LAN/VPN/IP pubblici).',
+    'settings.running': 'in esecuzione',
+    'settings.stopped': 'fermo',
+    'mcp.toggle_title': 'Tool MCP nella chat',
+    'mcp.toggle_subtitle': 'Quando attivo, la chat invia le richieste in modalità tool-calling: il modello può chiamare i tool MCP configurati qui sotto.',
+    'mcp.toggle_active': 'Tool MCP attivi nella chat',
+    'mcp.toggle_inactive': 'Tool MCP disattivati',
+    'mcp.servers_count': '{servers} server · {tools} tool',
+    'mcp.tools_note': 'I tool MCP sono eseguiti da questa UI; il modello decide quando chiamarli. Richiede un modello che supporti il tool-calling.',
+    'mcp.add_server': 'Aggiungi server MCP',
+    'mcp.add_server.subtitle': 'Definisce un server MCP avviato via comando locale (stdio). Gli args sono separati da spazi.',
+    'mcp.args_hint': 'args (separati da spazi)',
+    'mcp.configured_servers': 'Server configurati',
+    'mcp.configured_servers.subtitle': 'Server MCP registrati in questa UI e tool scoperti.',
+    'mcp.tools_discovered': 'TOOL SCOPERTI',
+    'mcp.no_tools': 'nessun tool disponibile',
+    'mcp.no_servers': 'nessun server MCP configurato',
+    'err.coordinator_unreachable': 'coordinator non raggiungibile',
+    'err.request_failed': 'richiesta fallita: {msg}',
+    'err.invalid_port': 'porta non valida',
+    'err.enter_coordinator_url': 'inserisci un URL coordinator',
+    'err.enter_stages': 'specifica almeno uno stage (es. embed,decoder:0-12)',
+    'err.enter_advertise': 'inserisci un Advertise URL',
+    'err.enter_peers': 'specifica almeno un peer (es. http://127.0.0.1:8001)',
+    'err.enter_name': 'inserisci un nome per il server',
+    'err.enter_command': 'inserisci un comando (es. npx)',
+    'err.target_updated': 'target aggiornato: {url} — il monitoraggio della rete ora punta qui.',
+    'err.network_created': 'rete creata · coordinator locale {url}\nil target è stato spostato qui. La rete è vuota: usa "Aggiungiti a una rete" per avviare i nodi (il pannello "MANCANO" nella vista Rete mostra i pezzi necessari).',
+    'err.node_started': 'nodo avviato · stages {stages} → {url}',
+    'err.seed_started': 'nodo seed P2P avviato · {advertise}\nla dashboard ora punta al tuo nodo ({url}). Nessun coordinator: aggiungi altri nodi via gossip per completare il modello.',
+    'err.p2p_joined': 'nodo P2P avviato · stages {stages} · peers {peers}\nla dashboard ora punta al tuo nodo ({url}).',
+    'err.server_added': 'server "{name}" aggiunto · i tool verranno scoperti al collegamento',
+    'err.cannot_update_target': 'impossibile aggiornare il target',
+    'err.cannot_create_network': 'impossibile creare la rete',
+    'err.cannot_join_network': 'impossibile unirsi alla rete',
+    'err.cannot_create_p2p': 'impossibile creare la rete P2P',
+    'err.cannot_join_p2p': 'impossibile unirsi alla rete P2P',
+    'err.cannot_stop': 'impossibile fermare il processo',
+    'err.cannot_add_server': 'impossibile aggiungere il server',
+    'err.cannot_remove_server': 'impossibile rimuovere il server',
+    'copy.big_copy': 'COPIA',
+    'copy.big_copied': 'COPIATO',
+    'copy.small_copy': 'copia',
+    'copy.small_copied': 'copiato',
+    'copy.chip_copy': 'copia',
+    'copy.chip_copied': 'copiato',
+  },
+  en: {
+    'tab.network': 'Network',
+    'tab.chat': 'Chat',
+    'tab.manage': 'Settings',
+    'tab.mcp': 'MCP',
+    'header.subtitle': 'decentralized LLM inference network',
+    'status.operational': 'OPERATIONAL',
+    'status.not_operational': 'NOT OPERATIONAL',
+    'status.updated_ago': 'updated {n}s ago',
+    'panel.assembly': 'Model assembly',
+    'panel.assembly.coverage': '{covered}/{total} layers · {pct}%',
+    'panel.network': 'The network',
+    'panel.network.subtitle': '{n} nodes · coordinator {url}',
+    'panel.node_detail': 'Node detail',
+    'panel.node_detail.none': 'no nodes connected',
+    'node.embed_missing': 'missing',
+    'node.head_missing': 'missing',
+    'node.memory': 'memory',
+    'node.awaiting': 'waiting for nodes to join the network…',
+    'net.missing_title': '⚠ MISSING FROM NETWORK',
+    'net.missing_start': 'start the missing piece:',
+    'btn.send': 'Send',
+    'btn.apply': 'Apply',
+    'btn.create_network': 'Create network',
+    'btn.join': 'Join',
+    'btn.join_p2p': 'Join (P2P)',
+    'btn.create_p2p': 'Create P2P network',
+    'btn.stop': 'Stop',
+    'btn.add': 'Add',
+    'btn.remove': 'Remove',
+    'chat.placeholder': 'Write a message…',
+    'chat.send_hint': 'Enter to send · Shift+Enter for new line',
+    'chat.connect_client': 'CONNECT A CLIENT',
+    'chat.model_not_assembled': 'Model not assembled',
+    'chat.model_not_assembled.desc': 'Chat is only available when the network covers all {n} layers with embed and head. Requests queue until the network is complete.',
+    'chat.missing': 'MISSING',
+    'chat.assembled_on': '{model} · assembled across {n} nodes',
+    'chat.query_model': 'Query the distributed model',
+    'chat.failovers': 'failovers: {n}',
+    'chat.mcp_active': 'MCP active · {n} tools',
+    'chat.suggestion1': 'Explain in one sentence what sharded inference is.',
+    'chat.suggestion2': 'Write a Python function that reverses a string.',
+    'chat.suggestion3': 'Summarize the advantages of a decentralized network.',
+    'settings.language': 'Lingua / Language',
+    'settings.coordinator_target': 'Target coordinator',
+    'settings.coordinator_target.subtitle': 'The coordinator the UI forwards registry, chat and inference to. Change it to monitor a different network.',
+    'settings.coordinator_url': 'coordinator url',
+    'settings.net_mode': 'Network mode',
+    'settings.net_mode.subtitle': 'Choose how to start/join nodes: with a central coordinator, or P2P where nodes discover each other via gossip without a coordinator.',
+    'settings.net_mode.coordinator': 'Coordinator',
+    'settings.net_mode.p2p': 'P2P (no coordinator)',
+    'settings.create_network': 'Create a network',
+    'settings.create_network.subtitle': 'Start a local coordinator and automatically set the target to it.',
+    'settings.join_network': 'Join a network',
+    'settings.join_network.subtitle': 'Start a local serve node that joins the specified coordinator serving the chosen stages.',
+    'settings.create_p2p': 'Create P2P network (first node)',
+    'settings.create_p2p.subtitle': 'Start a P2P seed node (serve --advertise --stages, no coordinator) and point the dashboard to your node.',
+    'settings.create_p2p.advertise_hint': 'the URL you advertise, reachable by other nodes',
+    'settings.join_p2p': 'Join a P2P network',
+    'settings.join_p2p.subtitle': 'Start a local P2P node that joins the network via gossip by specifying one or more seed peers.',
+    'settings.local_node': 'Local node',
+    'settings.local_node.subtitle': 'Processes started by this UI · updated every 2s.',
+    'settings.local_node.none': 'no processes managed by this UI',
+    'settings.stages_label': 'stages (e.g. embed,decoder:0-12 · head)',
+    'settings.p2p_note': 'No coordinator: nodes discover each other via gossip and each is queryable (chat works by pointing the dashboard to a peer). Requires nodes to be mutually reachable (LAN/VPN/public IPs).',
+    'settings.running': 'running',
+    'settings.stopped': 'stopped',
+    'mcp.toggle_title': 'MCP tools in chat',
+    'mcp.toggle_subtitle': 'When active, chat sends requests in tool-calling mode: the model can call the MCP tools configured below.',
+    'mcp.toggle_active': 'MCP tools active in chat',
+    'mcp.toggle_inactive': 'MCP tools disabled',
+    'mcp.servers_count': '{servers} servers · {tools} tools',
+    'mcp.tools_note': 'MCP tools are run by this UI; the model decides when to call them. Requires a model that supports tool-calling.',
+    'mcp.add_server': 'Add MCP server',
+    'mcp.add_server.subtitle': 'Defines an MCP server started via a local command (stdio). Args are space-separated.',
+    'mcp.args_hint': 'args (space-separated)',
+    'mcp.configured_servers': 'Configured servers',
+    'mcp.configured_servers.subtitle': 'MCP servers registered in this UI and discovered tools.',
+    'mcp.tools_discovered': 'DISCOVERED TOOLS',
+    'mcp.no_tools': 'no tools available',
+    'mcp.no_servers': 'no MCP servers configured',
+    'err.coordinator_unreachable': 'coordinator unreachable',
+    'err.request_failed': 'request failed: {msg}',
+    'err.invalid_port': 'invalid port',
+    'err.enter_coordinator_url': 'enter a coordinator URL',
+    'err.enter_stages': 'specify at least one stage (e.g. embed,decoder:0-12)',
+    'err.enter_advertise': 'enter an Advertise URL',
+    'err.enter_peers': 'specify at least one peer (e.g. http://127.0.0.1:8001)',
+    'err.enter_name': 'enter a name for the server',
+    'err.enter_command': 'enter a command (e.g. npx)',
+    'err.target_updated': 'target updated: {url} — network monitoring now points here.',
+    'err.network_created': 'network created · local coordinator {url}\ntarget set here. The network is empty: use "Join a network" to start nodes (the "MISSING" panel in the Network view shows required pieces).',
+    'err.node_started': 'node started · stages {stages} → {url}',
+    'err.seed_started': 'P2P seed node started · {advertise}\ndashboard now points to your node ({url}). No coordinator: add more nodes via gossip to complete the model.',
+    'err.p2p_joined': 'P2P node started · stages {stages} · peers {peers}\ndashboard now points to your node ({url}).',
+    'err.server_added': 'server "{name}" added · tools will be discovered on connection',
+    'err.cannot_update_target': 'failed to update target',
+    'err.cannot_create_network': 'failed to create network',
+    'err.cannot_join_network': 'failed to join network',
+    'err.cannot_create_p2p': 'failed to create P2P network',
+    'err.cannot_join_p2p': 'failed to join P2P network',
+    'err.cannot_stop': 'failed to stop the process',
+    'err.cannot_add_server': 'failed to add server',
+    'err.cannot_remove_server': 'failed to remove server',
+    'copy.big_copy': 'COPY',
+    'copy.big_copied': 'COPIED',
+    'copy.small_copy': 'copy',
+    'copy.small_copied': 'copied',
+    'copy.chip_copy': 'copy',
+    'copy.chip_copied': 'copied',
+  },
+  fr: {
+    'tab.network': 'Réseau',
+    'tab.chat': 'Chat',
+    'tab.manage': 'Paramètres',
+    'tab.mcp': 'MCP',
+    'header.subtitle': "réseau d'inférence LLM décentralisé",
+    'status.operational': 'OPÉRATIONNEL',
+    'status.not_operational': 'NON OPÉRATIONNEL',
+    'status.updated_ago': 'mis à jour il y a {n}s',
+    'panel.assembly': 'Assemblage du modèle',
+    'panel.assembly.coverage': '{covered}/{total} couches · {pct}%',
+    'panel.network': 'Le réseau',
+    'panel.network.subtitle': '{n} nœuds · coordinator {url}',
+    'panel.node_detail': 'Détail des nœuds',
+    'panel.node_detail.none': 'aucun nœud connecté',
+    'node.embed_missing': 'manquant',
+    'node.head_missing': 'manquant',
+    'node.memory': 'mémoire',
+    'node.awaiting': 'en attente que des nœuds rejoignent le réseau…',
+    'net.missing_title': '⚠ MANQUANTS AU RÉSEAU',
+    'net.missing_start': 'démarrez la partie manquante :',
+    'btn.send': 'Envoyer',
+    'btn.apply': 'Appliquer',
+    'btn.create_network': 'Créer le réseau',
+    'btn.join': 'Rejoindre',
+    'btn.join_p2p': 'Rejoindre (P2P)',
+    'btn.create_p2p': 'Créer réseau P2P',
+    'btn.stop': 'Arrêter',
+    'btn.add': 'Ajouter',
+    'btn.remove': 'Supprimer',
+    'chat.placeholder': 'Écrire un message…',
+    'chat.send_hint': 'Entrée pour envoyer · Maj+Entrée pour nouvelle ligne',
+    'chat.connect_client': 'CONNECTER UN CLIENT',
+    'chat.model_not_assembled': 'Modèle non assemblé',
+    'chat.model_not_assembled.desc': "Le chat n'est disponible que lorsque le réseau couvre toutes les {n} couches avec embed et head. Les requêtes sont en file d'attente jusqu'à ce que le réseau soit complet.",
+    'chat.missing': 'MANQUANTS',
+    'chat.assembled_on': '{model} · assemblé sur {n} nœuds',
+    'chat.query_model': 'Interroger le modèle distribué',
+    'chat.failovers': 'basculements : {n}',
+    'chat.mcp_active': 'MCP actif · {n} outils',
+    'chat.suggestion1': "Expliquez en une phrase ce qu'est l'inférence partagée.",
+    'chat.suggestion2': 'Écrivez une fonction Python qui inverse une chaîne.',
+    'chat.suggestion3': "Résumez les avantages d'un réseau décentralisé.",
+    'settings.language': 'Lingua / Language',
+    'settings.coordinator_target': 'Coordinator cible',
+    'settings.coordinator_target.subtitle': "Le coordinator vers lequel l'interface transmet le registre, le chat et l'inférence. Changez-le pour surveiller un autre réseau.",
+    'settings.coordinator_url': 'url coordinator',
+    'settings.net_mode': 'Mode réseau',
+    'settings.net_mode.subtitle': 'Choisissez comment démarrer/rejoindre les nœuds : avec un coordinator central, ou en P2P où les nœuds se découvrent via gossip sans coordinator.',
+    'settings.net_mode.coordinator': 'Coordinator',
+    'settings.net_mode.p2p': 'P2P (sans coordinator)',
+    'settings.create_network': 'Créer un réseau',
+    'settings.create_network.subtitle': 'Démarre un coordinator local et définit automatiquement la cible sur lui.',
+    'settings.join_network': 'Rejoindre un réseau',
+    'settings.join_network.subtitle': 'Démarre un nœud serve local qui rejoint le coordinator indiqué en servant les stages choisis.',
+    'settings.create_p2p': 'Créer réseau P2P (premier nœud)',
+    'settings.create_p2p.subtitle': 'Démarre un nœud seed P2P (serve --advertise --stages, sans coordinator) et pointe le tableau de bord vers votre nœud.',
+    'settings.create_p2p.advertise_hint': "l'URL que vous annoncez, accessible par les autres nœuds",
+    'settings.join_p2p': 'Rejoindre un réseau P2P',
+    'settings.join_p2p.subtitle': 'Démarre un nœud P2P local qui rejoint le réseau via gossip en spécifiant un ou plusieurs peers seed.',
+    'settings.local_node': 'Nœud local',
+    'settings.local_node.subtitle': 'Processus démarrés par cette interface · mis à jour toutes les 2s.',
+    'settings.local_node.none': 'aucun processus géré par cette interface',
+    'settings.stages_label': 'stages (ex. embed,decoder:0-12 · head)',
+    'settings.p2p_note': "Pas de coordinator : les nœuds se découvrent via gossip et chacun est interrogeable (le chat fonctionne en pointant le tableau de bord vers un pair). Nécessite que les nœuds se joignent (LAN/VPN/IP publics).",
+    'settings.running': 'en cours',
+    'settings.stopped': 'arrêté',
+    'mcp.toggle_title': 'Outils MCP dans le chat',
+    'mcp.toggle_subtitle': 'Quand actif, le chat envoie les requêtes en mode tool-calling : le modèle peut appeler les outils MCP configurés ci-dessous.',
+    'mcp.toggle_active': 'Outils MCP actifs dans le chat',
+    'mcp.toggle_inactive': 'Outils MCP désactivés',
+    'mcp.servers_count': '{servers} serveurs · {tools} outils',
+    'mcp.tools_note': "Les outils MCP sont exécutés par cette interface ; le modèle décide quand les appeler. Nécessite un modèle compatible tool-calling.",
+    'mcp.add_server': 'Ajouter un serveur MCP',
+    'mcp.add_server.subtitle': 'Définit un serveur MCP démarré via une commande locale (stdio). Les args sont séparés par des espaces.',
+    'mcp.args_hint': 'args (séparés par des espaces)',
+    'mcp.configured_servers': 'Serveurs configurés',
+    'mcp.configured_servers.subtitle': 'Serveurs MCP enregistrés dans cette interface et outils découverts.',
+    'mcp.tools_discovered': 'OUTILS DÉCOUVERTS',
+    'mcp.no_tools': 'aucun outil disponible',
+    'mcp.no_servers': 'aucun serveur MCP configuré',
+    'err.coordinator_unreachable': 'coordinator inaccessible',
+    'err.request_failed': 'requête échouée : {msg}',
+    'err.invalid_port': 'port invalide',
+    'err.enter_coordinator_url': 'entrez une URL coordinator',
+    'err.enter_stages': 'spécifiez au moins un stage (ex. embed,decoder:0-12)',
+    'err.enter_advertise': 'entrez une URL Advertise',
+    'err.enter_peers': 'spécifiez au moins un pair (ex. http://127.0.0.1:8001)',
+    'err.enter_name': 'entrez un nom pour le serveur',
+    'err.enter_command': 'entrez une commande (ex. npx)',
+    'err.target_updated': 'cible mise à jour : {url} — le monitoring réseau pointe maintenant ici.',
+    'err.network_created': 'réseau créé · coordinator local {url}\ncible définie ici. Le réseau est vide : utilisez "Rejoindre un réseau" pour démarrer les nœuds.',
+    'err.node_started': 'nœud démarré · stages {stages} → {url}',
+    'err.seed_started': 'nœud seed P2P démarré · {advertise}\nle tableau de bord pointe maintenant vers votre nœud ({url}).',
+    'err.p2p_joined': 'nœud P2P démarré · stages {stages} · pairs {peers}\nle tableau de bord pointe maintenant vers votre nœud ({url}).',
+    'err.server_added': 'serveur "{name}" ajouté · les outils seront découverts à la connexion',
+    'err.cannot_update_target': 'impossible de mettre à jour la cible',
+    'err.cannot_create_network': 'impossible de créer le réseau',
+    'err.cannot_join_network': 'impossible de rejoindre le réseau',
+    'err.cannot_create_p2p': 'impossible de créer le réseau P2P',
+    'err.cannot_join_p2p': 'impossible de rejoindre le réseau P2P',
+    'err.cannot_stop': "impossible d'arrêter le processus",
+    'err.cannot_add_server': "impossible d'ajouter le serveur",
+    'err.cannot_remove_server': 'impossible de supprimer le serveur',
+    'copy.big_copy': 'COPIER',
+    'copy.big_copied': 'COPIÉ',
+    'copy.small_copy': 'copier',
+    'copy.small_copied': 'copié',
+    'copy.chip_copy': 'copier',
+    'copy.chip_copied': 'copié',
+  },
+  de: {
+    'tab.network': 'Netzwerk',
+    'tab.chat': 'Chat',
+    'tab.manage': 'Einstellungen',
+    'tab.mcp': 'MCP',
+    'header.subtitle': 'dezentrales LLM-Inferenznetzwerk',
+    'status.operational': 'BETRIEBSBEREIT',
+    'status.not_operational': 'NICHT BETRIEBSBEREIT',
+    'status.updated_ago': 'aktualisiert vor {n}s',
+    'panel.assembly': 'Modell-Zusammenbau',
+    'panel.assembly.coverage': '{covered}/{total} Schichten · {pct}%',
+    'panel.network': 'Das Netzwerk',
+    'panel.network.subtitle': '{n} Knoten · Coordinator {url}',
+    'panel.node_detail': 'Knotendetail',
+    'panel.node_detail.none': 'keine Knoten verbunden',
+    'node.embed_missing': 'fehlt',
+    'node.head_missing': 'fehlt',
+    'node.memory': 'Speicher',
+    'node.awaiting': 'Warten auf Knoten, die dem Netzwerk beitreten…',
+    'net.missing_title': '⚠ IM NETZWERK FEHLEND',
+    'net.missing_start': 'fehlenden Teil starten:',
+    'btn.send': 'Senden',
+    'btn.apply': 'Anwenden',
+    'btn.create_network': 'Netzwerk erstellen',
+    'btn.join': 'Beitreten',
+    'btn.join_p2p': 'Beitreten (P2P)',
+    'btn.create_p2p': 'P2P-Netzwerk erstellen',
+    'btn.stop': 'Stopp',
+    'btn.add': 'Hinzufügen',
+    'btn.remove': 'Entfernen',
+    'chat.placeholder': 'Nachricht schreiben…',
+    'chat.send_hint': 'Enter zum Senden · Umschalt+Enter für neue Zeile',
+    'chat.connect_client': 'CLIENT VERBINDEN',
+    'chat.model_not_assembled': 'Modell nicht zusammengebaut',
+    'chat.model_not_assembled.desc': 'Chat ist nur verfügbar, wenn das Netzwerk alle {n} Schichten mit Embed und Head abdeckt. Anfragen werden in die Warteschlange gestellt, bis das Netzwerk vollständig ist.',
+    'chat.missing': 'FEHLT',
+    'chat.assembled_on': '{model} · zusammengebaut auf {n} Knoten',
+    'chat.query_model': 'Verteiltes Modell abfragen',
+    'chat.failovers': 'Failover: {n}',
+    'chat.mcp_active': 'MCP aktiv · {n} Tools',
+    'chat.suggestion1': 'Erklären Sie in einem Satz, was Sharded Inference ist.',
+    'chat.suggestion2': 'Schreiben Sie eine Python-Funktion, die einen String umkehrt.',
+    'chat.suggestion3': 'Fassen Sie die Vorteile eines dezentralen Netzwerks zusammen.',
+    'settings.language': 'Lingua / Language',
+    'settings.coordinator_target': 'Ziel-Coordinator',
+    'settings.coordinator_target.subtitle': 'Der Coordinator, an den die UI Registry, Chat und Inferenz weiterleitet. Ändern, um ein anderes Netzwerk zu überwachen.',
+    'settings.coordinator_url': 'Coordinator-URL',
+    'settings.net_mode': 'Netzwerkmodus',
+    'settings.net_mode.subtitle': 'Wählen Sie, wie Knoten gestartet/beigetreten werden: mit einem zentralen Coordinator oder P2P, wo Knoten sich via Gossip ohne Coordinator finden.',
+    'settings.net_mode.coordinator': 'Coordinator',
+    'settings.net_mode.p2p': 'P2P (kein Coordinator)',
+    'settings.create_network': 'Netzwerk erstellen',
+    'settings.create_network.subtitle': 'Startet einen lokalen Coordinator und setzt das Ziel automatisch auf diesen.',
+    'settings.join_network': 'Netzwerk beitreten',
+    'settings.join_network.subtitle': 'Startet einen lokalen Serve-Knoten, der dem angegebenen Coordinator mit den gewählten Stages beitritt.',
+    'settings.create_p2p': 'P2P-Netzwerk erstellen (erster Knoten)',
+    'settings.create_p2p.subtitle': 'Startet einen P2P-Seed-Knoten (serve --advertise --stages, kein Coordinator) und zeigt das Dashboard auf Ihren Knoten.',
+    'settings.create_p2p.advertise_hint': 'die URL, die Sie ankündigen, erreichbar von anderen Knoten',
+    'settings.join_p2p': 'P2P-Netzwerk beitreten',
+    'settings.join_p2p.subtitle': 'Startet einen lokalen P2P-Knoten, der über Gossip einem oder mehreren Seed-Peers beitritt.',
+    'settings.local_node': 'Lokaler Knoten',
+    'settings.local_node.subtitle': 'Von dieser UI gestartete Prozesse · alle 2s aktualisiert.',
+    'settings.local_node.none': 'keine von dieser UI verwalteten Prozesse',
+    'settings.stages_label': 'Stages (z.B. embed,decoder:0-12 · head)',
+    'settings.p2p_note': 'Kein Coordinator: Knoten finden sich via Gossip und jeder ist abfragbar (Chat funktioniert, indem das Dashboard auf einen Peer zeigt). Erfordert gegenseitige Erreichbarkeit (LAN/VPN/öffentliche IPs).',
+    'settings.running': 'läuft',
+    'settings.stopped': 'gestoppt',
+    'mcp.toggle_title': 'MCP-Tools im Chat',
+    'mcp.toggle_subtitle': 'Wenn aktiv, sendet der Chat Anfragen im Tool-Calling-Modus: das Modell kann die unten konfigurierten MCP-Tools aufrufen.',
+    'mcp.toggle_active': 'MCP-Tools im Chat aktiv',
+    'mcp.toggle_inactive': 'MCP-Tools deaktiviert',
+    'mcp.servers_count': '{servers} Server · {tools} Tools',
+    'mcp.tools_note': 'MCP-Tools werden von dieser UI ausgeführt; das Modell entscheidet, wann sie aufgerufen werden. Erfordert ein Modell mit Tool-Calling-Unterstützung.',
+    'mcp.add_server': 'MCP-Server hinzufügen',
+    'mcp.add_server.subtitle': 'Definiert einen MCP-Server, der über einen lokalen Befehl (stdio) gestartet wird. Args sind durch Leerzeichen getrennt.',
+    'mcp.args_hint': 'Args (leerzeichengetrennt)',
+    'mcp.configured_servers': 'Konfigurierte Server',
+    'mcp.configured_servers.subtitle': 'In dieser UI registrierte MCP-Server und entdeckte Tools.',
+    'mcp.tools_discovered': 'ENTDECKTE TOOLS',
+    'mcp.no_tools': 'keine Tools verfügbar',
+    'mcp.no_servers': 'keine MCP-Server konfiguriert',
+    'err.coordinator_unreachable': 'Coordinator nicht erreichbar',
+    'err.request_failed': 'Anfrage fehlgeschlagen: {msg}',
+    'err.invalid_port': 'ungültiger Port',
+    'err.enter_coordinator_url': 'Coordinator-URL eingeben',
+    'err.enter_stages': 'mindestens einen Stage angeben (z.B. embed,decoder:0-12)',
+    'err.enter_advertise': 'Advertise-URL eingeben',
+    'err.enter_peers': 'mindestens einen Peer angeben (z.B. http://127.0.0.1:8001)',
+    'err.enter_name': 'Namen für den Server eingeben',
+    'err.enter_command': 'Befehl eingeben (z.B. npx)',
+    'err.target_updated': 'Ziel aktualisiert: {url} — Netzwerküberwachung zeigt jetzt hierher.',
+    'err.network_created': 'Netzwerk erstellt · lokaler Coordinator {url}\nZiel gesetzt. Netzwerk ist leer: verwenden Sie "Netzwerk beitreten", um Knoten zu starten.',
+    'err.node_started': 'Knoten gestartet · Stages {stages} → {url}',
+    'err.seed_started': 'P2P-Seed-Knoten gestartet · {advertise}\nDashboard zeigt jetzt auf Ihren Knoten ({url}).',
+    'err.p2p_joined': 'P2P-Knoten gestartet · Stages {stages} · Peers {peers}\nDashboard zeigt jetzt auf Ihren Knoten ({url}).',
+    'err.server_added': 'Server "{name}" hinzugefügt · Tools werden beim Verbinden entdeckt',
+    'err.cannot_update_target': 'Ziel konnte nicht aktualisiert werden',
+    'err.cannot_create_network': 'Netzwerk konnte nicht erstellt werden',
+    'err.cannot_join_network': 'Netzwerk konnte nicht beigetreten werden',
+    'err.cannot_create_p2p': 'P2P-Netzwerk konnte nicht erstellt werden',
+    'err.cannot_join_p2p': 'P2P-Netzwerk konnte nicht beigetreten werden',
+    'err.cannot_stop': 'Prozess konnte nicht gestoppt werden',
+    'err.cannot_add_server': 'Server konnte nicht hinzugefügt werden',
+    'err.cannot_remove_server': 'Server konnte nicht entfernt werden',
+    'copy.big_copy': 'KOPIEREN',
+    'copy.big_copied': 'KOPIERT',
+    'copy.small_copy': 'kopieren',
+    'copy.small_copied': 'kopiert',
+    'copy.chip_copy': 'kopieren',
+    'copy.chip_copied': 'kopiert',
+  },
+  es: {
+    'tab.network': 'Red',
+    'tab.chat': 'Chat',
+    'tab.manage': 'Ajustes',
+    'tab.mcp': 'MCP',
+    'header.subtitle': 'red de inferencia LLM descentralizada',
+    'status.operational': 'OPERATIVO',
+    'status.not_operational': 'NO OPERATIVO',
+    'status.updated_ago': 'actualizado hace {n}s',
+    'panel.assembly': 'Ensamblaje del modelo',
+    'panel.assembly.coverage': '{covered}/{total} capas · {pct}%',
+    'panel.network': 'La red',
+    'panel.network.subtitle': '{n} nodos · coordinator {url}',
+    'panel.node_detail': 'Detalle de nodos',
+    'panel.node_detail.none': 'ningún nodo conectado',
+    'node.embed_missing': 'faltante',
+    'node.head_missing': 'faltante',
+    'node.memory': 'memoria',
+    'node.awaiting': 'esperando que los nodos se unan a la red…',
+    'net.missing_title': '⚠ FALTAN EN LA RED',
+    'net.missing_start': 'inicia la pieza faltante:',
+    'btn.send': 'Enviar',
+    'btn.apply': 'Aplicar',
+    'btn.create_network': 'Crear red',
+    'btn.join': 'Unirse',
+    'btn.join_p2p': 'Unirse (P2P)',
+    'btn.create_p2p': 'Crear red P2P',
+    'btn.stop': 'Detener',
+    'btn.add': 'Agregar',
+    'btn.remove': 'Eliminar',
+    'chat.placeholder': 'Escribe un mensaje…',
+    'chat.send_hint': 'Enter para enviar · Mayús+Enter para nueva línea',
+    'chat.connect_client': 'CONECTAR UN CLIENTE',
+    'chat.model_not_assembled': 'Modelo no ensamblado',
+    'chat.model_not_assembled.desc': 'El chat solo está disponible cuando la red cubre todas las {n} capas con embed y head. Las solicitudes se ponen en cola hasta que la red esté completa.',
+    'chat.missing': 'FALTAN',
+    'chat.assembled_on': '{model} · ensamblado en {n} nodos',
+    'chat.query_model': 'Consultar el modelo distribuido',
+    'chat.failovers': 'conmutaciones: {n}',
+    'chat.mcp_active': 'MCP activo · {n} herramientas',
+    'chat.suggestion1': 'Explica en una frase qué es la inferencia distribuida.',
+    'chat.suggestion2': 'Escribe una función Python que invierta una cadena.',
+    'chat.suggestion3': 'Resume las ventajas de una red descentralizada.',
+    'settings.language': 'Lingua / Language',
+    'settings.coordinator_target': 'Coordinator destino',
+    'settings.coordinator_target.subtitle': 'El coordinator al que la UI reenvía el registro, el chat y la inferencia. Cámbialo para monitorear otra red.',
+    'settings.coordinator_url': 'url coordinator',
+    'settings.net_mode': 'Modo de red',
+    'settings.net_mode.subtitle': 'Elige cómo iniciar/unirse a los nodos: con un coordinator central, o en P2P donde los nodos se descubren via gossip sin coordinator.',
+    'settings.net_mode.coordinator': 'Coordinator',
+    'settings.net_mode.p2p': 'P2P (sin coordinator)',
+    'settings.create_network': 'Crear una red',
+    'settings.create_network.subtitle': 'Inicia un coordinator local y configura automáticamente el destino en él.',
+    'settings.join_network': 'Unirse a una red',
+    'settings.join_network.subtitle': 'Inicia un nodo serve local que se une al coordinator indicado sirviendo los stages elegidos.',
+    'settings.create_p2p': 'Crear red P2P (primer nodo)',
+    'settings.create_p2p.subtitle': 'Inicia un nodo seed P2P (serve --advertise --stages, sin coordinator) y apunta el panel a tu nodo.',
+    'settings.create_p2p.advertise_hint': 'la URL que anuncias, accesible por otros nodos',
+    'settings.join_p2p': 'Unirse a red P2P',
+    'settings.join_p2p.subtitle': 'Inicia un nodo P2P local que se une a la red via gossip indicando uno o más peers seed.',
+    'settings.local_node': 'Nodo local',
+    'settings.local_node.subtitle': 'Procesos iniciados por esta UI · actualizado cada 2s.',
+    'settings.local_node.none': 'ningún proceso gestionado por esta UI',
+    'settings.stages_label': 'stages (ej. embed,decoder:0-12 · head)',
+    'settings.p2p_note': 'Sin coordinator: los nodos se descubren via gossip y cada uno es consultable (el chat funciona apuntando el panel a un peer). Requiere que los nodos se alcancen (LAN/VPN/IPs públicas).',
+    'settings.running': 'en ejecución',
+    'settings.stopped': 'detenido',
+    'mcp.toggle_title': 'Herramientas MCP en el chat',
+    'mcp.toggle_subtitle': 'Cuando está activo, el chat envía solicitudes en modo tool-calling: el modelo puede llamar las herramientas MCP configuradas abajo.',
+    'mcp.toggle_active': 'Herramientas MCP activas en el chat',
+    'mcp.toggle_inactive': 'Herramientas MCP desactivadas',
+    'mcp.servers_count': '{servers} servidores · {tools} herramientas',
+    'mcp.tools_note': 'Las herramientas MCP son ejecutadas por esta UI; el modelo decide cuándo llamarlas. Requiere un modelo compatible con tool-calling.',
+    'mcp.add_server': 'Agregar servidor MCP',
+    'mcp.add_server.subtitle': 'Define un servidor MCP iniciado mediante un comando local (stdio). Los args están separados por espacios.',
+    'mcp.args_hint': 'args (separados por espacios)',
+    'mcp.configured_servers': 'Servidores configurados',
+    'mcp.configured_servers.subtitle': 'Servidores MCP registrados en esta UI y herramientas descubiertas.',
+    'mcp.tools_discovered': 'HERRAMIENTAS DESCUBIERTAS',
+    'mcp.no_tools': 'ninguna herramienta disponible',
+    'mcp.no_servers': 'ningún servidor MCP configurado',
+    'err.coordinator_unreachable': 'coordinator no alcanzable',
+    'err.request_failed': 'solicitud fallida: {msg}',
+    'err.invalid_port': 'puerto no válido',
+    'err.enter_coordinator_url': 'ingresa una URL coordinator',
+    'err.enter_stages': 'especifica al menos un stage (ej. embed,decoder:0-12)',
+    'err.enter_advertise': 'ingresa una URL Advertise',
+    'err.enter_peers': 'especifica al menos un peer (ej. http://127.0.0.1:8001)',
+    'err.enter_name': 'ingresa un nombre para el servidor',
+    'err.enter_command': 'ingresa un comando (ej. npx)',
+    'err.target_updated': 'destino actualizado: {url} — el monitoreo de red ahora apunta aquí.',
+    'err.network_created': 'red creada · coordinator local {url}\ndestino establecido aquí. La red está vacía: usa "Unirse a una red" para iniciar los nodos.',
+    'err.node_started': 'nodo iniciado · stages {stages} → {url}',
+    'err.seed_started': 'nodo seed P2P iniciado · {advertise}\nel panel ahora apunta a tu nodo ({url}).',
+    'err.p2p_joined': 'nodo P2P iniciado · stages {stages} · peers {peers}\nel panel ahora apunta a tu nodo ({url}).',
+    'err.server_added': 'servidor "{name}" agregado · las herramientas se descubrirán al conectar',
+    'err.cannot_update_target': 'no se pudo actualizar el destino',
+    'err.cannot_create_network': 'no se pudo crear la red',
+    'err.cannot_join_network': 'no se pudo unirse a la red',
+    'err.cannot_create_p2p': 'no se pudo crear la red P2P',
+    'err.cannot_join_p2p': 'no se pudo unirse a la red P2P',
+    'err.cannot_stop': 'no se pudo detener el proceso',
+    'err.cannot_add_server': 'no se pudo agregar el servidor',
+    'err.cannot_remove_server': 'no se pudo eliminar el servidor',
+    'copy.big_copy': 'COPIAR',
+    'copy.big_copied': 'COPIADO',
+    'copy.small_copy': 'copiar',
+    'copy.small_copied': 'copiado',
+    'copy.chip_copy': 'copiar',
+    'copy.chip_copied': 'copiado',
+  },
+};
+// END_TRANSLATIONS
+
+const I18n = React.createContext(null);
+const LANGS = ['it', 'en', 'fr', 'de', 'es'];
+function getInitialLang(){
+  const stored = localStorage.getItem('axyn_lang');
+  if (stored && LANGS.includes(stored)) return stored;
+  const browser = (navigator.language || '').slice(0, 2).toLowerCase();
+  return LANGS.includes(browser) ? browser : 'en';
+}
+function tf(t, key, vars){
+  let s = (TRANSLATIONS[t.lang] && TRANSLATIONS[t.lang][key]) || TRANSLATIONS.en[key] || key;
+  if (vars) Object.keys(vars).forEach(k => { s = s.replace(new RegExp('\\{' + k + '\\}', 'g'), vars[k]); });
+  return s;
+}
+
 /* ---------- pure helpers (mirror backend build_chain) ---------- */
 function parseRanges(decoders){
   const out = [];
@@ -148,6 +722,7 @@ function serveCommand(coordinatorUrl, m){
 
 /* ---------- small presentational atoms ---------- */
 function StatusBadge({ operational }){
+  const { t } = React.useContext(I18n);
   const c = operational ? TEAL : AMBER;
   return h('div', { style: {
     display: 'inline-flex', alignItems: 'center', gap: '9px', fontSize: '13px',
@@ -156,11 +731,12 @@ function StatusBadge({ operational }){
     border: '1px solid ' + c + '55', color: c,
   }},
     h('span', { style: { width: '9px', height: '9px', borderRadius: '50%', background: c, boxShadow: '0 0 10px ' + c, animation: 'synpulse 2s infinite' }}),
-    h('span', null, operational ? 'OPERATIVO' : 'NON OPERATIVO'),
+    h('span', null, operational ? t('status.operational') : t('status.not_operational')),
   );
 }
 
 function CopyBox({ text, label, big, style }){
+  const { t } = React.useContext(I18n);
   const [copied, setCopied] = useState(false);
   const onCopy = () => {
     try { navigator.clipboard && navigator.clipboard.writeText(text); } catch(e){}
@@ -176,11 +752,12 @@ function CopyBox({ text, label, big, style }){
     h('span', { style: {
       flex: 'none', fontSize: '10px', letterSpacing: '.5px', color: '#f3c46b',
       border: '1px solid #3d300f', padding: '3px 8px', borderRadius: '6px',
-    }}, copied ? (big ? 'COPIATO' : 'copiato') : (big ? 'COPIA' : 'copia')),
+    }}, copied ? (big ? t('copy.big_copied') : t('copy.small_copied')) : (big ? t('copy.big_copy') : t('copy.small_copy'))),
   );
 }
 
 function CopyChip({ text, prefix }){
+  const { t } = React.useContext(I18n);
   const [copied, setCopied] = useState(false);
   const onCopy = () => {
     try { navigator.clipboard && navigator.clipboard.writeText(text); } catch(e){}
@@ -190,11 +767,12 @@ function CopyChip({ text, prefix }){
   return h('div', { onClick: onCopy, style: {
     cursor: 'pointer', fontFamily: "'IBM Plex Mono',monospace", fontSize: '10.5px',
     color: '#9fb0c6', background: '#0b1320', border: '1px solid #1c2a3e', borderRadius: '7px', padding: '4px 9px',
-  }}, prefix + ' · ' + (copied ? 'copiato' : 'copia'));
+  }}, prefix + ' · ' + (copied ? t('copy.chip_copied') : t('copy.chip_copy')));
 }
 
 /* ---------- assembly strip ---------- */
 function AssemblyStrip({ m }){
+  const { t } = React.useContext(I18n);
   const N = m.numLayers;
   const pillBase = {
     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -221,7 +799,7 @@ function AssemblyStrip({ m }){
         transition: 'flex-grow .5s ease, background .4s ease',
       }});
     }
-    return h('div', { key: range, title: 'layer ' + range + ' · scoperto', style: {
+    return h('div', { key: range, title: 'layer ' + range, style: {
       flexGrow: s.end - s.start, flexBasis: 0, minWidth: 0,
       background: 'repeating-linear-gradient(45deg,#3a1320,#3a1320 6px,#2a0d18 6px,#2a0d18 12px)',
       borderTop: '2px dashed ' + RED + '99', borderRight: '1px solid #0a121d',
@@ -247,13 +825,13 @@ function AssemblyStrip({ m }){
     padding: '14px 18px 12px', marginBottom: '14px',
   }},
     h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '12px', flexWrap: 'wrap', marginBottom: '11px' }},
-      h('span', { style: { fontSize: '12px', fontWeight: 600, color: '#9fb0c6', letterSpacing: '.3px' }}, 'Assemblaggio del modello'),
-      h('span', { style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '12px', color: m.statusColor, whiteSpace: 'nowrap' }}, m.coveredLayers + '/' + N + ' layer · ' + m.coveragePct + '%'),
+      h('span', { style: { fontSize: '12px', fontWeight: 600, color: '#9fb0c6', letterSpacing: '.3px' }}, t('panel.assembly')),
+      h('span', { style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '12px', color: m.statusColor, whiteSpace: 'nowrap' }}, t('panel.assembly.coverage').replace('{covered}', m.coveredLayers).replace('{total}', N).replace('{pct}', m.coveragePct)),
     ),
     h('div', { style: { display: 'flex', alignItems: 'center', gap: '9px' }},
       h('div', { style: m.hasEmbed ? coveredPill(embedColor) : missPill },
         h('span', { style: { opacity: .85 }}, 'EMBED'),
-        h('span', { style: { fontSize: '8.5px', marginTop: '2px', opacity: .9 }}, m.hasEmbed ? '✓' : 'mancante'),
+        h('span', { style: { fontSize: '8.5px', marginTop: '2px', opacity: .9 }}, m.hasEmbed ? '✓' : t('node.embed_missing')),
       ),
       h('span', { style: { color: '#2f435d', fontSize: '14px' }}, '→'),
       h('div', { style: { flex: 1, minWidth: 0 }},
@@ -265,7 +843,7 @@ function AssemblyStrip({ m }){
       h('span', { style: { color: '#2f435d', fontSize: '14px' }}, '→'),
       h('div', { style: m.hasHead ? coveredPill(headColor) : missPill },
         h('span', { style: { opacity: .85 }}, 'HEAD'),
-        h('span', { style: { fontSize: '8.5px', marginTop: '2px', opacity: .9 }}, m.hasHead ? '✓' : 'mancante'),
+        h('span', { style: { fontSize: '8.5px', marginTop: '2px', opacity: .9 }}, m.hasHead ? '✓' : t('node.head_missing')),
       ),
     ),
   );
@@ -273,13 +851,14 @@ function AssemblyStrip({ m }){
 
 /* ---------- missing alert ---------- */
 function MissingAlert({ m, command }){
+  const { t } = React.useContext(I18n);
   return h('section', { className: 'syn-card', style: {
     background: '#1a1305', border: '1px solid #3d300f', borderRadius: '14px',
     padding: '14px 18px', marginBottom: '14px', display: 'flex', gap: '16px',
     alignItems: 'flex-start', flexWrap: 'wrap',
   }},
     h('div', { style: { flex: 1, minWidth: '240px' }},
-      h('div', { style: { fontSize: '11px', letterSpacing: '.4px', color: '#f3c46b', fontWeight: 600, marginBottom: '9px' }}, '⚠ MANCANO ALLA RETE'),
+      h('div', { style: { fontSize: '11px', letterSpacing: '.4px', color: '#f3c46b', fontWeight: 600, marginBottom: '9px' }}, t('net.missing_title')),
       h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '7px' }},
         m.missing.map((ms, i) => h('span', { key: i, style: {
           fontFamily: "'IBM Plex Mono',monospace", fontSize: '12px', color: '#f3c46b',
@@ -288,7 +867,7 @@ function MissingAlert({ m, command }){
       ),
     ),
     h('div', { style: { flex: 2, minWidth: '300px' }},
-      h('div', { style: { fontSize: '10.5px', color: '#8a7a4d', marginBottom: '6px' }}, 'avvia il pezzo mancante:'),
+      h('div', { style: { fontSize: '10.5px', color: '#8a7a4d', marginBottom: '6px' }}, t('net.missing_start')),
       h(CopyBox, { text: command }),
     ),
   );
@@ -296,6 +875,7 @@ function MissingAlert({ m, command }){
 
 /* ---------- 2D network graph (SVG) ---------- */
 function NetworkGraph({ m, coordinatorUrl }){
+  const { t } = React.useContext(I18n);
   if (m.totalNodes === 0){
     return h('div', { style: {
       position: 'relative', width: '100%', height: '430px', marginTop: '14px',
@@ -303,7 +883,7 @@ function NetworkGraph({ m, coordinatorUrl }){
       background: 'radial-gradient(circle at 50% 42%, #0c1d30 0%, #070d16 72%)',
       border: '1px solid #122031', display: 'flex', alignItems: 'center', justifyContent: 'center',
       color: '#647689', fontSize: '13.5px',
-    }}, 'in attesa che i nodi si uniscano alla rete…');
+    }}, t('node.awaiting'));
   }
 
   const W = 900, H = 430, cx = W / 2, cy = H / 2;
@@ -353,13 +933,14 @@ function NetworkGraph({ m, coordinatorUrl }){
 
 /* ---------- node cards ---------- */
 function NodeCards({ m }){
+  const { t } = React.useContext(I18n);
   const chipBase = { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10.5px', padding: '4px 9px', borderRadius: '6px' };
   return h('section', { className: 'syn-card', style: {
     background: '#0c1421', border: '1px solid #1b2a3f', borderRadius: '16px', padding: '18px 20px',
   }},
-    h('div', { style: { fontSize: '13px', fontWeight: 600, color: '#9fb0c6', letterSpacing: '.3px', marginBottom: '14px' }}, 'Dettaglio nodi'),
+    h('div', { style: { fontSize: '13px', fontWeight: 600, color: '#9fb0c6', letterSpacing: '.3px', marginBottom: '14px' }}, t('panel.node_detail')),
     m.totalNodes === 0
-      ? h('div', { style: { padding: '26px', textAlign: 'center', border: '1px dashed #233246', borderRadius: '12px', color: '#647689', fontSize: '13px' }}, 'nessun nodo connesso')
+      ? h('div', { style: { padding: '26px', textAlign: 'center', border: '1px dashed #233246', borderRadius: '12px', color: '#647689', fontSize: '13px' }}, t('panel.node_detail.none'))
       : h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(248px,1fr))', gap: '13px' }},
           m.nodes.map(nd => {
             const chips = [];
@@ -382,7 +963,7 @@ function NodeCards({ m }){
               ),
               h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '13px' }}, chips),
               h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #131e2c' }},
-                h('span', { style: { fontSize: '11px', color: '#566679' }}, 'memoria'),
+                h('span', { style: { fontSize: '11px', color: '#566679' }}, t('node.memory')),
                 h('span', { style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '12.5px', color: '#aebccd' }}, nd.mem),
               ),
             );
@@ -393,6 +974,7 @@ function NodeCards({ m }){
 
 /* ---------- Rete view ---------- */
 function ReteView({ m, coordinatorUrl, command }){
+  const { t } = React.useContext(I18n);
   return h('main', { style: { flex: 1, minHeight: 0, overflow: 'auto', padding: '20px 24px 40px' }},
     h(AssemblyStrip, { m }),
     !m.operational ? h(MissingAlert, { m, command }) : null,
@@ -401,8 +983,8 @@ function ReteView({ m, coordinatorUrl, command }){
     }},
       h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '20px', flexWrap: 'wrap' }},
         h('div', null,
-          h('div', { style: { fontSize: '14px', fontWeight: 600, color: '#eaf2fb', letterSpacing: '-.2px' }}, 'La rete'),
-          h('div', { style: { fontSize: '12px', color: '#647689', marginTop: '4px', fontFamily: "'IBM Plex Mono',monospace" }}, m.totalNodes + ' nodi · coordinator ' + coordinatorUrl),
+          h('div', { style: { fontSize: '14px', fontWeight: 600, color: '#eaf2fb', letterSpacing: '-.2px' }}, t('panel.network')),
+          h('div', { style: { fontSize: '12px', color: '#647689', marginTop: '4px', fontFamily: "'IBM Plex Mono',monospace" }}, t('panel.network.subtitle').replace('{n}', m.totalNodes).replace('{url}', coordinatorUrl)),
         ),
         h('div', { style: { display: 'flex', gap: '18px', alignItems: 'center', fontFamily: "'IBM Plex Mono',monospace" }},
           h('div', { style: { textAlign: 'right' }},
@@ -423,6 +1005,7 @@ function ReteView({ m, coordinatorUrl, command }){
 
 /* ---------- Chat view ---------- */
 function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, setUseMcp, mcp }){
+  const { t } = React.useContext(I18n);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const msgRef = useRef(null);
@@ -455,7 +1038,7 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, s
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok){
-        const err = (data && data.error) || ('errore ' + res.status);
+        const err = (data && data.error) || t('err.request_failed').replace('{msg}', res.status);
         setMessages(h2 => h2.concat([{ role: 'system', content: err }]));
       } else {
         const choice = data && data.choices && data.choices[0];
@@ -468,7 +1051,7 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, s
         setMessages(h2 => h2.concat([{ role: 'assistant', content, failovers: fail, toolRuns }]));
       }
     } catch (e) {
-      setMessages(h2 => h2.concat([{ role: 'system', content: 'coordinator non raggiungibile: ' + (e && e.message || e) }]));
+      setMessages(h2 => h2.concat([{ role: 'system', content: t('err.coordinator_unreachable') + ': ' + (e && e.message || e) }]));
     } finally {
       setLoading(false);
     }
@@ -479,9 +1062,9 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, s
   };
 
   const suggestions = [
-    "Spiega in una frase cos'è la sharded inference.",
-    "Scrivi una funzione Python che inverte una stringa.",
-    "Riassumi i vantaggi di una rete decentralizzata.",
+    t('chat.suggestion1'),
+    t('chat.suggestion2'),
+    t('chat.suggestion3'),
   ];
 
   // LOCKED state
@@ -500,11 +1083,11 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, s
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px',
             margin: '0 auto 18px', boxShadow: '0 0 34px rgba(245,158,11,.3)',
           }}, '🔒'),
-          h('div', { style: { fontSize: '20px', fontWeight: 700, color: '#f3c46b' }}, 'Il modello non è assemblato'),
+          h('div', { style: { fontSize: '20px', fontWeight: 700, color: '#f3c46b' }}, t('chat.model_not_assembled')),
           h('div', { style: { fontSize: '13.5px', color: '#8b9bb0', marginTop: '8px', lineHeight: 1.5 }},
-            'La chat è disponibile solo quando la rete copre tutti i ' + m.numLayers + ' layer con embed e head. Le richieste restano in coda finché la rete non è completa.'),
+            t('chat.model_not_assembled.desc').replace('{n}', m.numLayers)),
           h('div', { style: { marginTop: '20px', textAlign: 'left' }},
-            h('div', { style: { fontSize: '11px', letterSpacing: '.4px', color: '#f3c46b', fontWeight: 600, marginBottom: '9px' }}, 'MANCANO'),
+            h('div', { style: { fontSize: '11px', letterSpacing: '.4px', color: '#f3c46b', fontWeight: 600, marginBottom: '9px' }}, t('chat.missing')),
             h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '7px', marginBottom: '14px' }},
               m.missing.map((ms, i) => h('span', { key: i, style: {
                 fontFamily: "'IBM Plex Mono',monospace", fontSize: '12px', color: '#f3c46b',
@@ -551,7 +1134,7 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, s
             h('span', { style: { color: '#8b9bb0', wordBreak: 'break-all' }}, '"' + truncRes(r.result) + '"'),
           )),
         ) : null,
-        hasFail ? h('div', { style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10px', color: '#5b8e88', marginTop: '5px', padding: '0 4px' }}, 'failovers: ' + mm.failovers) : null,
+        hasFail ? h('div', { style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10px', color: '#5b8e88', marginTop: '5px', padding: '0 4px' }}, t('chat.failovers').replace('{n}', mm.failovers)) : null,
       ),
     );
   };
@@ -565,7 +1148,7 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, s
     // api toolbar
     h('div', { style: { flex: 'none', borderBottom: '1px solid #122031', padding: '10px 0' }},
       h('div', { style: { width: 'min(880px,92%)', margin: '0 auto', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }},
-        h('span', { style: { fontSize: '10px', fontFamily: "'IBM Plex Mono',monospace", color: '#566679', letterSpacing: '.5px' }}, 'CONNETTI UN CLIENT'),
+        h('span', { style: { fontSize: '10px', fontFamily: "'IBM Plex Mono',monospace", color: '#566679', letterSpacing: '.5px' }}, t('chat.connect_client')),
         h(CopyChip, { prefix: 'CLI', text: cli }),
         h(CopyChip, { prefix: 'cURL', text: curl }),
         h(CopyChip, { prefix: 'OpenAI', text: openai }),
@@ -580,8 +1163,8 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, s
         messages.length === 0
           ? h('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '50px 0 30px' }},
               h('div', { style: { width: '60px', height: '60px', borderRadius: '50%', border: '2px solid #2dd4bf', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2dd4bf', fontSize: '26px', boxShadow: '0 0 30px rgba(45,212,191,.25)', marginBottom: '16px' }}, '⌘'),
-              h('div', { style: { fontSize: '20px', fontWeight: 700, color: '#eaf2fb' }}, 'Interroga il modello distribuito'),
-              h('div', { style: { fontSize: '13px', color: '#8b9bb0', marginTop: '7px', fontFamily: "'IBM Plex Mono',monospace" }}, m.model + ' · assemblato su ' + m.totalNodes + ' nodi'),
+              h('div', { style: { fontSize: '20px', fontWeight: 700, color: '#eaf2fb' }}, t('chat.query_model')),
+              h('div', { style: { fontSize: '13px', color: '#8b9bb0', marginTop: '7px', fontFamily: "'IBM Plex Mono',monospace" }}, t('chat.assembled_on').replace('{model}', m.model).replace('{n}', m.totalNodes)),
               h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: '9px', justifyContent: 'center', marginTop: '22px', maxWidth: '560px' }},
                 suggestions.map((t, i) => h('button', { key: i, onClick: () => send(t), style: {
                   cursor: 'pointer', fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '12.5px', color: '#aebccd',
@@ -604,16 +1187,16 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, s
       h('div', { style: { width: 'min(880px,92%)', margin: '0 auto', display: 'flex', gap: '10px', alignItems: 'flex-end' }},
         h('textarea', {
           ref: inputRef, value: input, onChange: e => setInput(e.target.value), onKeyDown: onKey,
-          rows: 1, spellCheck: false, placeholder: 'Scrivi un messaggio…',
+          rows: 1, spellCheck: false, placeholder: t('chat.placeholder'),
           style: { flex: 1, resize: 'none', fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '14px', color: '#dbe6f3', background: '#0b1320', border: '1px solid #1f2e44', borderRadius: '12px', padding: '12px 14px', outline: 'none', maxHeight: '140px', lineHeight: 1.5 },
         }),
         h('button', { onClick: () => send(), disabled: sendDisabled, style: Object.assign(
           { flex: 'none', border: 'none', borderRadius: '12px', padding: '12px 20px', fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '14px', fontWeight: 600 },
           sendDisabled ? { background: '#16202e', color: '#5b6b80', cursor: 'not-allowed' } : { background: '#2dd4bf', color: '#04201c', cursor: 'pointer' },
-        )}, loading ? '…' : 'Invia'),
+        )}, loading ? '…' : t('btn.send')),
       ),
       h('div', { style: { width: 'min(880px,92%)', margin: '7px auto 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }},
-        h('span', { style: { fontSize: '10.5px', color: '#3f5168', fontFamily: "'IBM Plex Mono',monospace" }}, 'Invio per inviare · Maiusc+Invio per andare a capo'),
+        h('span', { style: { fontSize: '10.5px', color: '#3f5168', fontFamily: "'IBM Plex Mono',monospace" }}, t('chat.send_hint')),
         (useMcp && mcp && mcp.servers && mcp.servers.length)
           ? h('span', { style: {
               display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontWeight: 600, letterSpacing: '.4px',
@@ -621,7 +1204,7 @@ function ChatView({ m, coordinatorUrl, command, messages, setMessages, useMcp, s
               background: 'rgba(45,212,191,.10)', border: '1px solid ' + TEAL + '55', borderRadius: '8px', padding: '4px 9px',
             }},
               h('span', { style: { width: '6px', height: '6px', borderRadius: '50%', background: TEAL, boxShadow: '0 0 8px ' + TEAL, display: 'inline-block' }}),
-              'MCP attivo · ' + ((mcp.tools && mcp.tools.length) || 0) + ' tool',
+              t('chat.mcp_active').replace('{n}', (mcp.tools && mcp.tools.length) || 0),
             )
           : null,
       ),
@@ -688,6 +1271,7 @@ function StatusDot({ on }){
 
 /* ---------- Gestione rete view ---------- */
 function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNodeStatus }){
+  const { t, lang, setLang } = React.useContext(I18n);
   const DEFAULT_MODEL = 'Qwen/Qwen2.5-0.5B-Instruct';
 
   // 0) network mode toggle: 'coordinator' | 'p2p'
@@ -745,37 +1329,37 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
 
   const applyTarget = async () => {
     const url = target.trim();
-    if (!url){ setApplyFb({ kind: 'err', text: 'inserisci un URL coordinator' }); return; }
+    if (!url){ setApplyFb({ kind: 'err', text: t('err.enter_coordinator_url') }); return; }
     setApplyBusy(true); setApplyFb(null);
     try {
       const { res, data } = await postJson('/api/config', { coordinator_url: url });
-      if (!res.ok){ setApplyFb({ kind: 'err', text: errText(data, res, 'impossibile aggiornare il target') }); }
+      if (!res.ok){ setApplyFb({ kind: 'err', text: errText(data, res, t('err.cannot_update_target')) }); }
       else {
         const next = (data && data.coordinator_url) || url;
         setCoordinatorUrl(next);
-        setApplyFb({ kind: 'ok', text: 'target aggiornato: ' + next + ' — il monitoraggio della rete ora punta qui.' });
+        setApplyFb({ kind: 'ok', text: t('err.target_updated').replace('{url}', next) });
       }
     } catch (e) {
-      setApplyFb({ kind: 'err', text: 'richiesta fallita: ' + (e && e.message || e) });
+      setApplyFb({ kind: 'err', text: t('err.request_failed').replace('{msg}', e && e.message || e) });
     } finally { setApplyBusy(false); }
   };
 
   const createNetwork = async () => {
     const model = crModel.trim() || DEFAULT_MODEL;
     const portNum = parseInt(crPort, 10);
-    if (isNaN(portNum) || portNum <= 0){ setCrFb({ kind: 'err', text: 'porta non valida' }); return; }
+    if (isNaN(portNum) || portNum <= 0){ setCrFb({ kind: 'err', text: t('err.invalid_port') }); return; }
     setCrBusy(true); setCrFb(null);
     try {
       const { res, data } = await postJson('/api/network/create', { model, port: portNum });
-      if (!res.ok){ setCrFb({ kind: 'err', text: errText(data, res, 'impossibile creare la rete') }); }
+      if (!res.ok){ setCrFb({ kind: 'err', text: errText(data, res, t('err.cannot_create_network')) }); }
       else {
         const next = (data && data.coordinator_url) || '';
         if (next) setCoordinatorUrl(next);
-        setCrFb({ kind: 'ok', text: 'rete creata · coordinator locale ' + next + '\nil target è stato spostato qui. La rete è vuota: usa "Aggiungiti a una rete" per avviare i nodi (il pannello "MANCANO" nella vista Rete mostra i pezzi necessari).' });
+        setCrFb({ kind: 'ok', text: t('err.network_created').replace('{url}', next) });
         refreshNodeStatus();
       }
     } catch (e) {
-      setCrFb({ kind: 'err', text: 'richiesta fallita: ' + (e && e.message || e) });
+      setCrFb({ kind: 'err', text: t('err.request_failed').replace('{msg}', e && e.message || e) });
     } finally { setCrBusy(false); }
   };
 
@@ -783,18 +1367,18 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
     const url = jnUrl.trim();
     const stages = jnStages.trim();
     const model = jnModel.trim() || DEFAULT_MODEL;
-    if (!url){ setJnFb({ kind: 'err', text: 'inserisci un URL coordinator' }); return; }
-    if (!stages){ setJnFb({ kind: 'err', text: 'specifica almeno uno stage (es. embed,decoder:0-12)' }); return; }
+    if (!url){ setJnFb({ kind: 'err', text: t('err.enter_coordinator_url') }); return; }
+    if (!stages){ setJnFb({ kind: 'err', text: t('err.enter_stages') }); return; }
     setJnBusy(true); setJnFb(null);
     try {
       const { res, data } = await postJson('/api/network/join', { coordinator_url: url, stages, model });
-      if (!res.ok){ setJnFb({ kind: 'err', text: errText(data, res, 'impossibile unirsi alla rete') }); }
+      if (!res.ok){ setJnFb({ kind: 'err', text: errText(data, res, t('err.cannot_join_network')) }); }
       else {
-        setJnFb({ kind: 'ok', text: 'nodo avviato · stages ' + stages + ' → ' + url });
+        setJnFb({ kind: 'ok', text: t('err.node_started').replace('{stages}', stages).replace('{url}', url) });
         refreshNodeStatus();
       }
     } catch (e) {
-      setJnFb({ kind: 'err', text: 'richiesta fallita: ' + (e && e.message || e) });
+      setJnFb({ kind: 'err', text: t('err.request_failed').replace('{msg}', e && e.message || e) });
     } finally { setJnBusy(false); }
   };
 
@@ -802,20 +1386,20 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
     const advertise = cpAdvertise.trim();
     const stages = cpStages.trim();
     const model = cpModel.trim() || DEFAULT_MODEL;
-    if (!advertise){ setCpFb({ kind: 'err', text: 'inserisci un Advertise URL' }); return; }
-    if (!stages){ setCpFb({ kind: 'err', text: 'specifica almeno uno stage (es. embed,decoder:0-12)' }); return; }
+    if (!advertise){ setCpFb({ kind: 'err', text: t('err.enter_advertise') }); return; }
+    if (!stages){ setCpFb({ kind: 'err', text: t('err.enter_stages') }); return; }
     setCpBusy(true); setCpFb(null);
     try {
       const { res, data } = await postJson('/api/network/create_p2p', { advertise, stages, model });
-      if (!res.ok){ setCpFb({ kind: 'err', text: errText(data, res, 'impossibile creare la rete P2P') }); }
+      if (!res.ok){ setCpFb({ kind: 'err', text: errText(data, res, t('err.cannot_create_p2p')) }); }
       else {
         const next = (data && data.coordinator_url) || advertise;
         if (next) setCoordinatorUrl(next);
-        setCpFb({ kind: 'ok', text: 'nodo seed P2P avviato · ' + advertise + '\nla dashboard ora punta al tuo nodo (' + next + '). Nessun coordinator: aggiungi altri nodi via gossip per completare il modello.' });
+        setCpFb({ kind: 'ok', text: t('err.seed_started').replace('{advertise}', advertise).replace('{url}', next) });
         refreshNodeStatus();
       }
     } catch (e) {
-      setCpFb({ kind: 'err', text: 'richiesta fallita: ' + (e && e.message || e) });
+      setCpFb({ kind: 'err', text: t('err.request_failed').replace('{msg}', e && e.message || e) });
     } finally { setCpBusy(false); }
   };
 
@@ -824,21 +1408,21 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
     const peers = jpPeers.trim();
     const stages = jpStages.trim();
     const model = jpModel.trim() || DEFAULT_MODEL;
-    if (!advertise){ setJpFb({ kind: 'err', text: 'inserisci un Advertise URL' }); return; }
-    if (!peers){ setJpFb({ kind: 'err', text: 'specifica almeno un peer (es. http://127.0.0.1:8001)' }); return; }
-    if (!stages){ setJpFb({ kind: 'err', text: 'specifica almeno uno stage (es. decoder:12-24,head)' }); return; }
+    if (!advertise){ setJpFb({ kind: 'err', text: t('err.enter_advertise') }); return; }
+    if (!peers){ setJpFb({ kind: 'err', text: t('err.enter_peers') }); return; }
+    if (!stages){ setJpFb({ kind: 'err', text: t('err.enter_stages') }); return; }
     setJpBusy(true); setJpFb(null);
     try {
       const { res, data } = await postJson('/api/network/join_p2p', { advertise, peers, stages, model });
-      if (!res.ok){ setJpFb({ kind: 'err', text: errText(data, res, 'impossibile unirsi alla rete P2P') }); }
+      if (!res.ok){ setJpFb({ kind: 'err', text: errText(data, res, t('err.cannot_join_p2p')) }); }
       else {
         const next = (data && data.coordinator_url) || advertise;
         if (next) setCoordinatorUrl(next);
-        setJpFb({ kind: 'ok', text: 'nodo P2P avviato · stages ' + stages + ' · peers ' + peers + '\nla dashboard ora punta al tuo nodo (' + next + ').' });
+        setJpFb({ kind: 'ok', text: t('err.p2p_joined').replace('{stages}', stages).replace('{peers}', peers).replace('{url}', next) });
         refreshNodeStatus();
       }
     } catch (e) {
-      setJpFb({ kind: 'err', text: 'richiesta fallita: ' + (e && e.message || e) });
+      setJpFb({ kind: 'err', text: t('err.request_failed').replace('{msg}', e && e.message || e) });
     } finally { setJpBusy(false); }
   };
 
@@ -847,10 +1431,10 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
     try {
       const body = role ? { role } : {};
       const { res, data } = await postJson('/api/node/stop', body);
-      if (!res.ok){ window.alert(errText(data, res, 'impossibile fermare il processo')); }
+      if (!res.ok){ window.alert(errText(data, res, t('err.cannot_stop'))); }
       refreshNodeStatus();
     } catch (e) {
-      window.alert('richiesta fallita: ' + (e && e.message || e));
+      window.alert(t('err.request_failed').replace('{msg}', e && e.message || e));
     } finally {
       setStopBusy(b => Object.assign({}, b, { [role]: false }));
     }
@@ -882,25 +1466,40 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
   return h('main', { style: { flex: 1, minHeight: 0, overflow: 'auto', padding: '20px 24px 40px' }},
     h('div', { style: { maxWidth: '920px', margin: '0 auto' }},
 
+      // language selector
+      h(GCard, { title: t('settings.language') },
+        h('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
+          h('select', {
+            value: lang,
+            onChange: e => setLang(e.target.value),
+            style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '13px', color: '#dbe6f3', background: '#0b1320', border: '1px solid #1f2e44', borderRadius: '10px', padding: '10px 12px', outline: 'none' }
+          },
+            [['it','Italiano'],['en','English'],['fr','Français'],['de','Deutsch'],['es','Español']].map(([code, name]) =>
+              h('option', { key: code, value: code }, name)
+            )
+          ),
+        ),
+      ),
+
       // 1 - coordinator target
-      h(GCard, { title: 'Coordinator bersaglio', subtitle: 'Il coordinator verso cui la UI inoltra registry, chat e inferenza. Cambialo per monitorare un\'altra rete.' },
+      h(GCard, { title: t('settings.coordinator_target'), subtitle: t('settings.coordinator_target.subtitle') },
         h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }},
           h('div', { style: fieldStyle },
-            GLabel('coordinator url'),
+            GLabel(t('settings.coordinator_url')),
             h('input', { type: 'text', value: target, spellCheck: false,
               onChange: e => setTarget(e.target.value),
               onKeyDown: e => { if (e.key === 'Enter') applyTarget(); },
               placeholder: 'http://localhost:9000', style: gInputStyle }),
           ),
-          h(GButton, { onClick: applyTarget, busy: applyBusy }, 'Applica'),
+          h(GButton, { onClick: applyTarget, busy: applyBusy }, t('btn.apply')),
         ),
         h(Feedback, { fb: applyFb }),
       ),
 
       // mode toggle: Coordinator | P2P (senza coordinator)
-      h(GCard, { title: 'Modalità rete', subtitle: 'Scegli come avviare/unire i nodi: con un coordinator centrale, oppure in P2P dove i nodi si scoprono via gossip senza coordinator.' },
+      h(GCard, { title: t('settings.net_mode'), subtitle: t('settings.net_mode.subtitle') },
         h('div', { style: { display: 'flex', background: '#0b1320', border: '1px solid #1c2a3e', borderRadius: '11px', padding: '3px', gap: '3px', maxWidth: '420px' }},
-          [['coordinator', 'Coordinator'], ['p2p', 'P2P (senza coordinator)']].map(([mode, lbl]) => {
+          [['coordinator', t('settings.net_mode.coordinator')], ['p2p', t('settings.net_mode.p2p')]].map(([mode, lbl]) => {
             const active = netMode === mode;
             return h('button', { key: mode, onClick: () => setNetMode(mode), style: Object.assign({
               flex: 1, cursor: 'pointer', border: 'none', borderRadius: '8px', padding: '8px 14px',
@@ -917,7 +1516,7 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
       netMode === 'coordinator' ? h('div', null,
 
       // 2 - create network
-      h(GCard, { title: 'Crea una rete', subtitle: 'Avvia un coordinator locale e imposta automaticamente il target su di esso.' },
+      h(GCard, { title: t('settings.create_network'), subtitle: t('settings.create_network.subtitle') },
         h('div', { style: { display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }},
           h('div', { style: { flex: 2, minWidth: '220px' }},
             GLabel('model id'),
@@ -929,21 +1528,21 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
             h('input', { type: 'text', value: crPort, spellCheck: false,
               onChange: e => setCrPort(e.target.value), placeholder: '9000', style: gInputStyle }),
           ),
-          h(GButton, { onClick: createNetwork, busy: crBusy }, 'Crea rete'),
+          h(GButton, { onClick: createNetwork, busy: crBusy }, t('btn.create_network')),
         ),
         h(Feedback, { fb: crFb }),
       ),
 
       // 3 - join network
-      h(GCard, { title: 'Aggiungiti a una rete', subtitle: 'Avvia un nodo serve locale che si unisce al coordinator indicato servendo gli stage scelti.' },
+      h(GCard, { title: t('settings.join_network'), subtitle: t('settings.join_network.subtitle') },
         h('div', { style: { display: 'flex', flexDirection: 'column', gap: '13px' }},
           h('div', null,
-            GLabel('coordinator url'),
+            GLabel(t('settings.coordinator_url')),
             h('input', { type: 'text', value: jnUrl, spellCheck: false,
               onChange: e => setJnUrl(e.target.value), placeholder: 'http://localhost:9000', style: gInputStyle }),
           ),
           h('div', null,
-            GLabel('stages (es. embed,decoder:0-12 · head)'),
+            GLabel(t('settings.stages_label')),
             h('input', { type: 'text', value: jnStages, spellCheck: false,
               onChange: e => setJnStages(e.target.value), placeholder: 'embed,decoder:0-12', style: gInputStyle }),
           ),
@@ -953,7 +1552,7 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
               h('input', { type: 'text', value: jnModel, spellCheck: false,
                 onChange: e => setJnModel(e.target.value), placeholder: DEFAULT_MODEL, style: gInputStyle }),
             ),
-            h(GButton, { onClick: joinNetwork, busy: jnBusy }, 'Aggiungiti'),
+            h(GButton, { onClick: joinNetwork, busy: jnBusy }, t('btn.join')),
           ),
         ),
         h(Feedback, { fb: jnFb }),
@@ -966,16 +1565,16 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
       netMode === 'p2p' ? h('div', null,
 
       // P2P - create network (first/seed node)
-      h(GCard, { title: 'Crea rete P2P (primo nodo)', subtitle: 'Avvia un nodo seed P2P (serve --advertise --stages, senza coordinator) e punta la dashboard al tuo nodo.' },
+      h(GCard, { title: t('settings.create_p2p'), subtitle: t('settings.create_p2p.subtitle') },
         h('div', { style: { display: 'flex', flexDirection: 'column', gap: '13px' }},
           h('div', null,
             GLabel('advertise url'),
             h('input', { type: 'text', value: cpAdvertise, spellCheck: false,
               onChange: e => setCpAdvertise(e.target.value), placeholder: 'http://127.0.0.1:8001', style: gInputStyle }),
-            h('div', { style: { fontSize: '11px', color: '#647689', marginTop: '6px', lineHeight: 1.5 }}, "l'URL con cui ti annunci, raggiungibile dagli altri nodi"),
+            h('div', { style: { fontSize: '11px', color: '#647689', marginTop: '6px', lineHeight: 1.5 }}, t('settings.create_p2p.advertise_hint')),
           ),
           h('div', null,
-            GLabel('stages (es. embed,decoder:0-12 · head)'),
+            GLabel(t('settings.stages_label')),
             h('input', { type: 'text', value: cpStages, spellCheck: false,
               onChange: e => setCpStages(e.target.value), placeholder: 'embed,decoder:0-12', style: gInputStyle }),
           ),
@@ -985,14 +1584,14 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
               h('input', { type: 'text', value: cpModel, spellCheck: false,
                 onChange: e => setCpModel(e.target.value), placeholder: DEFAULT_MODEL, style: gInputStyle }),
             ),
-            h(GButton, { onClick: createP2P, busy: cpBusy }, 'Crea rete P2P'),
+            h(GButton, { onClick: createP2P, busy: cpBusy }, t('btn.create_p2p')),
           ),
         ),
         h(Feedback, { fb: cpFb }),
       ),
 
       // P2P - join network (via gossip peers)
-      h(GCard, { title: 'Aggiungiti a rete P2P', subtitle: 'Avvia un nodo P2P locale che si unisce alla rete via gossip indicando uno o più peer seed.' },
+      h(GCard, { title: t('settings.join_p2p'), subtitle: t('settings.join_p2p.subtitle') },
         h('div', { style: { display: 'flex', flexDirection: 'column', gap: '13px' }},
           h('div', null,
             GLabel('advertise url (il tuo nodo)'),
@@ -1005,7 +1604,7 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
               onChange: e => setJpPeers(e.target.value), placeholder: 'http://127.0.0.1:8001', style: gInputStyle }),
           ),
           h('div', null,
-            GLabel('stages (es. decoder:12-24,head)'),
+            GLabel(t('settings.stages_label')),
             h('input', { type: 'text', value: jpStages, spellCheck: false,
               onChange: e => setJpStages(e.target.value), placeholder: 'decoder:12-24,head', style: gInputStyle }),
           ),
@@ -1015,7 +1614,7 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
               h('input', { type: 'text', value: jpModel, spellCheck: false,
                 onChange: e => setJpModel(e.target.value), placeholder: DEFAULT_MODEL, style: gInputStyle }),
             ),
-            h(GButton, { onClick: joinP2P, busy: jpBusy }, 'Aggiungiti (P2P)'),
+            h(GButton, { onClick: joinP2P, busy: jpBusy }, t('btn.join_p2p')),
           ),
         ),
         h(Feedback, { fb: jpFb }),
@@ -1025,15 +1624,15 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
       h('div', { style: {
         fontSize: '11.5px', color: '#647689', lineHeight: 1.6, marginBottom: '16px',
         padding: '12px 14px', background: '#0c1421', border: '1px solid #1b2a3f', borderRadius: '12px',
-      }}, 'Nessun coordinator: i nodi si scoprono via gossip e ognuno è interrogabile (la chat funziona puntando la dashboard a un peer). Richiede che i nodi si raggiungano (LAN/VPN/IP pubblici).')
+      }}, t('settings.p2p_note'))
 
       ) : null,
       // ===== END P2P MODE =====
 
       // 4 - local node status
-      h(GCard, { title: 'Nodo locale', subtitle: 'Processi avviati da questa UI · aggiornato ogni 2s.' },
+      h(GCard, { title: t('settings.local_node'), subtitle: t('settings.local_node.subtitle') },
         roleRows.length === 0
-          ? h('div', { style: { padding: '22px', textAlign: 'center', border: '1px dashed #233246', borderRadius: '12px', color: '#647689', fontSize: '13px' }}, 'nessun processo gestito da questa UI')
+          ? h('div', { style: { padding: '22px', textAlign: 'center', border: '1px dashed #233246', borderRadius: '12px', color: '#647689', fontSize: '13px' }}, t('settings.local_node.none'))
           : h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: '13px' }},
               roleRows.map(r => h('div', { key: r.role, className: 'syn-card', style: {
                 background: '#0a121d', border: '1px solid #182539', borderRadius: '13px', padding: '15px 16px',
@@ -1044,7 +1643,7 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
                     h(StatusDot, { on: r.running }),
                     h('span', { style: { fontSize: '14px', fontWeight: 600, color: '#eaf2fb' }}, r.role),
                   ),
-                  h('span', { style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10.5px', color: r.running ? TEAL : RED }}, r.running ? 'in esecuzione' : 'fermo'),
+                  h('span', { style: { fontFamily: "'IBM Plex Mono',monospace", fontSize: '10.5px', color: r.running ? TEAL : RED }}, r.running ? t('settings.running') : t('settings.stopped')),
                 ),
                 h('div', { style: { marginTop: '13px', display: 'flex', flexDirection: 'column', gap: '6px' }},
                   r.lines.length
@@ -1055,7 +1654,7 @@ function GestioneView({ coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNo
                     : h('div', { style: { fontSize: '11.5px', color: '#566679' }}, '—'),
                 ),
                 h('div', { style: { marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #131e2c', display: 'flex', justifyContent: 'flex-end' }},
-                  h(GButton, { onClick: () => stopRole(r.role), busy: !!stopBusy[r.role], disabled: !r.running, tone: 'danger' }, 'Stop'),
+                  h(GButton, { onClick: () => stopRole(r.role), busy: !!stopBusy[r.role], disabled: !r.running, tone: 'danger' }, t('btn.stop')),
                 ),
               )),
             ),
@@ -1082,6 +1681,7 @@ function ToggleSwitch({ on, onChange }){
 
 /* ---------- MCP view ---------- */
 function McpView({ mcp, refreshMcp, useMcp, setUseMcp }){
+  const { t } = React.useContext(I18n);
   const [name, setName] = useState('');
   const [command, setCommand] = useState('');
   const [args, setArgs] = useState('');
@@ -1103,21 +1703,21 @@ function McpView({ mcp, refreshMcp, useMcp, setUseMcp }){
   const addServer = async () => {
     const nm = name.trim();
     const cmd = command.trim();
-    if (!nm){ setAddFb({ kind: 'err', text: 'inserisci un nome per il server' }); return; }
-    if (!cmd){ setAddFb({ kind: 'err', text: 'inserisci un comando (es. npx)' }); return; }
+    if (!nm){ setAddFb({ kind: 'err', text: t('err.enter_name') }); return; }
+    if (!cmd){ setAddFb({ kind: 'err', text: t('err.enter_command') }); return; }
     const argList = args.trim() ? args.trim().split(/\s+/) : [];
     setAddBusy(true); setAddFb(null);
     try {
       const { res, data } = await postJson('/api/mcp/add', { name: nm, command: cmd, args: argList });
       if (!res.ok || (data && data.ok === false)){
-        setAddFb({ kind: 'err', text: errText(data, res, 'impossibile aggiungere il server') });
+        setAddFb({ kind: 'err', text: errText(data, res, t('err.cannot_add_server')) });
       } else {
-        setAddFb({ kind: 'ok', text: 'server "' + nm + '" aggiunto · i tool verranno scoperti al collegamento' });
+        setAddFb({ kind: 'ok', text: t('err.server_added').replace('{name}', nm) });
         setName(''); setCommand(''); setArgs('');
         refreshMcp();
       }
     } catch (e) {
-      setAddFb({ kind: 'err', text: 'richiesta fallita: ' + (e && e.message || e) });
+      setAddFb({ kind: 'err', text: t('err.request_failed').replace('{msg}', e && e.message || e) });
     } finally { setAddBusy(false); }
   };
 
@@ -1125,10 +1725,10 @@ function McpView({ mcp, refreshMcp, useMcp, setUseMcp }){
     setRmBusy(b => Object.assign({}, b, { [nm]: true }));
     try {
       const { res, data } = await postJson('/api/mcp/remove', { name: nm });
-      if (!res.ok || (data && data.ok === false)){ window.alert(errText(data, res, 'impossibile rimuovere il server')); }
+      if (!res.ok || (data && data.ok === false)){ window.alert(errText(data, res, t('err.cannot_remove_server'))); }
       refreshMcp();
     } catch (e) {
-      window.alert('richiesta fallita: ' + (e && e.message || e));
+      window.alert(t('err.request_failed').replace('{msg}', e && e.message || e));
     } finally {
       setRmBusy(b => Object.assign({}, b, { [nm]: false }));
     }
@@ -1142,21 +1742,21 @@ function McpView({ mcp, refreshMcp, useMcp, setUseMcp }){
     h('div', { style: { maxWidth: '920px', margin: '0 auto' }},
 
       // toggle - enable tools in chat
-      h(GCard, { title: 'Tool MCP nella chat', subtitle: 'Quando attivo, la chat invia le richieste in modalità tool-calling: il modello può chiamare i tool MCP configurati qui sotto.' },
+      h(GCard, { title: t('mcp.toggle_title'), subtitle: t('mcp.toggle_subtitle') },
         h('div', { style: { display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }},
           h(ToggleSwitch, { on: useMcp, onChange: setUseMcp }),
           h('span', { style: { fontSize: '13px', color: useMcp ? '#7ff0e0' : '#8b9bb0', fontWeight: 600 }},
-            useMcp ? 'Tool MCP attivi nella chat' : 'Tool MCP disattivati'),
+            useMcp ? t('mcp.toggle_active') : t('mcp.toggle_inactive')),
           servers.length ? h('span', { style: {
             fontFamily: "'IBM Plex Mono',monospace", fontSize: '11px', color: '#566679',
-          }}, servers.length + ' server · ' + tools.length + ' tool') : null,
+          }}, t('mcp.servers_count').replace('{servers}', servers.length).replace('{tools}', tools.length)) : null,
         ),
         h('div', { style: { marginTop: '13px', fontSize: '11.5px', color: '#647689', lineHeight: 1.5 }},
-          'I tool MCP sono eseguiti da questa UI; il modello decide quando chiamarli. Richiede un modello che supporti il tool-calling.'),
+          t('mcp.tools_note')),
       ),
 
       // add server
-      h(GCard, { title: 'Aggiungi server MCP', subtitle: 'Definisce un server MCP avviato via comando locale (stdio). Gli args sono separati da spazi.' },
+      h(GCard, { title: t('mcp.add_server'), subtitle: t('mcp.add_server.subtitle') },
         h('div', { style: { display: 'flex', flexDirection: 'column', gap: '13px' }},
           h('div', { style: { display: 'flex', gap: '10px', flexWrap: 'wrap' }},
             h('div', { style: fieldStyle },
@@ -1171,21 +1771,21 @@ function McpView({ mcp, refreshMcp, useMcp, setUseMcp }){
             ),
           ),
           h('div', null,
-            GLabel('args (separati da spazi)'),
+            GLabel(t('mcp.args_hint')),
             h('input', { type: 'text', value: args, spellCheck: false,
               onChange: e => setArgs(e.target.value),
               onKeyDown: e => { if (e.key === 'Enter') addServer(); },
               placeholder: '@modelcontextprotocol/server-filesystem /path', style: gInputStyle }),
           ),
           h('div', { style: { display: 'flex', justifyContent: 'flex-end' }},
-            h(GButton, { onClick: addServer, busy: addBusy }, 'Aggiungi'),
+            h(GButton, { onClick: addServer, busy: addBusy }, t('btn.add')),
           ),
         ),
         h(Feedback, { fb: addFb }),
       ),
 
       // configured servers + discovered tools
-      h(GCard, { title: 'Server configurati', subtitle: 'Server MCP registrati in questa UI e tool scoperti.' },
+      h(GCard, { title: t('mcp.configured_servers'), subtitle: t('mcp.configured_servers.subtitle') },
         mcp && mcp.error
           ? h('div', { style: {
               fontSize: '12px', lineHeight: 1.5, padding: '11px 13px', borderRadius: '10px',
@@ -1194,7 +1794,7 @@ function McpView({ mcp, refreshMcp, useMcp, setUseMcp }){
             }}, '⚠ ' + mcp.error)
           : null,
         servers.length === 0
-          ? h('div', { style: { marginTop: mcp && mcp.error ? '13px' : 0, padding: '22px', textAlign: 'center', border: '1px dashed #233246', borderRadius: '12px', color: '#647689', fontSize: '13px' }}, 'nessun server MCP configurato')
+          ? h('div', { style: { marginTop: mcp && mcp.error ? '13px' : 0, padding: '22px', textAlign: 'center', border: '1px dashed #233246', borderRadius: '12px', color: '#647689', fontSize: '13px' }}, t('mcp.no_servers'))
           : h('div', { style: { marginTop: mcp && mcp.error ? '13px' : 0, display: 'flex', flexDirection: 'column', gap: '11px' }},
               servers.map(nm => h('div', { key: nm, className: 'syn-card', style: {
                 background: '#0a121d', border: '1px solid #182539', borderRadius: '13px',
@@ -1205,7 +1805,7 @@ function McpView({ mcp, refreshMcp, useMcp, setUseMcp }){
                     h(StatusDot, { on: true }),
                     h('span', { style: { fontSize: '14px', fontWeight: 600, color: '#eaf2fb', fontFamily: "'IBM Plex Mono',monospace" }}, nm),
                   ),
-                  h(GButton, { onClick: () => removeServer(nm), busy: !!rmBusy[nm], tone: 'danger' }, 'Rimuovi'),
+                  h(GButton, { onClick: () => removeServer(nm), busy: !!rmBusy[nm], tone: 'danger' }, t('btn.remove')),
                 ),
               )),
             ),
@@ -1213,9 +1813,9 @@ function McpView({ mcp, refreshMcp, useMcp, setUseMcp }){
         // discovered tools
         h('div', { style: { marginTop: '18px' }},
           h('div', { style: { fontSize: '10.5px', letterSpacing: '.4px', color: '#7f93ab', fontFamily: "'IBM Plex Mono',monospace", marginBottom: '10px' }},
-            'TOOL SCOPERTI' + (tools.length ? ' (' + tools.length + ')' : '')),
+            t('mcp.tools_discovered') + (tools.length ? ' (' + tools.length + ')' : '')),
           tools.length === 0
-            ? h('div', { style: { padding: '16px', textAlign: 'center', border: '1px dashed #233246', borderRadius: '12px', color: '#647689', fontSize: '12.5px' }}, 'nessun tool disponibile')
+            ? h('div', { style: { padding: '16px', textAlign: 'center', border: '1px dashed #233246', borderRadius: '12px', color: '#647689', fontSize: '12.5px' }}, t('mcp.no_tools'))
             : h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(248px,1fr))', gap: '11px' }},
                 tools.map((t, i) => h('div', { key: t.name || i, style: {
                   background: '#0b1320', border: '1px solid #1c2a3e', borderRadius: '11px', padding: '12px 14px',
@@ -1235,6 +1835,7 @@ function McpView({ mcp, refreshMcp, useMcp, setUseMcp }){
 
 /* ---------- Header ---------- */
 function Header({ view, setView, coordinatorUrl, updatedAgo, operational, error, mcpCount }){
+  const { t } = React.useContext(I18n);
   const tab = active => Object.assign({
     cursor: 'pointer', border: 'none', borderRadius: '8px', padding: '7px 16px',
     fontFamily: "'IBM Plex Sans',sans-serif", fontSize: '13px', fontWeight: 600,
@@ -1265,18 +1866,18 @@ function Header({ view, setView, coordinatorUrl, updatedAgo, operational, error,
       ),
       h('div', null,
         h('div', { style: { fontSize: '18px', fontWeight: 700, letterSpacing: '-.3px', color: '#f1f6fc', lineHeight: 1 }}, 'Axyn'),
-        h('div', { style: { fontSize: '11px', color: '#67788f', marginTop: '4px', letterSpacing: '.2px' }}, 'rete di inferenza LLM decentralizzata'),
+        h('div', { style: { fontSize: '11px', color: '#67788f', marginTop: '4px', letterSpacing: '.2px' }}, t('header.subtitle')),
       ),
     ),
     h('div', { style: { display: 'flex', background: '#0b1320', border: '1px solid #1c2a3e', borderRadius: '11px', padding: '3px', gap: '3px' }},
-      h('button', { onClick: () => setView('rete'), style: tab(view === 'rete') }, 'Rete'),
+      h('button', { onClick: () => setView('rete'), style: tab(view === 'rete') }, t('tab.network')),
       h('button', { onClick: () => setView('chat'), style: tab(view === 'chat') },
         !operational ? h('span', { style: { fontSize: '11px' }}, '🔒') : null,
-        'Chat',
+        t('tab.chat'),
       ),
-      h('button', { onClick: () => setView('gestione'), style: tab(view === 'gestione') }, 'Gestione'),
+      h('button', { onClick: () => setView('gestione'), style: tab(view === 'gestione') }, t('tab.manage')),
       h('button', { onClick: () => setView('mcp'), style: tab(view === 'mcp') },
-        'MCP',
+        t('tab.mcp'),
         mcpCount ? h('span', { style: {
           fontFamily: "'IBM Plex Mono',monospace", fontSize: '9.5px', color: '#04201c',
           background: TEAL, borderRadius: '6px', padding: '1px 5px', fontWeight: 700,
@@ -1298,6 +1899,9 @@ function Header({ view, setView, coordinatorUrl, updatedAgo, operational, error,
 
 /* ---------- App ---------- */
 function App(){
+  const [lang, setLang] = React.useState(getInitialLang);
+  const changeLang = l => { setLang(l); localStorage.setItem('axyn_lang', l); document.documentElement.lang = l; };
+  const t = key => (TRANSLATIONS[lang] && TRANSLATIONS[lang][key]) || TRANSLATIONS.en[key] || key;
   const [coordinatorUrl, setCoordinatorUrl] = useState('');
   const [registry, setRegistry] = useState(null);
   const [error, setError] = useState(null);
@@ -1328,8 +1932,8 @@ function App(){
         tools: Array.isArray(data.tools) ? data.tools : [],
         error: data.error || null,
       });
-      else setMcp(prev => Object.assign({}, prev, { error: (data && data.error) || ('errore ' + res.status) }));
-    } catch (e) { setMcp(prev => Object.assign({}, prev, { error: 'richiesta fallita: ' + (e && e.message || e) })); }
+      else setMcp(prev => Object.assign({}, prev, { error: (data && data.error) || ('error ' + res.status) }));
+    } catch (e) { setMcp(prev => Object.assign({}, prev, { error: 'request failed: ' + (e && e.message || e) })); }
   }, []);
 
   // poll node status every 2s
@@ -1358,7 +1962,7 @@ function App(){
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (!res.ok || (data && data.error)){
-          setError((data && data.error) || 'coordinator non raggiungibile');
+          setError((data && data.error) || '__unreachable__');
         } else {
           setRegistry(data);
           setError(null);
@@ -1366,7 +1970,7 @@ function App(){
         setLastUpdate(Date.now());
       } catch (e) {
         if (cancelled) return;
-        setError('coordinator non raggiungibile');
+        setError('__unreachable__');
         setLastUpdate(Date.now());
       }
     };
@@ -1381,34 +1985,38 @@ function App(){
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => { document.documentElement.lang = lang; }, [lang]);
+
   // refresh MCP servers/tools on entering the MCP view; also load once for the chat badge
   useEffect(() => { refreshMcp(); }, [refreshMcp]);
   useEffect(() => { if (view === 'mcp') refreshMcp(); }, [view, refreshMcp]);
 
   const m = buildChain(registry || {});
   const command = serveCommand(coordinatorUrl, m);
-  const updatedAgo = 'aggiornato ' + Math.max(0, Math.round((now - lastUpdate) / 1000)) + 's fa';
+  const updatedAgo = t('status.updated_ago').replace('{n}', Math.max(0, Math.round((now - lastUpdate) / 1000)));
 
-  return h('div', { style: {
-    height: '100vh', display: 'flex', flexDirection: 'column', background: '#070a10',
-    color: '#cdd7e5', fontFamily: "'IBM Plex Sans',system-ui,sans-serif",
-  }},
-    h(Header, { view, setView, coordinatorUrl, updatedAgo, operational: m.operational, error, mcpCount: mcp.servers.length }),
-    error ? h('div', { style: {
-      flex: 'none', background: '#2a1410', borderBottom: '1px solid #5a241c', color: '#fca5a5',
-      fontFamily: "'IBM Plex Mono',monospace", fontSize: '12px', padding: '9px 24px',
-      display: 'flex', alignItems: 'center', gap: '8px',
+  return h(I18n.Provider, { value: { t, lang, setLang: changeLang } },
+    h('div', { style: {
+      height: '100vh', display: 'flex', flexDirection: 'column', background: '#070a10',
+      color: '#cdd7e5', fontFamily: "'IBM Plex Sans',system-ui,sans-serif",
     }},
-      h('span', { style: { width: '7px', height: '7px', borderRadius: '50%', background: AMBER, display: 'inline-block' }}),
-      'coordinator non raggiungibile',
-    ) : null,
-    view === 'rete'
-      ? h(ReteView, { m, coordinatorUrl, command })
-      : view === 'gestione'
-      ? h(GestioneView, { coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNodeStatus })
-      : view === 'mcp'
-      ? h(McpView, { mcp, refreshMcp, useMcp, setUseMcp })
-      : h(ChatView, { m, coordinatorUrl, command, messages, setMessages, useMcp, setUseMcp, mcp }),
+      h(Header, { view, setView, coordinatorUrl, updatedAgo, operational: m.operational, error, mcpCount: mcp.servers.length }),
+      error ? h('div', { style: {
+        flex: 'none', background: '#2a1410', borderBottom: '1px solid #5a241c', color: '#fca5a5',
+        fontFamily: "'IBM Plex Mono',monospace", fontSize: '12px', padding: '9px 24px',
+        display: 'flex', alignItems: 'center', gap: '8px',
+      }},
+        h('span', { style: { width: '7px', height: '7px', borderRadius: '50%', background: AMBER, display: 'inline-block' }}),
+        error === '__unreachable__' ? t('err.coordinator_unreachable') : error,
+      ) : null,
+      view === 'rete'
+        ? h(ReteView, { m, coordinatorUrl, command })
+        : view === 'gestione'
+        ? h(GestioneView, { coordinatorUrl, setCoordinatorUrl, nodeStatus, refreshNodeStatus })
+        : view === 'mcp'
+        ? h(McpView, { mcp, refreshMcp, useMcp, setUseMcp })
+        : h(ChatView, { m, coordinatorUrl, command, messages, setMessages, useMcp, setUseMcp, mcp }),
+    ),
   );
 }
 
