@@ -37,6 +37,19 @@ def _wait_count(client, base, n):
     raise AssertionError(f"registry never reached {n} nodes")
 
 
+async def _run_counting_node(ws_url, state, counts):
+    """A normal node that counts how many 'head' ops it serves (= tokens it generated)."""
+    async with websockets.connect(ws_url, max_size=None) as ws:
+        await ws.send(pack({"type": "announce", "stages": state.stages_dict()}))
+        loop = asyncio.get_running_loop()
+        async for message in ws:
+            header, payload = unpack(message)
+            if header["op"] == "head":
+                counts["head"] = counts.get("head", 0) + 1
+            rh, rp = await loop.run_in_executor(None, handle_request, state, header, payload)
+            await ws.send(pack({**rh, "req_id": header.get("req_id")}, rp))
+
+
 async def _run_flaky_after(ws_url, state, die_after_decodes):
     """Serve normally, but close the connection on the Nth 'decode' op (crash after some tokens)."""
     seen = {"n": 0}
@@ -73,8 +86,9 @@ def test_failover_resumes_from_persisted_tokens(full_model, tmp_path):
             # tail node that dies on the 4th decode -> ~3 tokens already persisted when it fails
             _thread(lambda: _run_flaky_after(ws_url, NodeState(model, StageSpec(head=True, decoders=[(12, 24)])), 4))
             _wait_count(client, base, 2)
-            # redundant tail node to fail over to
-            _thread(lambda: run_node(ws_url, NodeState(model, StageSpec(head=True, decoders=[(12, 24)]))))
+            # redundant tail node to fail over to — counted so we can discriminate resume from restart
+            counts = {}
+            _thread(lambda: _run_counting_node(ws_url, NodeState(model, StageSpec(head=True, decoders=[(12, 24)])), counts))
             _wait_count(client, base, 3)
 
             data = client.post(f"{base}/infer", json={"prompt": prompt, "max_new_tokens": 6}).json()
@@ -85,5 +99,7 @@ def test_failover_resumes_from_persisted_tokens(full_model, tmp_path):
         assert data["failovers"] >= 1
         assert detail["status"] == "DONE"
         assert detail["tokens"] == reference         # durable log drove a correct resume
+        assert counts.get("head", 0) >= 1, "redundant node never took over"
+        assert counts["head"] < 6, f"redundant node generated {counts['head']} tokens — looks like a full restart, not a resume"
     finally:
         server.should_exit = True
