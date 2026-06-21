@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { THEMES, ACCENTS, loadThemePrefs, saveThemePrefs } from './theme.js'
 import { getNode, getMetrics } from './api.js'
 import Sidebar from './Sidebar.jsx'
+import NetworkPage from './NetworkPage.jsx'
 
 export default function App() {
   // Theme state
@@ -77,15 +78,7 @@ export default function App() {
 
       <main style={{flex:'1', minWidth:0, height:'100vh', display:'flex', flexDirection:'column', overflow:'hidden'}}>
         {view === 'network' && (
-          <div style={{flex:'1', display:'flex', alignItems:'center', justifyContent:'center',
-                       flexDirection:'column', gap:'8px', color:T.muted}}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="5" cy="6" r="2.2"/><circle cx="19" cy="6" r="2.2"/><circle cx="12" cy="18" r="2.2"/>
-              <path d="M6.8 7.2 10.6 16M17.2 7.2 13.4 16M7 6h10"/>
-            </svg>
-            <span style={{fontSize:'15px', fontWeight:'600'}}>Network</span>
-            <span style={{fontSize:'13px', color:T.muted2}}>Coming soon</span>
-          </div>
+          <NetworkPage T={T} accent={accent} dark={theme === 'dark'} node={node} metrics={metrics} />
         )}
         {view === 'chat' && (
           <div style={{flex:'1', display:'flex', alignItems:'center', justifyContent:'center',
