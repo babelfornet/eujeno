@@ -422,4 +422,23 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
     async def get_receipts(job_id: str):
         return {"receipts": store.get_receipts(job_id)}
 
+    # ── SPA / placeholder — MUST be last so /api/*, /v1/*, /registry,
+    #    /embed, /decode, /head, /jobs all take precedence ────────────────────
+    import os as _os
+    _static_dir = _os.path.join(_os.path.dirname(__file__), "..", "ui", "static")
+    _index = _os.path.join(_static_dir, "index.html")
+    if _os.path.exists(_index):
+        from fastapi.staticfiles import StaticFiles
+        app.mount("/", StaticFiles(directory=_static_dir, html=True), name="ui")
+    else:
+        @app.get("/")
+        async def _placeholder():
+            from fastapi.responses import HTMLResponse
+            return HTMLResponse("<!doctype html><meta charset=utf-8>"
+                                "<title>Eujeno node</title>"
+                                "<body style='font-family:system-ui;padding:40px'>"
+                                "<h1>Eujeno node</h1><p>Dashboard bundle not built. "
+                                "Run <code>npm --prefix app run build</code>. API is live at "
+                                "<code>/api/node</code>.</p></body>")
+
     return app

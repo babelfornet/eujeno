@@ -52,3 +52,16 @@ def test_node_api_real_data(full_model, tmp_path):
             assert any(p["url"] == uB for p in peers)
     finally:
         sA.should_exit = sB.should_exit = True
+
+
+def test_root_serves_placeholder_or_spa(full_model, tmp_path):
+    model, tokenizer = full_model
+    p = _free_port(); u = f"http://127.0.0.1:{p}"
+    s = _serve(create_app(model, tokenizer, StageSpec(embed=True, head=True, decoders=[(0,24)]),
+                          node_url=u, peers=[], num_layers=24, gossip_interval=0.3), p)
+    try:
+        import httpx
+        r = httpx.get(f"{u}/", timeout=10)
+        assert r.status_code == 200 and "Eujeno" in r.text
+    finally:
+        s.should_exit = True
