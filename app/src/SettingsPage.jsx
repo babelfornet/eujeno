@@ -58,7 +58,25 @@ function Card({ title, children, style: extraStyle }) {
 }
 
 // ── Field label ───────────────────────────────────────────────────────────────
-function Label({ children }) {
+// Marks a field that only takes effect when the node next launches.
+function LaunchBadge() {
+  return (
+    <span style={{
+      marginLeft: '8px',
+      fontSize: '10.5px',
+      fontWeight: '600',
+      color: 'var(--muted2,#7a828e)',
+      background: 'var(--section-bg,#f7f8fa)',
+      border: '1px solid var(--border,#e9ebef)',
+      borderRadius: '999px',
+      padding: '1px 8px',
+      whiteSpace: 'nowrap',
+      verticalAlign: 'middle',
+    }}>↻ restart to apply</span>
+  )
+}
+
+function Label({ children, launch }) {
   return (
     <label style={{
       display: 'block',
@@ -67,7 +85,7 @@ function Label({ children }) {
       color: 'var(--muted,#5b6471)',
       marginBottom: '7px',
     }}>
-      {children}
+      {children}{launch ? <LaunchBadge /> : null}
     </label>
   )
 }
@@ -97,12 +115,12 @@ function Select({ value, onChange, children }) {
 }
 
 // ── Slider with label + value badge ──────────────────────────────────────────
-function SliderField({ label, value, min, max, step, unit, onChange }) {
+function SliderField({ label, value, min, max, step, unit, onChange, launch }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '9px' }}>
         <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--muted,#5b6471)' }}>
-          {label}
+          {label}{launch ? <LaunchBadge /> : null}
         </label>
         <span style={{
           fontFamily: "'JetBrains Mono',monospace",
@@ -219,9 +237,9 @@ export default function SettingsPage({ T, accent, dark, theme, setTheme, setAcce
   }
 
   const TOGGLES = [
-    { key: 'autojoin',   label: 'Auto-join network',      desc: 'Automatically connect to the swarm when the node starts.' },
-    { key: 'contribute', label: 'Contribute layers',       desc: 'Donate GPU/CPU layers to the shared model serving pool.' },
-    { key: 'inbound',    label: 'Accept inbound traffic',  desc: 'Allow other nodes to connect directly to yours.' },
+    { key: 'autojoin',   label: 'Auto-join network',      desc: 'Automatically connect to the swarm when the node starts.', launch: true },
+    { key: 'contribute', label: 'Contribute layers',       desc: 'Donate GPU/CPU layers to the shared model serving pool.', launch: true },
+    { key: 'inbound',    label: 'Accept inbound traffic',  desc: 'Allow other nodes to connect directly to yours.', launch: true },
     { key: 'telemetry',  label: 'Share anonymous metrics', desc: 'Send anonymous performance stats to help improve the network.' },
   ]
 
@@ -339,7 +357,7 @@ export default function SettingsPage({ T, accent, dark, theme, setTheme, setAcce
 
             {/* Layer assignment segmented control */}
             <div>
-              <Label>Layer assignment</Label>
+              <Label launch>Layer assignment</Label>
               <div style={{
                 display: 'inline-flex',
                 padding: '3px',
@@ -383,6 +401,7 @@ export default function SettingsPage({ T, accent, dark, theme, setTheme, setAcce
               max={20}
               step={1}
               onChange={patchNum('maxLayers')}
+              launch
             />
 
             {/* Max RAM slider */}
@@ -394,11 +413,12 @@ export default function SettingsPage({ T, accent, dark, theme, setTheme, setAcce
               step={2}
               unit="GB"
               onChange={patchNum('maxRam')}
+              launch
             />
 
             {/* Public port */}
             <div>
-              <Label>Public port</Label>
+              <Label launch>Public port</Label>
               <input
                 type="number"
                 value={s.port}
@@ -447,6 +467,7 @@ export default function SettingsPage({ T, accent, dark, theme, setTheme, setAcce
               step={50}
               unit="Mbps"
               onChange={patchNum('bandwidth')}
+              launch
             />
           </div>
         </Card>
@@ -476,7 +497,7 @@ export default function SettingsPage({ T, accent, dark, theme, setTheme, setAcce
               >
                 <div>
                   <div style={{ fontSize: '14.5px', fontWeight: '600', color: 'var(--text,#0e1116)' }}>
-                    {t.label}
+                    {t.label}{t.launch ? <LaunchBadge /> : null}
                   </div>
                   <div style={{ fontSize: '13px', color: 'var(--muted2,#7a828e)', marginTop: '2px' }}>
                     {t.desc}
