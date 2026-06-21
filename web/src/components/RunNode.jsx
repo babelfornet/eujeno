@@ -11,11 +11,11 @@ const DOWNLOADS = [
   { os: 'Windows', sub: 'x86-64', asset: 'eujeno-windows-x64.exe' },
 ]
 
-const RUN_CMD = `curl -fsSL ${REL}/eujeno-macos-arm64 -o eujeno && chmod +x eujeno
+const RUN_CMD = `curl -fsSL https://eujeno.com/install.sh | sh
 # Join an existing network:
-./eujeno serve --peers http://SEED:8001 --model Qwen/Qwen2.5-7B-Instruct
+eujeno serve --peers http://SEED:8001 --model Qwen/Qwen2.5-7B-Instruct
 # …or create a new one:
-./eujeno up --model Qwen/Qwen2.5-7B-Instruct`
+eujeno up --model Qwen/Qwen2.5-7B-Instruct`
 
 const CHECKS = [
   { title: 'No Python to install', body: 'The binary provisions its own runtime on first run.' },
@@ -141,23 +141,20 @@ export default function RunNode() {
             </button>
           </div>
           <div style={{ padding: '20px 18px', fontFamily: mono, fontSize: '12.5px', lineHeight: 1.85, color: '#dce3ee' }}>
-            <div style={{ color: '#6b7689' }}># download the binary for your OS</div>
+            <div style={{ color: '#6b7689' }}># install (macOS &amp; Linux)</div>
             <div>
-              <span style={{ color: '#8b86ff' }}>$</span> curl -fsSL .../eujeno-macos-arm64 -o eujeno
-            </div>
-            <div>
-              <span style={{ color: '#8b86ff' }}>$</span> chmod +x eujeno
+              <span style={{ color: '#8b86ff' }}>$</span> curl -fsSL https://eujeno.com/install.sh | sh
             </div>
             <div style={{ height: '10px' }} />
             <div style={{ color: '#6b7689' }}># join an existing network…</div>
             <div>
-              <span style={{ color: '#8b86ff' }}>$</span> ./eujeno serve --peers http://SEED:8001 \
+              <span style={{ color: '#8b86ff' }}>$</span> eujeno serve --peers http://SEED:8001 \
             </div>
             <div>{'      '}--model Qwen/Qwen2.5-7B-Instruct</div>
             <div style={{ height: '10px' }} />
             <div style={{ color: '#6b7689' }}># …or create a new one</div>
             <div>
-              <span style={{ color: '#8b86ff' }}>$</span> ./eujeno up --model Qwen/Qwen2.5-7B-Instruct
+              <span style={{ color: '#8b86ff' }}>$</span> eujeno up --model Qwen/Qwen2.5-7B-Instruct
             </div>
             <div style={{ height: '10px' }} />
             <div style={{ color: '#6b7689' }}>

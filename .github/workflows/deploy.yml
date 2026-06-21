@@ -6,6 +6,7 @@ on:
     paths:
       - 'web/**'
       - 'docs/**'
+      - 'install.sh'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
@@ -44,7 +45,7 @@ jobs:
       - name: Build docs
         working-directory: docs
         env:
-          BASE_PATH: /eujeno/docs
+          BASE_PATH: /docs
         run: |
           npm ci
           npm run build
@@ -52,6 +53,10 @@ jobs:
       # Combine: mount the docs export under /docs of the landing output.
       - name: Combine outputs
         run: cp -r docs/out web/dist/docs
+
+      # Serve the one-line installer at the site root (eujeno.com/install.sh).
+      - name: Stage install script
+        run: cp install.sh web/dist/install.sh
 
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5

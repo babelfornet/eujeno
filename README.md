@@ -6,7 +6,17 @@
 
 ## Installation / Getting started
 
-After `git clone`, get going right away with the auto-bootstrap launcher (it creates `.venv` and installs on first run):
+**Quick install** (macOS & Linux — one line, no clone, no Python needed):
+
+```bash
+curl -fsSL https://eujeno.com/install.sh | sh
+```
+
+This installs the native `eujeno` launcher; on first run it provisions its own Python runtime (with the right PyTorch backend) and the eujeno wheel. Windows: download `eujeno-windows-x64.exe` from the [latest release](https://github.com/babelfornet/eujeno/releases/latest). Pin a version with `EUJENO_VERSION=v0.1.0`.
+
+---
+
+Or, after `git clone`, get going with the auto-bootstrap launcher (it creates `.venv` and installs on first run):
 
 ```bash
 ./bin/eujeno --help                 # first run: creates .venv + pip install -e . , then runs
