@@ -1,9 +1,10 @@
 Eujeno — Decentralized peer-to-peer LLM inference network
 Copyright 2026 Alberto Ferrazzoli <alberto.ferrazzoli@gmail.com>
 
-This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+This product is licensed under the Business Source License 1.1 (BUSL-1.1).
+On the Change Date specified in LICENSE, the license changes to the Apache
+License, Version 2.0.
 
 "Eujeno" and the Eujeno logo are trademarks of Alberto Ferrazzoli.
-The Apache License 2.0 does NOT grant permission to use these trademarks
-(see section 6 of the License). Use of the name and logo is governed by
-TRADEMARKS.md.
+The Business Source License 1.1 does not grant permission to use these
+trademarks. Use of the name and logo is governed by TRADEMARKS.md.

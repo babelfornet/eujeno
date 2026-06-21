@@ -3,10 +3,11 @@
 **Owner:** Alberto Ferrazzoli ("the Owner")
 **Marks:** the name **"Eujeno"** and the Eujeno logo (the "Marks").
 
-The Eujeno **source code** is free and open under the Apache License 2.0.
-The **Marks are not** part of that license — Apache-2.0 §6 explicitly does not
-grant trademark rights. This policy explains how you may, and may not, use the
-Marks. The goal is simple: keep the code maximally free, while making sure
+The Eujeno **source code** is source-available under the Business Source
+License 1.1 (BUSL-1.1). On the Change Date specified in [LICENSE](./LICENSE),
+each version becomes available under the Apache License 2.0. The **Marks are
+not** part of either license, and neither license grants trademark rights. This
+policy explains how you may, and may not, use the Marks. The goal is to ensure
 users can always tell what is the **official** Eujeno and what is not.
 
 > **Not legal advice.** This is a template policy. "Eujeno" is a coined,
@@ -38,18 +39,20 @@ users can always tell what is the **official** Eujeno and what is not.
 
 ## Forks and modified versions
 
-You are free to fork and modify the code (that is what Apache-2.0 is for).
-But if you **distribute a modified version** as a product, you must **not**
-present it under the name "Eujeno" in a way that could confuse users into
-thinking it is the official project. Pick your own name; you may state,
-factually, that it is "based on Eujeno" or "a fork of Eujeno".
+You may fork and modify the code subject to BUSL-1.1 and, after the applicable
+Change Date, Apache-2.0. If you **distribute a modified version** as a product,
+you must **not** present it under the name "Eujeno" in a way that could confuse
+users into thinking it is the official project. Pick your own name; you may
+state, factually, that it is "based on Eujeno" or "a fork of Eujeno".
 
 ## Hosted / commercial services
 
-You may run Eujeno (modified or not) as a hosted or commercial service —
-Apache-2.0 allows it. You may say your service "runs Eujeno" or is "based on
-Eujeno". You may **not** name the service itself "Eujeno" or otherwise imply it is
-the official offering without permission.
+Before the applicable Change Date, production use—including operation as a
+hosted or commercial service—requires a commercial license from the Licensor.
+After that Change Date, Apache-2.0 permits such use. In either case, you may say
+your properly licensed service "runs Eujeno" or is "based on Eujeno". You may
+**not** name the service itself "Eujeno" or otherwise imply it is the official
+offering without permission.
 
 ## Requesting permission
 

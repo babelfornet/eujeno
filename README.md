@@ -86,4 +86,4 @@ Python · Hugging Face `transformers` + `accelerate` + `safetensors` · `hivemin
 
 ## License
 
-[Apache-2.0](./LICENSE). "Eujeno" and the Eujeno logo are trademarks of the project owner — see [TRADEMARKS.md](./TRADEMARKS.md) and [NOTICE](./NOTICE).
+[Business Source License 1.1 (BUSL-1.1)](./LICENSE), changing to Apache-2.0 on June 21, 2030 at the latest. Production use before the applicable Change Date requires a commercial license. "Eujeno" and the Eujeno logo are trademarks of the project owner — see [TRADEMARKS.md](./TRADEMARKS.md) and [NOTICE](./NOTICE).

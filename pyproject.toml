@@ -7,7 +7,7 @@ name = "eujeno"
 version = "0.0.1"
 description = "Decentralized peer-to-peer LLM inference network"
 requires-python = ">=3.11"
-license = "Apache-2.0"
+license = "BUSL-1.1"
 license-files = ["LICENSE"]
 authors = [{ name = "Alberto Ferrazzoli", email = "alberto.ferrazzoli@gmail.com" }]
 dependencies = [
