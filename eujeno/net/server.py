@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import logging
 import time
 from contextlib import asynccontextmanager
 
@@ -14,13 +15,14 @@ from eujeno.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_dec
 from eujeno.net.wire import encode_tensors, decode_tensors
 from eujeno.net.discovery import Registry, build_chain
 from eujeno.net.generation import generate_tokens
+from eujeno.net.jobstore import JobStore
 from eujeno.net.tools import extract_tool_calls
 
 _OCTET = "application/octet-stream"
 
 
 def create_app(model, tokenizer, stages, node_url=None, peers=None,
-               num_layers=None, gossip_interval=2.0, ttl=30.0):
+               num_layers=None, gossip_interval=2.0, ttl=30.0, db_path=None):
     """Create the FastAPI app of a BlockServer. With node_url/peers it enables
     decentralized gossip discovery (Mode A); without, Part 1 behavior."""
     embed_block = EmbedBlock(model.model.embed_tokens) if stages.embed else None
@@ -44,6 +46,14 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
                 stop_ids.add(int(_i))
     _model_id = getattr(model.config, "_name_or_path", "eujeno")
     _entry_job = {"n": 0}
+    store = JobStore(db_path if db_path is not None else ":memory:")
+    store.recover()
+
+    def _store_safe(fn, *args):
+        try:
+            fn(*args)
+        except Exception as e:
+            logging.getLogger("eujeno.node").warning("jobstore write failed: %s", e)
 
     async def _gossip_loop():
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -145,32 +155,52 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
             prompt = "\n".join((m.get("content") or "") for m in messages)
         _entry_job["n"] += 1
         job_id = f"entry{_entry_job['n']}"
-        async with httpx.AsyncClient(timeout=300.0) as client:
-            async def run_embed(cur):
-                r = await client.post(f"{embed_url}/embed", params={"job_id": job_id},
-                                      content=encode_tensors({"input_ids": cur}))
-                return decode_tensors(r.content)["hidden_states"]
+        prompt_len0 = int(tokenizer(prompt, return_tensors="pt").input_ids.shape[1])
+        _store_safe(store.create_job, job_id, _model_id, prompt, sampling, prompt_len0)
+        receipts = {}
 
-            async def run_decoders(h, cache_position):
-                for bk, url in decoders:
-                    r = await client.post(f"{url}/decode/{bk}", params={"job_id": job_id},
-                                          content=encode_tensors({"hidden_states": h, "cache_position": cache_position}))
-                    h = decode_tensors(r.content)["hidden_states"]
-                return h
+        def _rcacc(url, sent, recv, dt):
+            r = receipts.setdefault(url, {"hops": 0, "bytes": 0, "t_compute": 0.0})
+            r["hops"] += 1
+            r["bytes"] += sent + recv
+            r["t_compute"] += dt
 
-            async def run_head(h, topk):
-                r = await client.post(f"{head_url}/head", params={"job_id": job_id, "topk": topk},
-                                      content=encode_tensors({"hidden_states": h}))
-                return r.json()
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                async def run_embed(cur):
+                    payload = encode_tensors({"input_ids": cur}); t0 = time.monotonic()
+                    r = await client.post(f"{embed_url}/embed", params={"job_id": job_id}, content=payload)
+                    _rcacc(embed_url, len(payload), len(r.content), time.monotonic() - t0)
+                    return decode_tensors(r.content)["hidden_states"]
 
-            tokens, prompt_len, finish_reason = await generate_tokens(
-                tokenizer, prompt, max_new, sampling, stop_ids, run_embed, run_decoders, run_head)
-            for url in {embed_url, head_url, *(u for _, u in decoders)}:
-                try:
-                    await client.delete(f"{url}/job/{job_id}")
-                except Exception:
-                    pass
+                async def run_decoders(h, cache_position):
+                    for bk, url in decoders:
+                        payload = encode_tensors({"hidden_states": h, "cache_position": cache_position}); t0 = time.monotonic()
+                        r = await client.post(f"{url}/decode/{bk}", params={"job_id": job_id}, content=payload)
+                        _rcacc(url, len(payload), len(r.content), time.monotonic() - t0)
+                        h = decode_tensors(r.content)["hidden_states"]
+                    return h
+
+                async def run_head(h, topk):
+                    payload = encode_tensors({"hidden_states": h}); t0 = time.monotonic()
+                    r = await client.post(f"{head_url}/head", params={"job_id": job_id, "topk": topk}, content=payload)
+                    _rcacc(head_url, len(payload), len(r.content), time.monotonic() - t0)
+                    return r.json()
+
+                tokens, prompt_len, finish_reason = await generate_tokens(
+                    tokenizer, prompt, max_new, sampling, stop_ids, run_embed, run_decoders, run_head)
+                for url in {embed_url, head_url, *(u for _, u in decoders)}:
+                    try:
+                        await client.delete(f"{url}/job/{job_id}")
+                    except Exception:
+                        pass
+        except Exception as e:
+            _store_safe(store.fail, job_id, str(e))
+            return JSONResponse({"error": {"message": str(e), "type": "generation_failed"}}, status_code=502)
+
         text = tokenizer.decode(tokens, skip_special_tokens=True)
+        _store_safe(store.finish, job_id, text, finish_reason)
+        _store_safe(store.add_receipts, job_id, receipts)
         content, tool_calls = extract_tool_calls(text)
         message = {"role": "assistant", "content": (content if content else None)}
         if tool_calls:
@@ -181,5 +211,20 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
                 "choices": [{"index": 0, "message": message, "finish_reason": finish_reason}],
                 "usage": {"prompt_tokens": prompt_len, "completion_tokens": len(tokens),
                           "total_tokens": prompt_len + len(tokens)}}
+
+    @app.get("/jobs")
+    async def list_jobs(limit: int = 50):
+        return {"jobs": store.recent_jobs(limit)}
+
+    @app.get("/jobs/{job_id}")
+    async def get_job(job_id: str):
+        j = store.get_job(job_id)
+        if j is None:
+            return JSONResponse({"error": "job not found"}, status_code=404)
+        return j
+
+    @app.get("/jobs/{job_id}/receipts")
+    async def get_receipts(job_id: str):
+        return {"receipts": store.get_receipts(job_id)}
 
     return app
