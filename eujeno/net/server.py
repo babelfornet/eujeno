@@ -4,6 +4,7 @@
 import asyncio
 import logging
 import time
+import uuid
 from contextlib import asynccontextmanager
 
 import httpx
@@ -46,14 +47,16 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
                 stop_ids.add(int(_i))
     _model_id = getattr(model.config, "_name_or_path", "eujeno")
     _entry_job = {"n": 0}
+    _proc = uuid.uuid4().hex[:8]
     store = JobStore(db_path if db_path is not None else ":memory:")
-    store.recover()
 
     def _store_safe(fn, *args):
         try:
             fn(*args)
         except Exception as e:
             logging.getLogger("eujeno.node").warning("jobstore write failed: %s", e)
+
+    _store_safe(store.recover)
 
     async def _gossip_loop():
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -154,7 +157,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
         except Exception:
             prompt = "\n".join((m.get("content") or "") for m in messages)
         _entry_job["n"] += 1
-        job_id = f"entry{_entry_job['n']}"
+        job_id = f"entry-{_proc}-{_entry_job['n']}"
         prompt_len0 = int(tokenizer(prompt, return_tensors="pt").input_ids.shape[1])
         _store_safe(store.create_job, job_id, _model_id, prompt, sampling, prompt_len0)
         receipts = {}
@@ -196,6 +199,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
                         pass
         except Exception as e:
             _store_safe(store.fail, job_id, str(e))
+            _store_safe(store.add_receipts, job_id, receipts)
             return JSONResponse({"error": {"message": str(e), "type": "generation_failed"}}, status_code=502)
 
         text = tokenizer.decode(tokens, skip_special_tokens=True)
