@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { getSettings, putSettings } from './api.js'
+import { getSettings, putSettings, getNode } from './api.js'
 import { ACCENTS } from './theme.js'
 
 // ── Toggle switch ─────────────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ function SliderField({ label, value, min, max, step, unit, onChange }) {
 const DEFAULT_SETTINGS = {
   peerId:     '',
   name:       '',
-  model:      'swarm/llama-3-70b',
+  model:      '',
   layerMode:  'auto',
   maxLayers:  8,
   maxRam:     16,
@@ -150,6 +150,9 @@ export default function SettingsPage({ T, accent, dark, theme, setTheme, setAcce
   const [saved,   setSaved]   = useState(false)
   const [saving,  setSaving]  = useState(false)
   const [loading, setLoading] = useState(true)
+  // The model the node actually serves is fixed at launch (serve --model); read it
+  // from /api/node rather than letting it be "chosen" here.
+  const [servedModel, setServedModel] = useState('')
 
   // Load settings on mount
   useEffect(() => {
@@ -164,6 +167,9 @@ export default function SettingsPage({ T, accent, dark, theme, setTheme, setAcce
       .catch(() => {
         if (!cancelled) setLoading(false)
       })
+    getNode()
+      .then(n => { if (!cancelled) setServedModel(n.model || '') })
+      .catch(() => {})
     return () => { cancelled = true }
   }, [])
 
@@ -309,15 +315,26 @@ export default function SettingsPage({ T, accent, dark, theme, setTheme, setAcce
         <Card title="Node">
           <div style={{ marginTop: '18px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
 
-            {/* Model */}
+            {/* Model — the served model is fixed at node launch (serve --model); read-only */}
             <div>
               <Label>Model</Label>
-              <Select value={s.model} onChange={patch('model')}>
-                <option value="swarm/llama-3-70b">swarm/llama-3-70b</option>
-                <option value="swarm/mixtral-8x22b">swarm/mixtral-8x22b</option>
-                <option value="swarm/qwen-2-72b">swarm/qwen-2-72b</option>
-                <option value="swarm/falcon-180b">swarm/falcon-180b</option>
-              </Select>
+              <div style={{
+                fontFamily: "'JetBrains Mono',monospace",
+                fontSize: '13.5px',
+                color: 'var(--text,#0e1116)',
+                background: 'var(--section-bg,#f7f8fa)',
+                border: '1px solid var(--border,#e9ebef)',
+                borderRadius: '9px',
+                padding: '11px 13px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                {loading ? '—' : (servedModel || '—')}
+              </div>
+              <div style={{ marginTop: '6px', fontSize: '12px', color: 'var(--muted2,#7a828e)' }}>
+                Set when the node is launched (<code>serve --model</code>); restart the node to change it.
+              </div>
             </div>
 
             {/* Layer assignment segmented control */}
