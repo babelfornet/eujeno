@@ -90,7 +90,8 @@ export default function NetworkPage({ T, accent, dark, node, metrics }) {
   }
 
   const isOnline = node?.status === 'serving' || node?.status === 'online'
-  const swarmCount = Math.max(6, metrics?.connectedPeers ?? 0)
+  // Real swarm size = this node + its connected peers (not a decorative minimum).
+  const swarmCount = (metrics?.connectedPeers ?? 0) + 1
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
