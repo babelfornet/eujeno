@@ -4,6 +4,7 @@ import { getNode, getMetrics } from './api.js'
 import Sidebar from './Sidebar.jsx'
 import NetworkPage from './NetworkPage.jsx'
 import ChatPage from './ChatPage.jsx'
+import SettingsPage from './SettingsPage.jsx'
 
 export default function App() {
   // Theme state
@@ -85,15 +86,14 @@ export default function App() {
           <ChatPage T={T} accent={accent} />
         )}
         {view === 'settings' && (
-          <div style={{flex:'1', display:'flex', alignItems:'center', justifyContent:'center',
-                       flexDirection:'column', gap:'8px', color:T.muted}}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3.1"/>
-              <path d="M12 3.5v2.3M12 18.2v2.3M3.5 12h2.3M18.2 12h2.3M6 6l1.6 1.6M16.4 16.4 18 18M18 6l-1.6 1.6M7.6 16.4 6 18"/>
-            </svg>
-            <span style={{fontSize:'15px', fontWeight:'600'}}>Settings</span>
-            <span style={{fontSize:'13px', color:T.muted2}}>Coming soon</span>
-          </div>
+          <SettingsPage
+            T={T}
+            accent={accent}
+            dark={theme === 'dark'}
+            theme={theme}
+            setTheme={setTheme}
+            setAccent={setAccent}
+          />
         )}
       </main>
     </div>
