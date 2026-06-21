@@ -50,12 +50,30 @@ func main() {
 }
 
 func run(args []string) error {
+	// `--version` is answered by the launcher itself — the version is baked in
+	// at build time, so there is no need to provision the Python runtime.
+	if isVersionRequest(args) {
+		fmt.Println(versionLine())
+		return nil
+	}
+
 	rt := runtimeDir()
 	venv := filepath.Join(rt, "venv")
 	uvPath := filepath.Join(rt, uvBin())
 	stamp := filepath.Join(rt, ".installed")
 
-	if os.Getenv("EUJENO_FORCE_BOOTSTRAP") != "" || !upToDate(stamp) {
+	provisioned := os.Getenv("EUJENO_FORCE_BOOTSTRAP") == "" && upToDate(stamp)
+
+	// Before the runtime exists, answer `--help` (and a bare invocation) with a
+	// concise launcher help rather than provisioning Python just to print it.
+	// Once provisioned, help falls through to the real CLI for the full,
+	// per-command output.
+	if !provisioned && isHelpRequest(args) {
+		fmt.Print(helpText())
+		return nil
+	}
+
+	if !provisioned {
 		fmt.Fprintln(os.Stderr, "eujeno: first-run setup (one time) — provisioning Python + torch…")
 		if err := bootstrap(rt, venv, uvPath); err != nil {
 			return err
@@ -66,6 +84,62 @@ func run(args []string) error {
 		fmt.Fprintln(os.Stderr, "eujeno: ready.")
 	}
 	return execEujeno(venv, args)
+}
+
+// isVersionRequest reports whether the launcher should print its version and
+// exit — true only when a version flag is the first argument (so that, e.g.,
+// `eujeno serve --version` is left to the real CLI).
+func isVersionRequest(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "--version", "-V", "version":
+		return true
+	}
+	return false
+}
+
+// isHelpRequest reports whether this is a top-level help request (a bare
+// invocation, or a help flag as the first argument). Per-command help such as
+// `eujeno serve --help` is left to the real CLI.
+func isHelpRequest(args []string) bool {
+	if len(args) == 0 {
+		return true
+	}
+	switch args[0] {
+	case "--help", "-h", "help":
+		return true
+	}
+	return false
+}
+
+func versionLine() string {
+	return "eujeno " + eujenoVersion
+}
+
+func helpText() string {
+	return "eujeno " + eujenoVersion + " — decentralized peer-to-peer LLM inference\n" + `
+The first real command provisions a private Python runtime (one time);
+version and help are answered instantly, without it.
+
+Usage:
+  eujeno <command> [options]
+
+Common commands:
+  up     --model <id>                          start a coordinator + a node covering the whole model
+  serve  --peers <url> --model <id>            run a node and join an existing network
+  infer  --coordinator <url> --prompt "..."    query the distributed model
+  models                                        list compatible models
+  ui     --node <url>                           open a node's dashboard
+
+Flags:
+  --version, -V    print the eujeno version
+  --help, -h       show this help (full per-command help is available after first run)
+
+Every command also accepts --json for machine-readable output.
+Docs: https://eujeno.com/docs
+`
 }
 
 // installID identifies the currently-provisioned runtime so we know when to
