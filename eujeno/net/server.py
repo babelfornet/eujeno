@@ -90,16 +90,27 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
         while True:
             now = time.time()
             try:
+                adv = None
                 if node_url:
                     adv = {**own_stages, "name": config.get()["name"], "region": config.get()["region"]}
                     if config.get().get("telemetry"):
                         adv["tput"] = metrics.throughput_tok_s()
                     registry.upsert(node_url, adv, now=now, ttl=ttl)
                 for peer in (peers or []):
+                    # pull: learn what the peer already knows
                     try:
                         registry.merge(_get_json(f"{peer}/registry").get("nodes", {}), now=now, ttl=ttl)
                     except Exception:
                         pass
+                    # push: announce ourselves so the peer learns us even when we
+                    # are not in its static --peers list. Without this a node that
+                    # joined via a seed stays invisible to the rest of the swarm
+                    # (pull-only gossip makes a new node a sink).
+                    if adv is not None:
+                        try:
+                            httpx.post(f"{peer}/registry", json={"url": node_url, "node": adv}, timeout=5.0)
+                        except Exception:
+                            pass
                 registry.prune(now)
             except Exception:
                 pass
@@ -269,6 +280,22 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
     async def get_registry():
         return {"num_layers": num_layers, "model": getattr(model.config, "_name_or_path", "?"),
                 "nodes": registry.stages_by_url(time.time())}
+
+    @app.post("/registry")
+    async def post_registry(req: Request):
+        """Receive a peer's self-announcement (gossip push) and merge it. This is
+        what lets a node that joined via us — but isn't in our static --peers
+        list — become known to the whole swarm."""
+        try:
+            body = await req.json()
+            now = time.time()
+            if isinstance(body, dict) and body.get("url"):
+                registry.upsert(body["url"], body.get("node") or {}, now=now, ttl=ttl)
+            elif isinstance(body, dict) and isinstance(body.get("nodes"), dict):
+                registry.merge(body["nodes"], now=now, ttl=ttl)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     @app.get("/health")
     async def health():
