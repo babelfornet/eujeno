@@ -3,6 +3,7 @@
 
 import asyncio
 import logging
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -65,59 +66,70 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
 
     _store_safe(store.recover)
 
-    async def _gossip_loop():
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            while True:
-                now = time.time()
+    def _get_json(url, timeout=5.0):
+        """Blocking GET → JSON, used by the gossip thread (sync httpx)."""
+        r = httpx.get(url, timeout=timeout)
+        r.raise_for_status()
+        return r.json()
+
+    def _ping_ms(url, timeout=3.0):
+        """Blocking GET; returns round-trip latency in ms."""
+        t0 = time.monotonic()
+        httpx.get(url, timeout=timeout).raise_for_status()
+        return (time.monotonic() - t0) * 1000
+
+    # Discovery runs in plain daemon OS threads with *sync* httpx, NOT asyncio tasks.
+    # On some hosts the asyncio transport silently stalled the gossip pull inside the
+    # uvicorn event loop (loop alive, 0% CPU, awaited pulls never firing) while
+    # inference still worked; a dedicated thread sidesteps the event loop entirely.
+    # Registry is thread-safe (its own lock), so concurrent reads from the async
+    # request handlers are safe.
+    peer_fail: dict[str, int] = {}
+
+    def _gossip_thread():
+        while True:
+            now = time.time()
+            try:
                 if node_url:
-                    # Build a fresh advertised dict each tick; do NOT mutate own_stages
                     adv = {**own_stages, "name": config.get()["name"], "region": config.get()["region"]}
                     if config.get().get("telemetry"):
                         adv["tput"] = metrics.throughput_tok_s()
                     registry.upsert(node_url, adv, now=now, ttl=ttl)
                 for peer in (peers or []):
                     try:
-                        resp = await client.get(f"{peer}/registry")
-                        registry.merge(resp.json().get("nodes", {}), now=now, ttl=ttl)
+                        registry.merge(_get_json(f"{peer}/registry").get("nodes", {}), now=now, ttl=ttl)
                     except Exception:
                         pass
                 registry.prune(now)
-                await asyncio.sleep(gossip_interval)
+            except Exception:
+                pass
+            time.sleep(gossip_interval)
 
-    peer_fail: dict[str, int] = {}
-
-    async def _probe_loop():
+    def _probe_thread():
         """Ping each peer every 5 s; record latency + update peer_status."""
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            while True:
-                now = time.time()
-                nodes = registry.stages_by_url(now)
-                for url in list(nodes.keys()):
+        while True:
+            now = time.time()
+            try:
+                for url in list(registry.stages_by_url(now).keys()):
                     if url == node_url:
                         continue
                     try:
-                        t0 = time.monotonic()
-                        await client.get(f"{url}/health")
-                        ms = (time.monotonic() - t0) * 1000
-                        metrics.observe_latency(url, ms)
+                        metrics.observe_latency(url, _ping_ms(f"{url}/health"))
                         peer_status[url] = "online"
                         peer_fail[url] = 0
                     except Exception:
                         peer_fail[url] = peer_fail.get(url, 0) + 1
                         peer_status[url] = "offline" if peer_fail[url] >= 3 else "syncing"
-                await asyncio.sleep(5.0)
+            except Exception:
+                pass
+            time.sleep(5.0)
 
     @asynccontextmanager
     async def lifespan(_app):
-        gossip_task = asyncio.create_task(_gossip_loop()) if node_url else None
-        probe_task = asyncio.create_task(_probe_loop()) if node_url else None
-        try:
-            yield
-        finally:
-            if gossip_task:
-                gossip_task.cancel()
-            if probe_task:
-                probe_task.cancel()
+        if node_url:
+            threading.Thread(target=_gossip_thread, daemon=True).start()
+            threading.Thread(target=_probe_thread, daemon=True).start()
+        yield
 
     app = FastAPI(lifespan=lifespan)
 

@@ -1,24 +1,35 @@
 # SPDX-FileCopyrightText: 2026 Alberto Ferrazzoli <alberto.ferrazzoli@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
 
+import threading
+
+
 class Registry:
     """Decentralized discovery state: url -> {stages, expiry}. Relative TTL:
-    learned entries expire at now+ttl unless refreshed by the gossip."""
+    learned entries expire at now+ttl unless refreshed by the gossip.
+
+    Thread-safe: the node's gossip/probe run in a daemon OS thread (writes) while
+    the async request handlers read concurrently, so every accessor takes a lock."""
     def __init__(self):
         self.entries = {}   # url -> {"stages": dict, "expiry": float}
+        self._lock = threading.RLock()
 
     def upsert(self, url: str, stages: dict, now: float, ttl: float) -> None:
-        self.entries[url] = {"stages": stages, "expiry": now + ttl}
-
-    def merge(self, stages_by_url: dict, now: float, ttl: float) -> None:
-        for url, stages in stages_by_url.items():
+        with self._lock:
             self.entries[url] = {"stages": stages, "expiry": now + ttl}
 
+    def merge(self, stages_by_url: dict, now: float, ttl: float) -> None:
+        with self._lock:
+            for url, stages in stages_by_url.items():
+                self.entries[url] = {"stages": stages, "expiry": now + ttl}
+
     def prune(self, now: float) -> None:
-        self.entries = {u: e for u, e in self.entries.items() if e["expiry"] > now}
+        with self._lock:
+            self.entries = {u: e for u, e in self.entries.items() if e["expiry"] > now}
 
     def stages_by_url(self, now: float) -> dict:
-        return {u: e["stages"] for u, e in self.entries.items() if e["expiry"] > now}
+        with self._lock:
+            return {u: e["stages"] for u, e in self.entries.items() if e["expiry"] > now}
 
 
 def build_chain(stages_by_url: dict, num_layers: int, exclude=None, load=None, reputation=None, speed=None):
