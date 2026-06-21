@@ -113,7 +113,22 @@ Each item is an independent spec → plan → build cycle.
 - **P2 — Accounting plugin (lightweight ledger).** Build on existing receipts; hash-linked log + gossiped checkpoints; `LedgerBackend` interface with a **blockchain adapter as opt-in**.
 - **P3 — Verifier integration, then Incentives plugin.** First wire `sampling.py` into the hop path (prerequisite); then incentives as policy over accounting + reputation.
 - **P4 — Crypto plugin (hop-by-hop encryption).** Designed **jointly** with the verification story; key model per posture.
-- **Separate track — Replicated coordinator.** Its own project (Raft cluster replicating the SQLite routing state, or prefer-P2P), as an opt-in attack-resistance mode.
+- **Track R (separate, parallel) — Replicated coordinator.** Not a plugin but a network **topology mode**, so it enters the plan in *two* places: (1) its slot is **reserved in P0** as the manifest field `coordinator.mode: p2p | single | replicated`, so the option exists declaratively from day one; (2) the **implementation** is its own project, gated *only* on P0 and **independent of the plugins** (P1–P4). It is the highest-complexity new piece (needs a consensus protocol). Internal sub-phases: **R1** replicate routing/registry state across N coordinators (Raft; the durable SQLite job log is the replication substrate) → **R2** leader election + node/client failover → **R3** geo-distribution + split-brain handling.
+
+### Dependency & ordering
+
+```
+P0  framework + manifest  (incl. the coordinator.mode slot)
+ ├─ P1  DDoS / admission
+ ├─ P2  Accounting (lightweight ledger)
+ ├─ P3  Verifier integration → Incentives
+ ├─ P4  Crypto (hop-by-hop)
+ └─ Track R  Replicated coordinator     (gated only on P0; runs in parallel; lowest priority)
+       R1 Raft state replication → R2 leader election + failover → R3 geo-distribution
+```
+
+- **Composition:** Track R pairs with **P1 (DDoS)** to harden the relay against takedown + flooding, and is compatible with **P4 (crypto)** because replicas relay **ciphertext blind** — no replica ever sees plaintext activations.
+- **Priority:** build Track R **last / on demand**, not speculatively. Pure P2P is already maximally redundant (zero SPOF), so Track R only earns its cost where a relay is *required* (NAT-bound) **and** a single relay is unacceptable — the most expensive piece for a benefit pure-P2P partly already provides.
 
 ## 7. What to reframe vs the original proposal
 
