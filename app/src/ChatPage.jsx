@@ -104,7 +104,7 @@ export default function ChatPage({ T, accent }) {
       if (ej) {
         const hops   = ej.hops   != null ? ej.hops   : null
         const layers = ej.layers != null ? ej.layers : null
-        const tokS   = ej.tok_s  != null ? Math.round(ej.tok_s) : null
+        const tokS   = (ej.tokS ?? ej.tok_s) != null ? Math.round(ej.tokS ?? ej.tok_s) : null
         if (hops != null && layers != null && tokS != null) {
           routing = `routed through ${hops} nodes · ${layers} layers · ${tokS} tok/s`
         }

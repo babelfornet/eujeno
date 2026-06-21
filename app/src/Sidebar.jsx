@@ -68,8 +68,8 @@ export default function Sidebar({ view, setView, collapsed, toggle, T, accent, n
   const navSet  = navItem('settings')
 
   // Status card values
-  const peerId  = node?.peer_id  ? `node·${node.peer_id.slice(0,6)}`  : 'node·—'
-  const peerCnt = metrics?.peers ?? 0
+  const peerId  = node?.peerId  ? `node·${node.peerId.slice(0,6)}`  : 'node·—'
+  const peerCnt = metrics?.connectedPeers ?? 0
   const model   = node?.model    ?? '—'
 
   return (
