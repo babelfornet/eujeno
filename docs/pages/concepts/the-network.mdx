@@ -1,0 +1,86 @@
+---
+title: The Network
+---
+
+import { Callout } from 'nextra/components'
+
+# The Network
+
+Every Eujeno node is **symmetric**: the same software runs on every peer, with no
+special roles. Each node runs the full set of subsystems below — what differs
+between nodes is only which blocks they happen to hold and which jobs they are
+currently driving.
+
+<Callout type="info">
+Eujeno is a PoC under construction. Distributed inference across multiple nodes
+already works (orchestrator-driven); DHT discovery, the durable store-and-forward
+queue, and automatic failover are designed and in progress. Each component below
+notes its status.
+</Callout>
+
+## Subsystems each node runs
+
+### Layer Executor
+
+Runs the transformer blocks the node holds, on Hugging Face / PyTorch. It loads
+only the assigned layers (partial loading), takes an incoming hidden state, runs
+its block, and produces the next hidden state. **Status: working** — this is what
+already reproduces the full model exactly across multiple nodes.
+
+### DHT Agent — discovery
+
+Answers the question "who has which block?". It announces the blocks this node
+serves and discovers the holders of other blocks, plus node health. Discovery is
+the **metadata plane only**: it carries records about blocks and liveness, never
+the activations themselves. Each block holder publishes a record keyed by
+`{model_id}/block:{lo}-{hi}` with its inbox URL, block range, a TTL/expiry used
+as a liveness signal (refreshed periodically), and `load`/`reputation` fields.
+The primary implementation is built on `hivemind.DHT`, behind a
+`DiscoveryProvider` abstraction with a Kademlia fallback for LAN/VPN. **Status:
+designed (next step).**
+
+### Router / Dispatcher — routing and failover
+
+For each hop, the router looks up the live holders of the next block, selects one
+(preferring lower `load` and higher `reputation`), and forwards the hidden state
+to that holder's inbox. On timeout, error, or missing ACK it **re-dispatches** to
+another holder — because the activation is already persisted by the Job Store, no
+work is lost. **Status: designed; failover depends on the durable Job Store.**
+
+### Durable Job Store
+
+A per-node, crash-safe store: **SQLite in WAL mode** for job and stage state plus
+**on-disk blobs** (safetensors) for activations and KV-cache. It is the substrate
+that makes inference a durable, store-and-forward job: every hop is persisted
+before being forwarded, keyed by `(job_id, stage)` so it can be retried
+idempotently. **Status: durable SQLite job log is in use on the coordinator (jobs
+are persisted and inspectable); the full peer-driven store-and-forward substrate
+is in progress.**
+
+### Allocator — self-assignment
+
+When a node joins, the Allocator scans coverage, finds blocks that are not yet
+covered (or the least-replicated ones), and **self-assigns** a block by itself —
+picking at random among the uncovered blocks with a jittered backoff to avoid a
+thundering herd, then loading the layers and announcing them. A redundancy target
+can be set so blocks get more than one holder. **Status: designed; available in
+the CLI as `eujeno serve --auto`.**
+
+### Reputation / Verifier
+
+A lightweight integrity layer. A small sampled fraction of computations is
+redundantly recomputed at a second holder and compared within numerical
+tolerance; divergence penalizes a node's reputation, which then influences holder
+selection in the router. **Status: designed on paper (light); full Byzantine
+fault tolerance and on-chain incentives are explicitly deferred.**
+
+## How they fit together
+
+Discovery tells the router where each block lives; the router forwards hidden
+states hop-by-hop; the Job Store persists each hop so failover and queueing are
+safe; the Allocator keeps coverage complete as nodes come and go; and
+reputation biases routing toward well-behaved holders.
+
+See [Architecture Overview](/concepts/architecture-overview) for blocks and the
+operational condition, and [Store-and-Forward Jobs](/concepts/store-and-forward)
+for the job lifecycle.

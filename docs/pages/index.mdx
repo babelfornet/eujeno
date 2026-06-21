@@ -1,0 +1,60 @@
+---
+title: Introduction
+---
+
+# Eujeno
+
+**A fully decentralized, peer-to-peer LLM inference network.** No central server:
+every node is a symmetric peer that hosts and runs one or more *blocks* of layers of
+an open-source model from [Hugging Face](https://huggingface.co). User prompts are
+routed as **durable jobs** across the nodes responsible for the various blocks.
+
+> **Guiding idea.** Eujeno is not "real-time Petals". It is **"BOINC / SETI@home for
+> the layers of an LLM"** — it tolerates very high latencies (hours, days, weeks) and
+> treats inference as an asynchronous job that advances hop-by-hop in
+> *store-and-forward* fashion. Giving up real-time makes failover and queueing
+> simpler, not harder.
+
+## How it works in one paragraph
+
+A model's transformer layers are split into contiguous **blocks** (`embed`,
+`decoder:lo-hi`, `head`). Each node loads **only the layers it claims** — so a node
+never needs the resources for the whole model, just for its block. Nodes discover
+each other, announce which layers they hold, and self-organize into an end-to-end
+chain. A prompt is routed through that chain — activations passed peer to peer — and
+the final node streams tokens back. The model becomes **operational** only once every
+block is covered by at least one node; until then, requests queue.
+
+## Try it in two commands
+
+```bash
+./bin/eujeno --help                              # first run bootstraps a venv
+eujeno up --model Qwen/Qwen2.5-0.5B-Instruct     # coordinator + a node, single box
+```
+
+See [Getting Started](/getting-started/installation) for the full walkthrough, or
+[Running a Node](/running-a-node/join-the-swarm) to contribute your GPU to a swarm.
+
+## Status
+
+import { Callout } from 'nextra/components'
+
+<Callout type="warning">
+  **PoC under construction.** Distributed inference across multiple nodes over HTTP
+  already works (orchestrator-driven): a model is split into layer blocks hosted by
+  `eujeno serve` on different nodes, and `eujeno infer` runs generation across the
+  network, reproducing the full model exactly. Next: DHT discovery, a durable
+  store-and-forward queue with failover. Token incentives are deferred (designed on
+  paper — see [Design &amp; Roadmap](/design-roadmap)).
+</Callout>
+
+## Where to go next
+
+import { Cards } from 'nextra/components'
+
+<Cards>
+  <Cards.Card title="Installation" href="/getting-started/installation" arrow />
+  <Cards.Card title="Run a node" href="/running-a-node/join-the-swarm" arrow />
+  <Cards.Card title="Architecture" href="/concepts/architecture-overview" arrow />
+  <Cards.Card title="CLI Reference" href="/cli-reference" arrow />
+</Cards>

@@ -41,6 +41,9 @@ export default function Nav() {
           <a className="nav-link nav-extra" href="#cases" style={{ color: 'var(--muted)', textDecoration: 'none' }}>
             Use cases
           </a>
+          <a className="nav-link nav-extra" href="docs/" style={{ color: 'var(--muted)', textDecoration: 'none' }}>
+            Docs
+          </a>
           <a
             href="#run"
             style={{

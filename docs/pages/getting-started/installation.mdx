@@ -1,0 +1,80 @@
+---
+title: Installation
+---
+
+# Installation
+
+Eujeno is installed from source. There is no `curl | sh` installer: you clone the
+repository and run the auto-bootstrapping launcher, which sets up an isolated Python
+environment on its first run.
+
+## Prerequisites
+
+- **Python 3.10+** and the `python -m venv` module.
+- **git**, to clone the repository.
+- Enough RAM/disk for the model you intend to run. Models are downloaded from
+  [Hugging Face](https://huggingface.co) on first use, and each node only loads the
+  layers it hosts — so a single node can cover a small model, or several nodes can
+  share a larger one.
+
+## Clone the repository
+
+```bash
+git clone <repository-url> eujeno
+cd eujeno
+```
+
+## Bootstrap with the launcher (recommended)
+
+The `bin/eujeno` launcher is auto-bootstrapping: the first time you run it, it creates
+a `.venv` and installs the package (`pip install -e .`), then forwards your command. No
+manual environment setup needed.
+
+```bash
+./bin/eujeno --help                 # first run: creates .venv + pip install -e . , then runs
+```
+
+Every later invocation reuses the same `.venv` and runs immediately. You can keep using
+`./bin/eujeno <command>` for everything.
+
+## Manual installation (alternative)
+
+If you prefer to manage the virtual environment yourself:
+
+```bash
+python -m venv .venv && . .venv/bin/activate && pip install -e .
+eujeno --help
+```
+
+With the environment activated, the `eujeno` command is on your `PATH` directly (no
+`./bin/` prefix).
+
+## Verify the install
+
+Either path should leave you with a working CLI. Confirm it:
+
+```bash
+eujeno --help
+```
+
+You should see the list of commands (`up`, `serve`, `infer`, `coordinator`, `models`,
+and more). To list the models Eujeno can run:
+
+```bash
+eujeno models
+```
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  Throughout the docs we write commands as `eujeno <command>`. If you used the launcher
+  without activating the venv, run them as `./bin/eujeno <command>` instead — they are
+  equivalent.
+</Callout>
+
+## Next steps
+
+- [Quickstart](/getting-started/quickstart) — bring up an operational single-node
+  network in one command.
+- [Your First Query](/getting-started/first-query) — run inference against the running
+  network.

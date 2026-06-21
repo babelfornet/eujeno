@@ -1,0 +1,97 @@
+---
+title: Choosing Layers & RAM
+---
+
+# Choosing Layers & RAM
+
+A node loads **only the layers it claims** (partial loading), so the RAM it needs is
+roughly proportional to the number of hosted layers — not to the whole model. This
+page shows how to decide what to host.
+
+import { Callout } from 'nextra/components'
+
+## Let the CLI do the math: `eujeno fit`
+
+`eujeno fit` answers "how many layers can I host with N GB of RAM?" and prints a
+**suggested stage spec** you can pass straight to `--stages`.
+
+```bash
+eujeno fit --model Qwen/Qwen2.5-7B-Instruct --ram 4 --dtype bfloat16
+```
+
+Options:
+
+| Flag | What it does |
+|---|---|
+| `--model <id>` | Hugging Face model ID. Default `Qwen/Qwen2.5-0.5B-Instruct`. |
+| `--ram <GB>` | RAM available on the node, in GB. **Required.** |
+| `--dtype <type>` | `float32` (default), `bfloat16`, or `float16`. |
+| `--reserve <fraction>` | Fraction of RAM reserved for activations / KV-cache / OS (0–0.9). Default `0.2`. |
+
+With `--json` you get a machine-readable answer:
+
+```bash
+eujeno --json fit --model Qwen/Qwen2.5-7B-Instruct --ram 4 --dtype bfloat16
+```
+
+```json
+{"ok": true, "command": "fit", "data": {"model": "Qwen/Qwen2.5-7B-Instruct", "dtype": "bfloat16", "num_layers": 28, "hidden_size": 3584, "ram_gb": 4.0, "reserve": 0.2, "ram_per_layer_gb": 0.434, "ram_embed_head_gb": 1.015, "max_decoder_layers": 7, "fits_whole_model": false, "suggested_stages": "decoder:0-7"}}
+```
+
+Here a 4 GB node in `bfloat16` can hold 7 decoder layers, and the suggested spec is
+`decoder:0-7` — ready to drop into `--stages`.
+
+## The RAM math behind it
+
+If you want to reason about the split yourself, the estimate per block is:
+
+```
+bytes_per_param = 4 (float32) | 2 (bfloat16/float16)
+ram_layer ≈ params_per_layer × bytes_per_param
+ram_node  ≈ Σ ram_layer of the hosted layers (+ embed/head if assigned)
+```
+
+`eujeno model --info --model <id>` gives `num_layers` and `hidden_size`, from which you
+can derive `params_per_layer`. Decoder layers are roughly equal in size to one another.
+
+<Callout type="info">
+  The memory **outliers** are `embed` and `head`: each carries the `vocab × hidden`
+  matrix, which is larger than a single decoder layer. `eujeno fit` accounts for this
+  separately (see `ram_embed_head_gb` in the JSON output) when it decides how many
+  layers fit.
+</Callout>
+
+## The `--stages` format
+
+`--stages` lists the blocks a node serves, comma-separated:
+
+- `embed` — the embedding block.
+- `decoder:lo-hi` — a contiguous range of decoder layers, e.g. `decoder:0-12`.
+- `head` — the output head.
+
+Examples:
+
+```bash
+# Front of the model: embedding + first 12 decoder layers
+eujeno serve --stages "embed,decoder:0-12" --port 8001
+
+# Back of the model: last 12 decoder layers + head
+eujeno serve --stages "decoder:12-24,head" --port 8002
+```
+
+Full coverage of a model = `embed` + all contiguous decoder ranges + `head`. With the
+two nodes above, `decoder:0-12` and `decoder:12-24` are contiguous and together with
+`embed` and `head` they cover the whole model.
+
+## `--dtype bfloat16` to halve RAM
+
+A 7B model in `float32` is roughly 28 GB; in `bfloat16` it is roughly 14 GB. Passing
+`--dtype bfloat16` halves the per-layer RAM, so the same node can host about twice as
+many layers. Use it on `fit`, `serve`, and `up`. For very large models, combine it
+with splitting the work across more nodes.
+
+## Next steps
+
+- Hand the planning to the network entirely with self-assignment in
+  [Join the Swarm](/running-a-node/join-the-swarm).
+- Browse compatible models in [Models](/models).

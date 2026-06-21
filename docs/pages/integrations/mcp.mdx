@@ -1,0 +1,68 @@
+---
+title: MCP Tools
+---
+
+# MCP Tools
+
+Eujeno can call **MCP** (Model Context Protocol) tool servers as part of inference, with no
+frontend required. You configure the servers once with `eujeno mcp`, then run a
+tool-calling loop with `eujeno infer --mcp`.
+
+import { Callout } from 'nextra/components'
+
+<Callout type="warning">
+  Tool calling requires a model that supports it — in practice 7B+. With Qwen 0.5B it's only
+  good for verifying the mechanism.
+</Callout>
+
+## Configure MCP servers
+
+`eujeno mcp` configures the MCP servers usable by `eujeno infer --mcp`. Run with no
+switches to list the configured servers (add `--json` for servers plus discovered tools).
+
+```bash
+# add an MCP server (stdio)
+eujeno mcp --add fs --command npx --args "@modelcontextprotocol/server-filesystem /path"
+
+# list the configured servers + discovered tools
+eujeno --json mcp
+
+# remove a server
+eujeno mcp --remove fs
+```
+
+The options, from `eujeno mcp --help`:
+
+| Option | Meaning |
+|---|---|
+| `--add TEXT` | Name of an MCP server to add. |
+| `--command TEXT` | MCP server command (with `--add`). |
+| `--args TEXT` | Command arguments, space-separated. |
+| `--remove TEXT` | Name of an MCP server to remove. |
+
+The configuration is saved in `~/.eujeno/mcp.json` (override the directory with
+`EUJENO_HOME`).
+
+## Use the tools in inference
+
+Pass `--mcp` to `eujeno infer` to run the tool-calling loop with the configured tools:
+
+```bash
+eujeno infer --coordinator http://IP:9000 --mcp --prompt "List the files in /path"
+```
+
+<Callout type="info">
+  `--mcp` requires `--coordinator` or `--peer` (both expose the `/v1` API). The model
+  decides which tool to call; Eujeno runs the tool and feeds the result back into the loop.
+</Callout>
+
+## Tool calling vs. host-executed tools
+
+Two related but distinct paths exist:
+
+- **`eujeno infer --mcp`** — Eujeno itself runs the configured MCP tools in the
+  tool-calling loop, end to end from the CLI. This is what this page describes.
+- **OpenAI `tools` parameter** — when an external agent (Claude Code, an OpenAI client)
+  passes `tools` to `/v1/chat/completions`, the model returns `tool_calls` and the
+  **agent/host** executes the tool. See [OpenAI-compatible API](/integrations/openai-api)
+  and [Agents / Claude Code](/integrations/agents).

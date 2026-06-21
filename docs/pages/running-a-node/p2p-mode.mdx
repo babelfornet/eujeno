@@ -1,0 +1,76 @@
+---
+title: Pure P2P Mode
+---
+
+# Pure P2P Mode
+
+In pure peer-to-peer mode every node is the same: nodes discover each other via
+**gossip** (one seed is enough) and inference flows **directly** node-to-node, with no
+central server. This is the recommended, fully decentralized topology.
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  Pure P2P requires the nodes to be able to reach each other directly — same LAN, a
+  VPN, or public IPs / port-forwarding. If your nodes are behind NAT on different
+  networks **without a VPN**, use [Coordinator Mode](/running-a-node/coordinator-mode)
+  instead.
+</Callout>
+
+## Two nodes, one model
+
+Start two nodes that, together, cover the whole model. Each node `--advertise`s the
+URL the others should use to reach it; the second node lists the first as a `--peers`
+seed.
+
+```bash
+# Node A — embedding + first 12 layers (first node, no seed)
+eujeno serve --stages "embed,decoder:0-12" --port 8001 --advertise http://127.0.0.1:8001
+
+# Node B — last 12 layers + head; knows A as a seed
+eujeno serve --stages "decoder:12-24,head" --port 8002 \
+  --advertise http://127.0.0.1:8002 --peers http://127.0.0.1:8001
+```
+
+- `--advertise` is the URL the node announces itself with. It must be reachable by the
+  other nodes — not `0.0.0.0`. On one machine, `http://127.0.0.1:<port>` is fine; on a
+  LAN use the node's LAN IP (e.g. `http://192.168.1.10:8001`).
+- `--peers` are the seeds from which to learn the network, comma-separated. The first
+  node needs none; every other node lists at least one. Knowledge propagates
+  transitively.
+
+## Run inference against any node
+
+Point `infer` at **any single node** — it discovers the rest of the topology on its
+own via gossip and runs the job directly.
+
+```bash
+eujeno --json infer --peer http://127.0.0.1:8001 --prompt "The capital of Italy is"
+```
+
+<Callout type="info">
+  Until coverage is complete (`embed` + all decoder ranges + `head`), `infer` responds
+  `NOT_OPERATIONAL`. Add nodes with the missing ranges and the model assembles
+  progressively across the swarm. See
+  [Choosing Layers & RAM](/running-a-node/layers-and-ram) for the stage format.
+</Callout>
+
+## Every node is a queryable entry point
+
+In P2P mode every `serve` node also exposes an OpenAI-compatible API
+(`POST /v1/chat/completions` and `/v1/models`): it orchestrates inference over the
+gossiped topology via direct transport, with no coordinator. Point an OpenAI client at
+**any peer**:
+
+```bash
+curl -s http://127.0.0.1:8001/v1/chat/completions -H 'content-type: application/json' \
+  -d '{"model":"eujeno","messages":[{"role":"user","content":"Hi"}],"max_tokens":32}'
+```
+
+`eujeno infer --peer` remains available as an alternative.
+
+## Let nodes split the layers themselves
+
+You don't have to assign `--stages` by hand. With `--auto`, each node reads the
+coverage gaps from its seed plus its own RAM and claims a range automatically — see
+[Join the Swarm](/running-a-node/join-the-swarm).

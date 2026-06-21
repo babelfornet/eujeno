@@ -19,7 +19,7 @@ eujeno/ui/server.py            # NEW: create_ui_app(coordinator_url) + /api/* en
 eujeno/ui/static/index.html    # NEW: real frontend (Network + Chat)
 eujeno/cli.py                  # MOD: `ui` command
 tests/test_ui_server.py         # NEW: proxy + serve index (slow: stub coordinator in thread)
-docs/examples/frontend.md       # NEW: how to launch the UI
+specs/examples/frontend.md       # NEW: how to launch the UI
 .gitignore                      # MOD: ignore frontend/_mock/
 ```
 
@@ -201,7 +201,7 @@ cd /Users/alberto/Projects/AI/eujeno && git add eujeno/ui/static/index.html && g
 
 ## Task 3: `eujeno ui` CLI command + docs
 
-**Files:** modify `eujeno/cli.py`; create `docs/examples/frontend.md`; modify `.gitignore`, `README.md`.
+**Files:** modify `eujeno/cli.py`; create `specs/examples/frontend.md`; modify `.gitignore`, `README.md`.
 
 - [ ] **Step 1: add the `ui` command in `eujeno/cli.py`** (after `coordinator`):
 ```python
@@ -227,7 +227,7 @@ def ui(
 
 - [ ] **Step 3: `.gitignore`** — add a line `frontend/_mock/` (folder extracted from the mock, not to be versioned).
 
-- [ ] **Step 4: `docs/examples/frontend.md`**
+- [ ] **Step 4: `specs/examples/frontend.md`**
 ```markdown
 # Eujeno frontend (`eujeno ui`)
 
@@ -247,7 +247,7 @@ The browser only talks to the local `eujeno ui` server, which acts as a proxy to
 Coming soon: create/join a network from the frontend (Phase 2) and configure MCP tools (Phase 3).
 ```
 
-- [ ] **Step 5:** add a line to `README.md` (Quickstart section): "**Frontend:** `eujeno ui --coordinator http://IP:9000` → network dashboard + chat (see [docs/examples/frontend.md](docs/examples/frontend.md))."
+- [ ] **Step 5:** add a line to `README.md` (Quickstart section): "**Frontend:** `eujeno ui --coordinator http://IP:9000` → network dashboard + chat (see [specs/examples/frontend.md](specs/examples/frontend.md))."
 
 - [ ] **Step 6: reinstall + verify the command**
 `cd /Users/alberto/Projects/AI/eujeno && .venv/bin/pip install -e . >/dev/null 2>&1 && .venv/bin/eujeno --help | grep -q "ui" && echo "ui command ok"`
@@ -256,7 +256,7 @@ Coming soon: create/join a network from the frontend (Phase 2) and configure MCP
 
 - [ ] **Step 8: commit**
 ```bash
-cd /Users/alberto/Projects/AI/eujeno && git add eujeno/cli.py pyproject.toml .gitignore docs/examples/frontend.md README.md && git commit -m "feat(cli): 'eujeno ui' command (local frontend) + docs"
+cd /Users/alberto/Projects/AI/eujeno && git add eujeno/cli.py pyproject.toml .gitignore specs/examples/frontend.md README.md && git commit -m "feat(cli): 'eujeno ui' command (local frontend) + docs"
 ```
 
 ---

@@ -1,0 +1,89 @@
+---
+title: Deployment
+---
+
+# Deployment with Docker
+
+Eujeno ships a node image and a Compose file for running worker nodes in containers. This
+page reflects the bundled **3-node example**: a small model (Qwen2.5-0.5B, 24 layers) split
+across **3 nodes** — one on the host and two in Docker containers. Each node loads **only its
+own layers** into RAM (partial loading). It uses **coordinator** mode, so the containers
+connect outbound to the host.
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  The containers share the host's Hugging Face cache, so the model is downloaded once and
+  every node materializes only its assigned layers in RAM; the rest stay on the `meta`
+  device (zero memory).
+</Callout>
+
+## Layer distribution
+
+The 24 layers are split like this:
+
+| Node | Where | Stage |
+|---|---|---|
+| coordinator | host | (routes, does not run layers) |
+| host-node | host | `embed,decoder:0-8` |
+| node-mid | container | `decoder:8-16` |
+| node-tail | container | `decoder:16-24,head` |
+
+## Startup
+
+```bash
+# 0) (once) download the model on the host so the containers reuse it from the shared cache
+python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen2.5-0.5B-Instruct')"
+
+# 1) Coordinator on the host (port 9000, reachable by the containers)
+eujeno coordinator --model Qwen/Qwen2.5-0.5B-Instruct --port 9000 &
+
+# 2) Node on the host: embedding + first 8 layers
+eujeno serve --coordinator ws://127.0.0.1:9000/node --stages "embed,decoder:0-8" &
+
+# 3) Two nodes in the containers (built automatically the first time)
+docker compose -f docker/compose.yaml up --build -d
+
+# 4) Wait for all 3 nodes to register and the coverage to be complete
+curl -s http://127.0.0.1:9000/registry        # must list 3 nodes
+
+# 5) Test a prompt from this machine
+eujeno --json infer --coordinator http://127.0.0.1:9000 --prompt "The capital of Italy is"
+```
+
+The containers connect outbound to the coordinator on the host via
+`host.docker.internal:9000`, so only the host needs to be reachable.
+
+## Verifying the memory benefit
+
+```bash
+docker stats --no-stream    # container RAM: each loads only its own layers, not the whole model
+```
+
+Each container's resident memory reflects only its slice of the model, demonstrating partial
+loading.
+
+## Stop
+
+```bash
+docker compose -f docker/compose.yaml down
+kill %1 %2     # coordinator + host-node
+```
+
+## How the image is built
+
+The Compose services build from `docker/Dockerfile` (a slim Python base) and run the
+`eujeno` CLI as the entrypoint. The model weights are **not** baked into the image: the
+host's `~/.cache/huggingface` is mounted into each container so all nodes share a single
+download. The container commands are plain `serve` invocations, for example:
+
+```yaml
+command: ["serve", "--coordinator", "ws://host.docker.internal:9000/node",
+          "--stages", "decoder:8-16", "--model", "Qwen/Qwen2.5-0.5B-Instruct"]
+```
+
+<Callout type="info">
+  To run more or different layers in containers, edit the `--stages` of each service in
+  `docker/compose.yaml`. Coverage is complete when `embed`, every `decoder` range, and
+  `head` are each hosted by at least one node.
+</Callout>

@@ -38,13 +38,13 @@ eujeno up --model Qwen/Qwen2.5-0.5B-Instruct    # bring-up; --dtype bfloat16 for
 
 Three ways, pick based on your network:
 
-- **[Pure P2P](docs/examples/p2p.md)** (decentralized, recommended) — nodes discover each other via **gossip**, no central server; the entry point targets any node and discovers the topology on its own. For LAN/VPN/public IPs.
+- **[Pure P2P](specs/examples/p2p.md)** (decentralized, recommended) — nodes discover each other via **gossip**, no central server; the entry point targets any node and discovers the topology on its own. For LAN/VPN/public IPs.
   ```bash
   eujeno serve --stages "embed,decoder:0-12" --port 8001 --advertise http://127.0.0.1:8001
   eujeno serve --stages "decoder:12-24,head" --port 8002 --advertise http://127.0.0.1:8002 --peers http://127.0.0.1:8001
   eujeno --json infer --peer http://127.0.0.1:8001 --prompt "The capital of Italy is"
   ```
-- **[Coordinator](docs/examples/coordinator.md)** (opt-in) — for machines behind NAT on different networks **without a VPN**: nodes connect outbound to a reachable coordinator.
+- **[Coordinator](specs/examples/coordinator.md)** (opt-in) — for machines behind NAT on different networks **without a VPN**: nodes connect outbound to a reachable coordinator.
   ```bash
   eujeno coordinator --port 9000                                                  # reachable machine
   eujeno serve --coordinator ws://IP:9000/node --stages "embed,decoder:0-12"      # node A (any network)
@@ -55,24 +55,24 @@ Three ways, pick based on your network:
   ```bash
   eujeno serve --stages "embed,decoder:0-12" --port 8001
   eujeno serve --stages "decoder:12-24,head" --port 8002
-  eujeno --json infer --topology docs/examples/topology.localhost.json --prompt "The capital of Italy is"
+  eujeno --json infer --topology specs/examples/topology.localhost.json --prompt "The capital of Italy is"
   ```
 
 Machines download the model from Hugging Face on first run.
 
-When the model is operational, the coordinator exposes an **OpenAI-compatible API** (`/v1/chat/completions`): you can connect agents and OpenAI clients to it (and Claude Code via LiteLLM). See **[docs/examples/agents.md](docs/examples/agents.md)**.
+When the model is operational, the coordinator exposes an **OpenAI-compatible API** (`/v1/chat/completions`): you can connect agents and OpenAI clients to it (and Claude Code via LiteLLM). See **[specs/examples/agents.md](specs/examples/agents.md)**.
 
-**Frontend:** `eujeno ui --coordinator http://IP:9000` starts a local dashboard (network status + chat) → open `http://127.0.0.1:8500`. See **[docs/examples/frontend.md](docs/examples/frontend.md)**.
+**Frontend:** `eujeno ui --coordinator http://IP:9000` starts a local dashboard (network status + chat) → open `http://127.0.0.1:8500`. See **[specs/examples/frontend.md](specs/examples/frontend.md)**.
 
 ## Documentation
 
-Everything is in [`docs/`](./docs/):
+Everything is in [`specs/`](./specs/):
 
-- **[docs/README.md](./docs/README.md)** — index and document map
-- **[docs/ROADMAP.md](./docs/ROADMAP.md)** — project status, milestones, backlog
-- **[docs/00-vision-architecture.md](./docs/00-vision-architecture.md)** — full vision and architecture (diagrams)
-- **[docs/decisions/](./docs/decisions/)** — Architecture Decision Records
-- **[docs/prd/](./docs/prd/)** — PRDs for the 5 subsystems
+- **[specs/README.md](./specs/README.md)** — index and document map
+- **[specs/ROADMAP.md](./specs/ROADMAP.md)** — project status, milestones, backlog
+- **[specs/00-vision-architecture.md](./specs/00-vision-architecture.md)** — full vision and architecture (diagrams)
+- **[specs/decisions/](./specs/decisions/)** — Architecture Decision Records
+- **[specs/prd/](./specs/prd/)** — PRDs for the 5 subsystems
 
 ## Architecture in brief
 
@@ -82,7 +82,7 @@ The model becomes **operational** only once every block is covered by ≥1 node;
 
 ## Stack (PoC)
 
-Python · Hugging Face `transformers` + `accelerate` + `safetensors` · `hivemind.DHT` (discovery) · SQLite (durable job store) · FastAPI/uvicorn (activation transport). Details and rationale in [ADR-0001](./docs/decisions/ADR-0001-implementation-forks.md).
+Python · Hugging Face `transformers` + `accelerate` + `safetensors` · `hivemind.DHT` (discovery) · SQLite (durable job store) · FastAPI/uvicorn (activation transport). Details and rationale in [ADR-0001](./specs/decisions/ADR-0001-implementation-forks.md).
 
 ## License
 

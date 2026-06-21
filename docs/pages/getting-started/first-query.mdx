@@ -1,0 +1,70 @@
+---
+title: Your First Query
+---
+
+# Your First Query
+
+With a network running (see [Quickstart](/getting-started/quickstart)), you can send it
+a prompt. The `infer` command runs distributed inference across the nodes that host the
+model's blocks and prints the generated text.
+
+## Query the running network
+
+Point `infer` at the coordinator you started with `eujeno up` (by default
+`http://127.0.0.1:9000`):
+
+```bash
+eujeno infer --coordinator http://127.0.0.1:9000 --prompt "The capital of Italy is"
+```
+
+`--prompt` is required. Pass `-` to read the prompt from stdin.
+
+### Useful flags
+
+See them all with `eujeno infer --help`. The common ones:
+
+- `--prompt TEXT` — the prompt (required); `-` reads from stdin.
+- `--coordinator TEXT` — HTTP URL of the coordinator; `infer` acts as a thin client.
+- `--peer TEXT` — for **pure P2P**: the URL of any node. `infer` discovers the topology
+  via gossip and runs directly, no coordinator needed.
+- `--topology TEXT` — path to a static topology JSON file.
+- `--max-new-tokens INTEGER` — number of tokens to generate. Default: `8`.
+
+### Pure P2P (no coordinator)
+
+If your nodes run on a LAN, VPN, or public IPs, you can skip the coordinator entirely
+and target any node directly:
+
+```bash
+eujeno infer --peer http://127.0.0.1:8001 --prompt "The capital of Italy is"
+```
+
+## Machine-readable output
+
+`--json` is a **global** flag — it goes before the command — and wraps the result in an
+envelope: `{"ok": true|false, "command": "...", "data": {...}}`. Use it whenever you
+consume the output programmatically.
+
+```bash
+eujeno --json infer --coordinator http://127.0.0.1:9000 --prompt "The capital of Italy is"
+```
+
+## In-process generation with `generate`
+
+`generate` runs the split pipeline **in a single process** — it does not talk to a
+network. It's handy for testing a model locally without bringing up a coordinator or
+nodes. Check the flags with `eujeno generate --help`:
+
+```bash
+eujeno generate --prompt "The capital of Italy is" --model Qwen/Qwen2.5-0.5B-Instruct
+```
+
+Options include `--model` (Hugging Face model ID, default `Qwen/Qwen2.5-0.5B-Instruct`),
+`--max-new-tokens` (default `8`), and `--blocks` (number of decoder blocks to split the
+pipeline into, default `2`).
+
+## Next steps
+
+- [Running a Node](/running-a-node/join-the-swarm) — contribute your machine's layers to
+  a larger swarm so bigger models become operational.
+- [CLI Reference](/cli-reference) — every command and flag in one place.

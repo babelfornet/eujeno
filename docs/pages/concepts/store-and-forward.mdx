@@ -1,0 +1,85 @@
+---
+title: Store-and-Forward Jobs
+---
+
+import { Callout } from 'nextra/components'
+
+# Store-and-Forward Jobs
+
+The defining trait of Eujeno is not speed — it is **tolerance to extremely high
+latencies**. An answer may arrive after hours, days, or weeks. The mental model
+is deliberate:
+
+> Eujeno is **"BOINC / SETI@home for the layers of an LLM"**, not "real-time
+> Petals".
+
+Inference is **not** a live socket session. It is a **durable job** that advances
+hop-by-hop in *store-and-forward* fashion: each hop persists the intermediate
+hidden state and forwards it when the next node is reachable. Giving up real-time
+is a liberation, not a limitation — it lets the network wait for a node to come
+back online, queue work without a latency budget, and treat failover as a simple
+re-dispatch.
+
+## The job lifecycle
+
+When a node receives a prompt, it tokenizes and embeds it, creates a `job_id`,
+persists the job, and immediately accepts it (the caller polls for the result
+rather than holding a connection open). The hidden state then advances through
+the blocks: each holder loads the incoming activation, computes its block,
+**persists** the result, and dispatches it to the next holder. The LM head turns
+the final hidden state into logits, samples a token, and the token re-enters the
+pipeline autoregressively until end-of-sequence; the complete response is written
+back to the job for the user to retrieve.
+
+```
+prompt ─▶ [entry: tokenize + embed] ─▶ h0   (job_id persisted; result via poll)
+   ▼  for each block b0..bN:
+ [holder bi] load h_{i-1} ─▶ compute h_i ─▶ PERSIST ─▶ dispatch to b{i+1}
+   ▼  [holder LM head] hN ─▶ logits ─▶ sample token
+   ▼  autoregressive: token re-enters the pipeline until EOS
+   ▼  complete response written to the job ─▶ user retrieves it
+```
+
+## Durable jobs
+
+Jobs are persisted, not held in memory. State lives in a per-node SQLite log
+(WAL mode) plus on-disk activation/KV-cache blobs, so the job can be
+reconstructed after a crash. Each hop is **idempotent**, identified by
+`(job_id, stage_idx)`, using an ACK-after-persist protocol with dedup on
+receipt: a process restart loses no hop and applies none twice.
+
+On the coordinator, jobs are written to a durable SQLite log (default
+`~/.eujeno/coordinator-jobs.db`, configurable via `coordinator --db`) and can be
+inspected over HTTP at `GET /jobs` and `GET /jobs/{id}`.
+
+## Queueing until coverage
+
+If the next block has **no live holder** — because coverage is still incomplete —
+the activation does not fail; it **parks durably** with job status
+`WAITING_COVERAGE` and waits for a node to self-assign the missing block.
+Requests queue up, they are not lost.
+
+From the user's side this means: until coverage is complete, `infer` parks the
+request and waits for a node to cover the missing range, up to the coordinator's
+`coverage_timeout` (default 120s); when the block appears, the job **resumes from
+where it left off**, and on timeout it errors. Adding a node with the missing
+range unblocks parked jobs.
+
+<Callout type="info">
+The same store-and-forward framing also handles partial network failures: a
+temporary partition queues work instead of losing it. Coverage and the
+operational condition are covered in
+[Architecture Overview](/concepts/architecture-overview).
+</Callout>
+
+## Failover
+
+Because every hop's activation is persisted before it is forwarded, recovering
+from a dead holder is trivial: the router simply **re-dispatches** the current
+stage to a redundant holder, and no work is lost. If a holder dies mid-generation
+its KV-cache is lost, so the backup holder recomputes the prefix for that block
+(an `O(seq_len)` cost accepted in the PoC). This is why redundancy — more than one
+holder per block — directly improves resilience.
+
+See [The Network](/concepts/the-network) for the routing and durable-store
+subsystems that make this work.

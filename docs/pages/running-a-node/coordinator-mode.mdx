@@ -1,0 +1,85 @@
+---
+title: Coordinator Mode (NAT)
+---
+
+# Coordinator Mode (NAT)
+
+Coordinator mode is for machines **behind NAT on different networks without a VPN**.
+Worker nodes connect **outbound** to a coordinator, so they need no port-forwarding and
+expose no inbound ports. Only the **coordinator** has to be reachable: a public IP, a
+VPS, or a single port-forward — and on a LAN, any node will do.
+
+import { Callout } from 'nextra/components'
+
+## Start a coordinator
+
+Run the coordinator on a machine the others can reach. It relays traffic and computes
+coverage for the model.
+
+```bash
+eujeno coordinator --model Qwen/Qwen2.5-0.5B-Instruct --port 9000
+```
+
+Options:
+
+| Flag | What it does |
+|---|---|
+| `--model <id>` | Model ID, used for the tokenizer and `num_layers`. Default `Qwen/Qwen2.5-0.5B-Instruct`. |
+| `--host <host>` | Listen host. Default `0.0.0.0`. |
+| `--port <port>` | Listen port. Default `9000`. |
+| `--db <path>` | SQLite job-log path. Default `~/.eujeno/coordinator-jobs.db`. |
+
+## Connect worker nodes
+
+Each node passes `--coordinator ws://IP:9000/node` (note the `ws://` scheme and the
+`/node` path) and opens an **outbound** WebSocket to the coordinator. The nodes still
+declare the [stages](/running-a-node/layers-and-ram) they serve.
+
+```bash
+# Node A (any network, behind NAT) — embedding + first 12 layers
+eujeno serve --coordinator ws://203.0.113.5:9000/node --stages "embed,decoder:0-12"
+
+# Node B (different network, behind NAT) — last 12 layers + head
+eujeno serve --coordinator ws://203.0.113.5:9000/node --stages "decoder:12-24,head"
+```
+
+- Nodes using `--coordinator` do **not** expose inbound ports — nothing to configure on
+  the worker's router.
+- On a LAN, put the coordinator on a local IP, e.g. `ws://192.168.1.10:9000/node`. With
+  a VPN, use the VPN IP.
+
+## Run inference
+
+`infer` connects to the coordinator as a thin HTTP client, from any network.
+
+```bash
+eujeno --json infer --coordinator http://203.0.113.5:9000 --prompt "The capital of Italy is"
+```
+
+<Callout type="info">
+  The coordinator computes coverage: until `embed` + all decoder ranges + `head` are
+  covered, `infer` responds `NOT_OPERATIONAL`. Add nodes with the missing ranges to
+  complete the model.
+</Callout>
+
+## Redundancy and failover
+
+Start **multiple nodes serving the same block** for resilience. If a node goes down
+during a job, the coordinator excludes it and **restarts** generation on the remaining
+nodes — at least one holder is needed for each block.
+
+```bash
+# block 12-24 + head served by TWO nodes (B and C): if B goes down, the job continues on C
+eujeno serve --coordinator ws://203.0.113.5:9000/node --stages "decoder:12-24,head"   # node B
+eujeno serve --coordinator ws://203.0.113.5:9000/node --stages "decoder:12-24,head"   # node C (redundant)
+```
+
+The `infer` response includes `"failovers": N` (how many reroutes were served). If no
+redundant node covers the block that went down, `infer` responds `NOT_OPERATIONAL`.
+
+## Trade-off
+
+The coordinator routes all traffic, so it is a **central point** — unlike
+[Pure P2P Mode](/running-a-node/p2p-mode), which has no central server but requires the
+nodes to be mutually reachable. Choose coordinator mode when NAT without a VPN makes
+direct peer connections impossible.

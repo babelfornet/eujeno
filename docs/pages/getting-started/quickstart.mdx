@@ -1,0 +1,81 @@
+---
+title: Quickstart
+---
+
+# Quickstart
+
+This walkthrough brings up a complete, operational Eujeno network on a single machine
+with one command. The `up` command starts a **coordinator** and a single **node** that
+covers the whole model — every block (`embed`, all decoder layers, `head`) is hosted on
+that one box, so the model is immediately operational.
+
+If you haven't installed Eujeno yet, see [Installation](/getting-started/installation).
+
+## 1. Pick a model
+
+List the models Eujeno supports (decoder-only Llama / Qwen2 architectures):
+
+```bash
+eujeno models
+```
+
+```
+Compatible models (Llama/Qwen2):
+  - Qwen/Qwen2.5-0.5B-Instruct
+  - Qwen/Qwen2.5-1.5B-Instruct
+  - Qwen/Qwen2.5-3B-Instruct
+  ...
+  - meta-llama/Llama-3.2-1B-Instruct
+  - meta-llama/Llama-3.2-3B-Instruct
+  - meta-llama/Llama-3.1-8B-Instruct
+```
+
+For a first run, `Qwen/Qwen2.5-0.5B-Instruct` is small and downloads quickly. It is
+also the default model for `up`.
+
+## 2. Bring up the network
+
+```bash
+eujeno up --model Qwen/Qwen2.5-0.5B-Instruct
+```
+
+This starts a coordinator on `127.0.0.1:9000` and a node that claims every layer of the
+model. The first run downloads the model from Hugging Face. Once the node has loaded its
+layers, the model is operational and ready to answer queries.
+
+### Useful flags
+
+Check the real options at any time with `eujeno up --help`. The ones you'll reach for:
+
+- `--model TEXT` — the Hugging Face model ID to serve.
+  Default: `Qwen/Qwen2.5-0.5B-Instruct`.
+- `--dtype TEXT` — `float32` (default), `bfloat16`, or `float16`. Use `bfloat16` for
+  larger models: it roughly halves the memory needed.
+- `--host TEXT` / `--port INTEGER` — where the coordinator listens.
+  Defaults: `127.0.0.1` and `9000`.
+- `--dry-run` — print the commands `up` would run, without starting anything. Handy for
+  previewing the setup or copying the underlying `coordinator`/`serve` invocations.
+
+A larger model in `bfloat16`:
+
+```bash
+eujeno up --model Qwen/Qwen2.5-7B-Instruct --dtype bfloat16
+```
+
+Preview without launching:
+
+```bash
+eujeno up --model Qwen/Qwen2.5-0.5B-Instruct --dry-run
+```
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  A 7B model in `float32` needs roughly 28 GB of RAM; in `bfloat16` about 14 GB. If a
+  model is too large for one box, host its layers across several nodes instead — see
+  [Running a Node](/running-a-node/join-the-swarm).
+</Callout>
+
+## Next steps
+
+With the network up, send it a prompt: [Your First Query](/getting-started/first-query).

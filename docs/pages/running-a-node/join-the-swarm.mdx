@@ -1,0 +1,76 @@
+---
+title: Join the Swarm
+---
+
+# Join the Swarm
+
+The fastest way to contribute a node to an existing network is **self-assignment**.
+Instead of picking which layers to host by hand, your node reads the current coverage
+gaps from a seed peer and its own RAM budget, then **claims** a contiguous range that
+fits. As more nodes join, the model assembles itself across the swarm.
+
+import { Callout } from 'nextra/components'
+
+## One command
+
+```bash
+eujeno serve --auto --peers http://192.168.1.10:8001 \
+  --model Qwen/Qwen2.5-7B-Instruct --dtype bfloat16
+```
+
+This connects to the seed at `http://192.168.1.10:8001`, inspects which layers are
+already covered, measures how many layers fit in the available RAM, and serves the
+range needed to fill a gap.
+
+<Callout type="info">
+  The model becomes **operational** only once coverage is complete: `embed` + all
+  contiguous decoder ranges + `head`. Until then, `infer` responds `NOT_OPERATIONAL`.
+  Each `--auto` node claims part of the missing range, so the network assembles
+  progressively as nodes join.
+</Callout>
+
+## The flags
+
+| Flag | What it does |
+|---|---|
+| `--auto` | Auto-assign layers from registry gaps + RAM capacity. The node plans its own range at startup instead of using `--stages`. |
+| `--peers <seed>` | Comma-separated seed peers for gossip discovery. From a seed the node learns the current topology and coverage. The first node in a swarm needs no seed; every other node lists at least one. |
+| `--ram <GB>` | Forces the memory budget used for planning. Defaults to the node's detected free RAM. |
+| `--reserve <fraction>` | Fraction of RAM kept aside for activations / KV-cache / OS. Default `0.2`. |
+| `--target <N>` | Desired replicas per range. `--target 2` aims for **≥2 nodes per range** for redundancy. Default `1`. |
+| `--dtype <type>` | `float32` (default), `bfloat16`, or `float16`. Use `bfloat16` for large models — it halves the RAM and lets the node hold more layers. |
+| `--model <id>` | Hugging Face model ID. Must match the model the rest of the swarm is serving. |
+
+## Startup order matters
+
+Claiming is a **one-time decision made at startup**. Start the seed(s) first and wait
+until they are reachable and have published their range **before** launching other
+`--auto` nodes.
+
+<Callout type="warning">
+  If a node plans while the seed's registry is still empty, it sees no existing
+  coverage and may claim too much. Start and warm up the seed first; you can confirm
+  it has published by checking that `SEED/registry` is non-empty. For a guaranteed
+  split, use explicit [stages](/running-a-node/layers-and-ram) instead, or stagger the
+  startup of each node.
+</Callout>
+
+## Redundancy with `--target`
+
+Pass `--target 2` so the planner aims for at least two nodes covering every range.
+When a range has two holders and one goes down mid-job, the network can continue on
+the other. The node also announces its `capacity` in the gossip record, which lets
+later nodes plan around it.
+
+```bash
+eujeno serve --auto --target 2 --peers http://192.168.1.10:8001 \
+  --model Qwen/Qwen2.5-7B-Instruct --dtype bfloat16
+```
+
+## Next steps
+
+- Decide a budget and understand the layer ↔ RAM math in
+  [Choosing Layers & RAM](/running-a-node/layers-and-ram).
+- Pick a compatible model from [Models](/models).
+- Joining over the internet behind NAT without a VPN? Use
+  [Coordinator Mode](/running-a-node/coordinator-mode).

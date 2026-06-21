@@ -1,0 +1,253 @@
+---
+title: CLI Reference
+---
+
+# CLI Reference
+
+Every Eujeno operation runs through the `eujeno` command. This page covers the global
+JSON flag and every subcommand, grouped by what you're trying to do. The authoritative
+source is always `eujeno <command> --help`; the descriptions and options below are taken
+from that help.
+
+```
+Usage: eujeno [OPTIONS] COMMAND [ARGS]...
+
+  Eujeno — decentralized LLM inference network.
+```
+
+## Global: the JSON envelope
+
+`-j` / `--json` is a **global** flag — it goes **before** the command, not after. With it,
+Eujeno emits a single JSON envelope on stdout, ideal for scripts and AI agents:
+
+```bash
+eujeno --json model --info --model Qwen/Qwen2.5-0.5B-Instruct
+```
+
+The envelope has the shape:
+
+```json
+{ "ok": true, "command": "model", "data": { } }
+```
+
+`ok` is `false` on failure. Without `--json`, the output is human-readable instead.
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  `eujeno schema` prints the full command + option tree in machine-readable form — the
+  most reliable way for an agent to discover what's available.
+</Callout>
+
+## Discover & plan
+
+Commands for choosing a model and deciding how to split it across nodes.
+
+### `models`
+
+List the compatible models / families (Llama / Qwen2 architecture).
+
+```bash
+eujeno models
+```
+
+No options. See also the [Models](/models) page.
+
+### `model`
+
+Model operations. In v1, `--info` (the default) shows the model's dimensions plus a
+proposed split.
+
+```bash
+eujeno model --info --model Qwen/Qwen2.5-0.5B-Instruct
+```
+
+| Option | Meaning |
+|---|---|
+| `--info` | Show dimensions and the proposed split (default). |
+| `--model TEXT` | Hugging Face model ID. Default `Qwen/Qwen2.5-0.5B-Instruct`. |
+| `--blocks INTEGER` | Number of decoder blocks. Default `2`. |
+
+### `fit`
+
+How many layers can you host with a given amount of RAM? `fit` does the math and suggests
+a stage spec you can pass straight to `serve --stages`.
+
+```bash
+eujeno fit --model Qwen/Qwen2.5-7B-Instruct --ram 4 --dtype bfloat16
+```
+
+| Option | Meaning |
+|---|---|
+| `--model TEXT` | Hugging Face model ID. Default `Qwen/Qwen2.5-0.5B-Instruct`. |
+| `--ram FLOAT` | RAM available on the node, in GB. **Required.** |
+| `--dtype TEXT` | `float32` \| `bfloat16` \| `float16`. Default `float32`. |
+| `--reserve FLOAT` | Fraction of RAM reserved for activations / KV-cache / OS (0–0.9). Default `0.2`. |
+
+### `selfcheck`
+
+Compare the split pipeline against the whole model (golden equivalence) — a sanity check
+that the distributed path reproduces the monolithic model.
+
+```bash
+eujeno selfcheck --model Qwen/Qwen2.5-0.5B-Instruct
+```
+
+| Option | Meaning |
+|---|---|
+| `--prompt TEXT` | Verification prompt (`-` = stdin). Default `The capital of Italy is`. |
+| `--model TEXT` | Hugging Face model ID. Default `Qwen/Qwen2.5-0.5B-Instruct`. |
+| `--max-new-tokens INTEGER` | Number of tokens to generate. Default `8`. |
+| `--blocks INTEGER` | Number of decoder blocks. Default `2`. |
+
+### `schema`
+
+Print the command + option tree in machine-readable form (for AI agents). No options.
+
+```bash
+eujeno schema
+```
+
+### `version`
+
+Print the package version. No options.
+
+```bash
+eujeno version
+```
+
+## Run
+
+Commands that start the long-running processes that make up a network.
+
+### `up`
+
+Bring up an operational single-node network in one shot: a coordinator plus a node that
+covers the whole model. The fastest way to get something running on one machine.
+
+```bash
+eujeno up --model Qwen/Qwen2.5-0.5B-Instruct
+```
+
+| Option | Meaning |
+|---|---|
+| `--model TEXT` | Hugging Face model ID. Default `Qwen/Qwen2.5-0.5B-Instruct`. |
+| `--dtype TEXT` | `float32` \| `bfloat16` \| `float16`. Default `float32`. |
+| `--host TEXT` | Coordinator host. Default `127.0.0.1`. |
+| `--port INTEGER` | Coordinator port. Default `9000`. |
+| `--dry-run` | Print the commands without starting anything. |
+
+### `serve`
+
+Start a BlockServer hosting the given stages (a long-running process). It loads into RAM
+**only** the assigned layers (partial loading): a node doesn't need resources for the whole
+model, just enough for its stages.
+
+```bash
+eujeno serve --stages "embed,decoder:0-12" --port 8001
+```
+
+| Option | Meaning |
+|---|---|
+| `--stages TEXT` | Stages served, e.g. `embed,decoder:0-12`. |
+| `--model TEXT` | Hugging Face model ID. Default `Qwen/Qwen2.5-0.5B-Instruct`. |
+| `--host TEXT` | Listen host. Default `0.0.0.0`. |
+| `--port INTEGER` | Listen port. Default `8001`. |
+| `--peers TEXT` | Seed peers for gossip discovery, comma-separated. |
+| `--advertise TEXT` | URL the node advertises itself with (e.g. `http://IP:8001`). Default `http://<host>:<port>`. |
+| `--num-layers INTEGER` | Total number of layers (for coverage). Default: from config. |
+| `--coordinator TEXT` | Coordinator WS URL (e.g. `ws://host:9000/node`). If present, the node connects outbound instead of exposing a direct server. |
+| `--dtype TEXT` | `float32` \| `bfloat16` \| `float16` (bf16 for large models). Default `float32`. |
+| `--auto` | Auto-assign layers from registry gaps + RAM capacity. |
+| `--ram FLOAT` | RAM to use for auto-assignment, GB (default: detected). |
+| `--reserve FLOAT` | Fraction of RAM reserved (auto). Default `0.2`. |
+| `--target INTEGER` | Desired replicas per range (auto; `2` = redundancy). Default `1`. |
+| `--db TEXT` | [P2P] SQLite job-log path for this node (default: in-memory). |
+| `--settings TEXT` | Node settings JSON path. Default `~/.eujeno/node-<port>.json`. |
+
+### `coordinator`
+
+Start the coordinator-relay (must be reachable by the nodes). Lets nodes behind NAT
+connect outbound instead of exposing a direct server. See
+[Coordinator Mode](/running-a-node/coordinator-mode).
+
+```bash
+eujeno coordinator --port 9000
+```
+
+| Option | Meaning |
+|---|---|
+| `--model TEXT` | Model ID (for tokenizer + num_layers). Default `Qwen/Qwen2.5-0.5B-Instruct`. |
+| `--host TEXT` | Listen host. Default `0.0.0.0`. |
+| `--port INTEGER` | Listen port. Default `9000`. |
+| `--db TEXT` | SQLite job-log path. Default `~/.eujeno/coordinator-jobs.db`. |
+
+## Query
+
+Commands that send a prompt through a network and return generated text.
+
+### `infer`
+
+Run distributed inference over a topology of BlockServers. Choose how it reaches the
+network: `--topology` (a static JSON file), `--peer` (pure P2P, discovers the topology via
+gossip), or `--coordinator` (thin client to a coordinator).
+
+```bash
+eujeno --json infer --coordinator http://IP:9000 --prompt "Explain photosynthesis"
+```
+
+| Option | Meaning |
+|---|---|
+| `--topology TEXT` | Path to the topology JSON file. |
+| `--prompt TEXT` | Prompt (`-` reads from stdin). **Required.** |
+| `--max-new-tokens INTEGER` | Number of tokens to generate. Default `8`. |
+| `--peer TEXT` | [P2P] URL of any node: discovers the topology via gossip and runs directly. |
+| `--coordinator TEXT` | [coordinator] HTTP URL of the coordinator: thin client. |
+| `--mcp` | [coordinator/peer] use the configured MCP tools (tool-calling loop). |
+| `--wait-coverage INTEGER` | [P2P] seconds to wait for full coverage before failing. Default `0`. |
+
+### `generate`
+
+Generate text by running the split pipeline **in-process** — no separate nodes, useful for
+local testing of the pipeline itself.
+
+```bash
+eujeno generate --prompt "The capital of Italy is" --max-new-tokens 16
+```
+
+| Option | Meaning |
+|---|---|
+| `--prompt TEXT` | Prompt text (`-` reads from stdin). **Required.** |
+| `--model TEXT` | Hugging Face model ID. Default `Qwen/Qwen2.5-0.5B-Instruct`. |
+| `--max-new-tokens INTEGER` | Number of tokens to generate. Default `8`. |
+| `--blocks INTEGER` | Number of decoder blocks. Default `2`. |
+
+## Tools & UI
+
+### `mcp`
+
+Configure the MCP servers (tools) usable by `eujeno infer --mcp`. Without switches, it
+lists the configured servers. See [MCP Tools](/integrations/mcp).
+
+```bash
+eujeno mcp --add fs --command npx --args "@modelcontextprotocol/server-filesystem /path"
+```
+
+| Option | Meaning |
+|---|---|
+| `--add TEXT` | Name of an MCP server to add. |
+| `--command TEXT` | MCP server command (with `--add`). |
+| `--args TEXT` | Command arguments, space-separated. |
+| `--remove TEXT` | Name of an MCP server to remove. |
+
+### `ui`
+
+Open a node's dashboard (every node serves its own UI).
+
+```bash
+eujeno ui --node http://127.0.0.1:8001
+```
+
+| Option | Meaning |
+|---|---|
+| `--node TEXT` | URL of a node whose dashboard to open. Default `http://127.0.0.1:8001`. |

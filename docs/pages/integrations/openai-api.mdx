@@ -1,0 +1,96 @@
+---
+title: OpenAI-compatible API
+---
+
+# OpenAI-compatible API
+
+Once the model is **operational** (every block covered by at least one node), the
+coordinator exposes an **OpenAI-compatible** HTTP API. Point any OpenAI client or SDK at
+`http://YOUR_COORDINATOR:9000/v1` and talk to the distributed model as if it were OpenAI.
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  The endpoint lives on the **coordinator**. Bring up a network first — for example with
+  `eujeno up` (single box) or a coordinator plus nodes. Until coverage is complete,
+  requests queue rather than return.
+</Callout>
+
+## Endpoints
+
+- `GET /v1/models`
+- `POST /v1/chat/completions` — accepts `temperature`, `top_p`, `max_tokens`,
+  `repetition_penalty`, and `seed`. The model's chat template is applied automatically to
+  the `messages`.
+
+The model name to send is `eujeno`.
+
+## OpenAI SDK (Python)
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://127.0.0.1:9000/v1", api_key="anything")
+r = client.chat.completions.create(
+    model="eujeno",
+    messages=[{"role": "user", "content": "Write a haiku about the sea"}],
+    temperature=0.8, top_p=0.9, max_tokens=80,
+)
+print(r.choices[0].message.content)
+```
+
+The `api_key` is not checked — any non-empty string works.
+
+## curl
+
+```bash
+curl -s http://127.0.0.1:9000/v1/chat/completions -H 'content-type: application/json' -d '{
+  "model": "eujeno",
+  "messages": [{"role":"user","content":"Hi!"}],
+  "temperature": 0.7, "max_tokens": 64
+}'
+```
+
+## Tool / function calling
+
+`/v1/chat/completions` accepts the OpenAI `tools` parameter. If the model decides to call a
+tool, the response contains `tool_calls` with `finish_reason: "tool_calls"`. The tools
+themselves are executed by the **agent / host**: the model decides *which* tool to call,
+your application runs it and sends the result back as a `role: "tool"` message.
+
+```python
+tools = [{"type": "function", "function": {
+    "name": "get_weather", "description": "Weather for a city",
+    "parameters": {"type": "object",
+                   "properties": {"city": {"type": "string"}},
+                   "required": ["city"]}}}]
+
+r = client.chat.completions.create(
+    model="eujeno",
+    messages=[{"role": "user", "content": "What's the weather in Rome?"}],
+    tools=tools,
+)
+# r.choices[0].message.tool_calls ->
+#   [{function: {name: "get_weather", arguments: '{"city":"Rome"}'}}]
+```
+
+<Callout type="warning">
+  Reliable tool calling needs a capable model (7B+). With Qwen 0.5B it only verifies the
+  mechanism. Generation stops at the end of the turn (EOS) and the output is stripped of
+  special tokens.
+</Callout>
+
+## Connecting agents and Claude Code
+
+Claude Code speaks the **Anthropic** API rather than OpenAI, so it needs a translation
+gateway. See [Agents / Claude Code](/integrations/agents). For wiring MCP tools straight
+from the CLI, see [MCP Tools](/integrations/mcp).
+
+## Many agents at once
+
+Each request is a **job** on the network, and the coordinator handles concurrent jobs. The
+async, "BOINC" framing fits this well: many agents enqueue and receive their responses over
+time, even with high latencies. For heavy concurrency, run **block replicas** so requests
+are distributed and there is failover, and for quality, split a **larger model** (e.g. Llama
+3.x 8B/70B) across more nodes — the infrastructure is identical, only the size and number of
+nodes change.

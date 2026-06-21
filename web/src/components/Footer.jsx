@@ -22,7 +22,7 @@ export default function Footer() {
           <span style={{ color: 'var(--text)', fontWeight: 700 }}>Eujeno</span>
         </div>
         <div style={{ display: 'flex', gap: '24px', fontWeight: 500 }}>
-          <a className="footer-link" href="#how" style={{ color: 'var(--muted2)', textDecoration: 'none' }}>
+          <a className="footer-link" href="docs/" style={{ color: 'var(--muted2)', textDecoration: 'none' }}>
             Docs
           </a>
           <a className="footer-link" href="#run" style={{ color: 'var(--muted2)', textDecoration: 'none' }}>

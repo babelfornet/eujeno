@@ -1,0 +1,61 @@
+---
+title: Agents / Claude Code
+---
+
+# Agents / Claude Code
+
+Eujeno's coordinator speaks the [OpenAI-compatible API](/integrations/openai-api), so most
+agent frameworks connect to it directly by setting the base URL to
+`http://YOUR_COORDINATOR:9000/v1`. Claude Code is the exception: it speaks the **Anthropic**
+API, so it needs a translation gateway in front.
+
+import { Callout } from 'nextra/components'
+
+<Callout type="info">
+  An agent can even **bring up a network from scratch**: `eujeno models` lists the
+  compatible models, and `eujeno up --model <id> [--dtype bfloat16]` starts a coordinator
+  plus a node covering all layers in a single command (`--dry-run` for a preview).
+</Callout>
+
+## Claude Code via LiteLLM
+
+Claude Code speaks the **Anthropic** API, not OpenAI. Put **LiteLLM** in front of the
+coordinator as a gateway — it translates Anthropic ↔ OpenAI — and point it at
+`http://YOUR_COORDINATOR:9000/v1`. Then run Claude Code against LiteLLM:
+
+```bash
+ANTHROPIC_BASE_URL=http://LITELLM:4000 claude
+```
+
+LiteLLM forwards Claude Code's Anthropic requests to the coordinator's OpenAI endpoint and
+translates the responses back.
+
+<Callout type="warning">
+  **SSE streaming** and a native Anthropic `/v1/messages` endpoint are next on the list —
+  see [Design &amp; Roadmap](/design-roadmap).
+</Callout>
+
+## Tool calling
+
+When an agent passes OpenAI-format `tools`, the model can respond with `tool_calls` and
+`finish_reason: "tool_calls"`. The **agent/host** (Claude Code, etc.) executes the tool and
+returns the result as a `role: "tool"` message — the model only decides *which* tool to
+call. Details and examples are in [OpenAI-compatible API](/integrations/openai-api). To
+configure MCP tool servers directly for `eujeno infer`, see [MCP Tools](/integrations/mcp).
+
+<Callout type="warning">
+  Reliable tool calling requires a capable model (7B+). With Qwen 0.5B it's only good for
+  verifying the mechanism.
+</Callout>
+
+## Many agents in parallel
+
+Each request is a **job** on the network, and the coordinator handles concurrent jobs. For
+many simultaneous agents:
+
+- add a **queue + block replicas** so requests are distributed and there's failover;
+- for **quality**, split a **larger model** (e.g. Llama 3.x 8B/70B) across multiple nodes —
+  the infrastructure is identical, only the size and number of nodes change.
+
+The async / "BOINC" framing is ideal here: many agents enqueue and receive their responses
+over time, even with high latencies.

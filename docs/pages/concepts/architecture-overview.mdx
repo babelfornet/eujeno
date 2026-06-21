@@ -1,0 +1,76 @@
+---
+title: Architecture Overview
+---
+
+import { Callout } from 'nextra/components'
+
+# Architecture Overview
+
+Eujeno is a fully decentralized, peer-to-peer LLM inference network. There is no
+central server: a large open-source model is split into **layer blocks**, and
+each node in the network hosts and runs one or more of those blocks. When a user
+asks a question, the hidden-state vectors are routed through the nodes
+responsible for the blocks, in sequence, until the answer is produced. The
+network *is* the model.
+
+## Blocks and sharding
+
+The unit of sharding is the **block** — a contiguous set of transformer layers
+served by a node. A model is divided into three kinds of block:
+
+- `embed` — the token embedding (input stage).
+- `decoder:lo-hi` — a contiguous range of decoder layers, e.g. `decoder:0-12`.
+- `head` — the LM head that turns the final hidden state into logits.
+
+A block spec given to a node is a comma-separated list of these, for example
+`embed,decoder:0-12` on one node and `decoder:12-24,head` on another. Between
+blocks, nodes pass the **hidden state** (also called the activation): a
+`seq_len × hidden_dim` vector. A node that serves a given block is a **holder**;
+a block can have multiple holders for redundancy.
+
+## Partial loading
+
+Each node loads **only the layers assigned to it**, not the whole model. The
+runtime allocates empty weights and partially loads only the assigned block's
+parameters, so the RAM a node needs is roughly proportional to the number of
+layers it hosts — not to the size of the full model. This is what lets a model
+that would not fit on any single machine run across several modest ones.
+
+For how to translate a layer count into a RAM budget (and back), see
+[Choosing Layers & RAM](/running-a-node/layers-and-ram) and [Models](/models).
+
+## Symmetric peers
+
+Every node is **identical** and runs the same set of subsystems — there are no
+special roles. Any peer can act as the entry point/coordinator for a job, as an
+executor of its blocks, and as a router forwarding hidden states to the next
+hop. A single seed/bootstrap node is allowed only as a temporary convenience and
+is designed to be removable. The components every node runs are covered in
+[The Network](/concepts/the-network).
+
+## The operational condition
+
+The set of blocks currently served by at least one node is the network's
+**coverage**. The model becomes **operational** only once every block is covered
+by at least one holder — that means `embed`, every contiguous `decoder` range up
+to the last layer, and `head` are all served.
+
+```
+operational  ⟺  embed covered
+              ∧  decoder:0..N covered (contiguous, no gaps)
+              ∧  head covered
+```
+
+Until coverage is complete, requests are **not lost**: they stay parked in a
+durable queue. As nodes join and self-assign the blocks that are still missing,
+the model **progressively assembles itself** across the network, moving from an
+incomplete state to operational. If a holder later goes down and leaves a block
+uncovered, the network degrades back toward incomplete and new work queues
+again until the gap is filled.
+
+<Callout type="info">
+Because Eujeno treats inference as an asynchronous, store-and-forward job rather
+than a real-time session, queueing until coverage is complete (and failing over
+when a holder dies) is a natural part of the model, not an error path. See
+[Store-and-Forward Jobs](/concepts/store-and-forward).
+</Callout>

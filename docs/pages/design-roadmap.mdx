@@ -1,0 +1,112 @@
+---
+title: Design & Roadmap
+---
+
+# Design & Roadmap
+
+import { Callout } from 'nextra/components'
+
+<Callout type="warning">
+  **These subsystems are designed on paper, not yet implemented in the PoC.** This page is
+  forward-looking: it summarizes the specifications for incentives, reputation, and Byzantine
+  fault tolerance, plus what's on the roadmap. The PoC ships a **light** version of some of
+  these (reputation, sampled verification); the full economic and BFT machinery is deferred.
+</Callout>
+
+Eujeno's first goal is a **PoC that actually runs** on 2–3 real nodes. Several subsystems are
+fully specified but intentionally left for the post-PoC phase. The sections below describe
+where the line is drawn.
+
+## Token incentives & reputation
+
+The goal is to measure and reward node contribution (compute time + bandwidth) and penalize
+unreliable or dishonest nodes. The spec splits this into an **operational** part (implemented)
+and an **economic** part (deferred).
+
+**Light reputation (in the PoC).** A `reputation` field lives in the same DHT record used for
+routing. It rises on completed, ACKed hops and on liveness (timely TTL refresh), and falls on
+timeouts, on being the cause of a failover, or on a divergence detected by a sampled
+recompute. The router prefers high-reputation nodes; verification sampling is biased toward
+new / low-score nodes; cold-start uses a neutral initial score. Every ACKed hop also leaves a
+local **receipt** `{job_id, stage_idx, peer_id, bytes, t_compute}` in the SQLite job log —
+the attachment point where a future token ledger will plug in.
+
+**Token design (on paper — deferred).** A post-PoC specification, **not** implemented now:
+
+- **What is rewarded:** compute time (per layer × tokens processed) + bandwidth (activation
+  bytes transferred).
+- **Unit:** signed, gossiped off-chain credit, later anchored to a chain (EVM / Solana /
+  Cosmos).
+- **Slashing:** a proven divergence in a recompute is the slashing trigger; the hop receipt is
+  the proof.
+- **Sybil resistance:** participation cost / stake — absent today (no identity cost), a known
+  documented risk.
+- **Open precondition:** any hash / commit-reveal scheme requires deterministic kernels
+  (canonical fp32).
+
+Source: [`specs/prd/part-4-incentives-reputation.md`](https://github.com/albertoferrazzoli/eujeno).
+
+## Security & Byzantine fault tolerance
+
+The goal is to defend the integrity of distributed computation against faulty or malicious
+nodes. In the PoC the nodes are mostly trusted (we own them), so verification is
+**probabilistic and cheap** rather than systematic.
+
+**Light verification (in the PoC).** A **sampled** redundant recompute (~5–10% of stateless /
+prefill hops, biased toward low-score nodes) fans out a stage to a second holder and compares
+activations. A few hard rules shape this:
+
+- **Never hash-compare.** FP non-determinism across heterogeneous hardware means *honest* nodes
+  produce different bytes, so hash equality always fails. Tensors are promoted to **fp32** and
+  compared with an empirical tolerance (`torch.allclose`).
+- **Stateless / prefill hops only.** Verifying mid-generation would require replaying the
+  KV-cache on the second holder, so verification happens only at session / prefill boundaries.
+- **Sampling, not systematic.** Verifying every stage roughly doubles compute and kills the
+  async advantage.
+
+Partial network failures are absorbed by durable store-and-forward: work queues up
+(`WAITING_COVERAGE`, an outbox with retry / backoff) rather than being lost. Basic in-transit
+integrity uses a length / checksum field on the safetensors payload.
+
+**Full BFT (on paper — deferred).** The threat-model table maps each threat to its PoC
+mitigation and its future, full-BFT defense:
+
+| Threat | PoC | Deferred (full BFT) |
+|---|---|---|
+| Node returns garbage activations | sampled recompute + reputation − | N-of-M quorum + slashing |
+| Node lies "small" under tolerance | accepted (wide tolerance) | deterministic kernels + commit-reveal |
+| Sybil (many identities) | no identity cost (known risk) | economic stake / proof-of-work on entry |
+| Free-riding (announces, doesn't compute) | reputation decays on timeout | stake slashing |
+| Replay / payload tampering | checksum + (opt.) signatures | mandatory signed records + nonce |
+
+Commit-reveal is deferred and flagged as potentially non-viable until canonical deterministic
+fp32 / integer kernels are adopted.
+
+Source: [`specs/prd/part-5-security-bft.md`](https://github.com/albertoferrazzoli/eujeno).
+
+## Roadmap
+
+The project status, milestones, and backlog live in
+[`specs/ROADMAP.md`](https://github.com/albertoferrazzoli/eujeno). At a high level:
+
+- **Done:** the split-pipeline foundation with real partial loading; network transport and a
+  distributed orchestrator; the `eujeno` CLI; discovery (pure P2P gossip + coordinator-relay
+  for NAT); automatic failover; durable store-and-forward with resume and
+  `WAITING_COVERAGE`; load balancing; minimal reputation + receipts; the OpenAI-compatible API
+  with tool/function calling.
+- **Next:** end-to-end integration on 2–3 nodes with failover tests; SSE streaming and a native
+  Anthropic `/v1/messages` endpoint; direct-P2P failover.
+- **Deferred (`⏸`):** token / crypto incentives (on-chain ledger, settlement, full
+  proof-of-compute); full BFT (commit-reveal, consensus on outputs, economic slashing); large
+  models (70B+) and advanced tensor-parallel sharding; advanced reputation + economic sybil
+  resistance.
+
+## Architecture Decision Records
+
+The reasoning behind the major choices is captured in the ADRs under
+[`specs/decisions/`](https://github.com/albertoferrazzoli/eujeno):
+
+- **ADR-0001** — implementation forks (including the deterministic-kernels precondition that
+  gates commit-reveal).
+- **ADR-0002** — NAT connectivity (pure P2P vs. coordinator-relay).
+- **ADR-0003** — capacity-aware allocation.

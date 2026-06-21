@@ -1,0 +1,125 @@
+---
+title: Models
+---
+
+import { Callout } from 'nextra/components'
+
+# Models
+
+Eujeno runs open-source models from Hugging Face, split into layer blocks across
+the network. Not every model is supported: the runtime targets a specific family
+of architectures, and you choose how to split a model based on how much RAM your
+nodes have.
+
+## Compatible architectures
+
+Eujeno supports **decoder-only Llama and Qwen2** architectures. The built-in
+`eujeno models` command lists the curated, compatible models:
+
+```bash
+eujeno models
+```
+
+```
+Compatible models (Llama/Qwen2):
+  - Qwen/Qwen2.5-0.5B-Instruct
+  - Qwen/Qwen2.5-1.5B-Instruct
+  - Qwen/Qwen2.5-3B-Instruct
+  - Qwen/Qwen2.5-7B-Instruct
+  - Qwen/Qwen2.5-14B-Instruct
+  - Qwen/Qwen2.5-32B-Instruct
+  - Qwen/Qwen2.5-72B-Instruct
+  - meta-llama/Llama-3.2-1B-Instruct
+  - meta-llama/Llama-3.2-3B-Instruct
+  - meta-llama/Llama-3.1-8B-Instruct
+```
+
+These are examples of the supported families — any decoder-only Llama/Qwen2 model
+on Hugging Face is a candidate. Use the `--json` flag for machine-readable output:
+
+```bash
+eujeno --json models
+```
+
+## Inspecting a model
+
+Before splitting a model, inspect its dimensions with `model --info`:
+
+```bash
+eujeno model --info --model Qwen/Qwen2.5-0.5B-Instruct
+```
+
+```bash
+eujeno --json model --info --model Qwen/Qwen2.5-0.5B-Instruct
+# {"ok": true, "command": "model", "data": {
+#   "model": "Qwen/Qwen2.5-0.5B-Instruct", "num_layers": 24, "hidden_size": 896,
+#   "architecture": "qwen2", "compatible": true, ... }}
+```
+
+The key fields are:
+
+- `compatible` — whether Eujeno can run this model. Check this first.
+- `num_layers` — the number of decoder layers (used to size `decoder` ranges).
+- `hidden_size` — the hidden dimension, used to estimate per-layer RAM.
+- `architecture` / `model_type` — the detected architecture (e.g. `qwen2`).
+
+## Deciding the split
+
+Each node loads **only the layers assigned to it** (partial loading), so the RAM
+a node needs is roughly proportional to the number of layers it hosts, not to the
+size of the whole model. A quick estimate:
+
+```
+bytes_per_param = 4 (float32) | 2 (bfloat16 / float16)
+ram_layer ≈ params_per_layer × bytes_per_param
+ram_node  ≈ Σ ram_layer of the hosted layers  (+ embed / head if assigned)
+```
+
+`num_layers` and `hidden_size` from `model --info` let you derive
+`params_per_layer`. Decoder layers are roughly equal to each other; the memory
+outliers are `embed` and `head`, dominated by the `vocab_size × hidden_size`
+matrix.
+
+Full coverage means a node (or several nodes together) serves `embed`, every
+contiguous `decoder:0-N` range, and `head`. See
+[Architecture Overview](/concepts/architecture-overview#the-operational-condition)
+for the operational condition.
+
+### Large models and `--dtype bfloat16`
+
+Memory scales with the dtype. A 7B model in float32 is roughly 28 GB; in
+bfloat16 it is roughly 14 GB. For large models, pass `--dtype bfloat16` (which
+halves the RAM) and/or split the model across more nodes.
+
+## The `fit` shortcut
+
+Rather than doing the arithmetic by hand, `eujeno fit` tells you how many layers
+a node can hold for a given RAM budget — and suggests a ready-to-use stage spec:
+
+```bash
+eujeno fit --model Qwen/Qwen2.5-7B-Instruct --ram 4 --dtype bfloat16
+```
+
+```bash
+eujeno --json fit --model Qwen/Qwen2.5-7B-Instruct --ram 4 --dtype bfloat16
+# {"ok": true, "command": "fit", "data": {
+#   "num_layers": 28, "ram_per_layer_gb": 0.434, "ram_embed_head_gb": 1.015,
+#   "max_decoder_layers": 7, "fits_whole_model": false,
+#   "suggested_stages": "decoder:0-7" }}
+```
+
+`fit` accepts:
+
+- `--ram <GB>` (required) — the RAM available on the node.
+- `--dtype` — `float32` (default), `bfloat16`, or `float16`.
+- `--reserve` — fraction of RAM held back for activations / KV-cache / OS
+  (default `0.2`).
+
+The `suggested_stages` value (e.g. `decoder:0-7`) can be passed straight to
+`eujeno serve --stages`.
+
+<Callout type="info">
+For a worked walkthrough of choosing layers and RAM and joining a network with
+your share of the model, see
+[Choosing Layers & RAM](/running-a-node/layers-and-ram).
+</Callout>
