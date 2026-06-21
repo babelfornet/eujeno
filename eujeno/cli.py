@@ -417,6 +417,7 @@ def infer(
     peer: str = typer.Option(None, "--peer", help="[P2P] URL of any node: discovers the topology via gossip and runs directly"),
     coordinator: str = typer.Option(None, "--coordinator", help="[coordinator] HTTP URL of the coordinator: thin client"),
     mcp: bool = typer.Option(False, "--mcp", help="[coordinator/peer] use the configured MCP tools (tool-calling loop)"),
+    wait_coverage: int = typer.Option(0, "--wait-coverage", help="[P2P] seconds to wait for full coverage before failing"),
 ):
     """Run distributed inference over a topology of BlockServers."""
     import httpx
@@ -485,7 +486,7 @@ def infer(
             with httpx.Client(timeout=120.0) as client:
                 result = distributed_generate_resilient(
                     reg["nodes"], reg["num_layers"], prompt, max_new_tokens, client, tokenizer,
-                    stop_ids=stop_ids, refresh=_refresh)
+                    stop_ids=stop_ids, refresh=_refresh, coverage_timeout=wait_coverage)
         except Exception as e:
             _fail("infer", "GENERATION_FAILED", str(e))
         if not result.get("ok"):

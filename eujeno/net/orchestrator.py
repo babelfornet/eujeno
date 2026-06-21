@@ -48,10 +48,12 @@ def distributed_generate(topology, prompt: str, max_new_tokens: int, client, tok
 
 def distributed_generate_resilient(stages_by_url, num_layers, prompt, max_new_tokens, client,
                                    tokenizer, stop_ids=None, job_id_prefix="job",
-                                   refresh=None, max_failovers=5):
+                                   refresh=None, max_failovers=5, coverage_timeout=0.0,
+                                   poll_interval=0.5):
     """Pure-P2P entry: greedy distributed generation with failover. On a peer hop failure,
     exclude that peer, rebuild the chain from the gossip registry, and resume from the
     tokens already produced (prefix replay). Stops at EOS (stop_ids)."""
+    import time
     from eujeno.net.discovery import build_chain
     stop_ids = stop_ids or set()
     ids = tokenizer(prompt, return_tensors="pt").input_ids
@@ -59,18 +61,31 @@ def distributed_generate_resilient(stages_by_url, num_layers, prompt, max_new_to
     tokens = []
     excluded = set()
     finish_reason = "length"
+
+    def _resolve_chain():
+        nonlocal stages_by_url
+        start = time.monotonic()
+        while True:
+            if refresh is not None:
+                try:
+                    fresh = refresh()
+                    if fresh:
+                        stages_by_url = fresh
+                except Exception:
+                    pass
+            chain = build_chain(stages_by_url, num_layers, exclude=excluded)
+            if chain is not None:
+                return chain
+            if time.monotonic() - start >= coverage_timeout:
+                return None
+            time.sleep(poll_interval)
+
     for attempt in range(max_failovers + 1):
-        if refresh is not None:
-            try:
-                fresh = refresh()
-                if fresh:
-                    stages_by_url = fresh
-            except Exception:
-                pass
-        chain = build_chain(stages_by_url, num_layers, exclude=excluded)
+        chain = _resolve_chain()
         if chain is None:
-            return {"ok": False, "error": "incomplete coverage: model not operational",
-                    "tokens": tokens, "failovers": attempt}
+            err = ("coverage timeout: model not operational" if coverage_timeout > 0
+                   else "incomplete coverage: model not operational")
+            return {"ok": False, "error": err, "tokens": tokens, "failovers": attempt}
         embed_url, decoders, head_url = chain
         job_id = f"{job_id_prefix}{attempt}"
         current = None
