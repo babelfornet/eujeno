@@ -1,0 +1,73 @@
+name: Release binaries
+
+# Tag a release (e.g. `git tag v0.0.1 && git push --tags`) to build the
+# cross-platform launchers + the eujeno wheel and publish them to a GitHub
+# Release. The launcher is a tiny native binary; on first run it provisions a
+# private Python runtime (via uv) and installs the wheel attached here.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g. v0.0.1)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        run: echo "name=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build eujeno wheel
+        run: |
+          python -m pip install --upgrade build
+          python -m build --wheel
+          ls -la dist
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Cross-compile launchers
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.tag.outputs.name }}"
+          VERSION="${TAG#v}"
+          WHEEL="$(ls dist/eujeno-*.whl | xargs -n1 basename)"
+          WHEEL_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${WHEEL}"
+          echo "wheel=$WHEEL url=$WHEEL_URL"
+          mkdir -p out
+          cd launcher
+          LDFLAGS="-s -w -X main.eujenoVersion=${VERSION} -X main.wheelURL=${WHEEL_URL}"
+          build() { echo "-> $3"; GOOS="$1" GOARCH="$2" CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o "../out/$3" .; }
+          build darwin  arm64 eujeno-macos-arm64
+          build darwin  amd64 eujeno-macos-x64
+          build linux   amd64 eujeno-linux-x64
+          build linux   arm64 eujeno-linux-arm64
+          build windows amd64 eujeno-windows-x64.exe
+          cd ..
+          cp dist/eujeno-*.whl out/
+          ls -la out
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.name }}"
+          gh release create "$TAG" out/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --generate-notes \
+            || gh release upload "$TAG" out/* --repo "$GITHUB_REPOSITORY" --clobber

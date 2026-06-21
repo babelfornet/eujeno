@@ -4,11 +4,62 @@ title: Installation
 
 # Installation
 
-Eujeno is installed from source. There is no `curl | sh` installer: you clone the
-repository and run the auto-bootstrapping launcher, which sets up an isolated Python
-environment on its first run.
+The easiest way is the **standalone binary** — one small download per OS, no Python
+required. Developers can also install from source.
 
-## Prerequisites
+import { Callout } from 'nextra/components'
+
+## Download the binary (recommended)
+
+Each release ships a tiny native launcher for every OS. On its **first run** it
+provisions a private Python runtime and installs PyTorch with the right backend for your
+machine — CPU, NVIDIA CUDA, or Apple MPS — **automatically**. Nothing else to install.
+
+| OS | Download |
+|---|---|
+| macOS (Apple Silicon) | [`eujeno-macos-arm64`](https://github.com/babelfornet/eujeno/releases/latest/download/eujeno-macos-arm64) |
+| macOS (Intel) | [`eujeno-macos-x64`](https://github.com/babelfornet/eujeno/releases/latest/download/eujeno-macos-x64) |
+| Linux (x86-64) | [`eujeno-linux-x64`](https://github.com/babelfornet/eujeno/releases/latest/download/eujeno-linux-x64) |
+| Linux (ARM64) | [`eujeno-linux-arm64`](https://github.com/babelfornet/eujeno/releases/latest/download/eujeno-linux-arm64) |
+| Windows (x86-64) | [`eujeno-windows-x64.exe`](https://github.com/babelfornet/eujeno/releases/latest/download/eujeno-windows-x64.exe) |
+
+**macOS / Linux:**
+
+```bash
+curl -fsSL https://github.com/babelfornet/eujeno/releases/latest/download/eujeno-macos-arm64 -o eujeno
+chmod +x eujeno
+./eujeno --help
+```
+
+**Windows (PowerShell):**
+
+```powershell
+irm https://github.com/babelfornet/eujeno/releases/latest/download/eujeno-windows-x64.exe -OutFile eujeno.exe
+.\eujeno.exe --help
+```
+
+Then **join an existing network** or **create a new one**:
+
+```bash
+# join a network that already serves a model
+./eujeno serve --peers http://SEED_IP:8001 --model Qwen/Qwen2.5-7B-Instruct
+
+# …or create a new single-box network for a model
+./eujeno up --model Qwen/Qwen2.5-7B-Instruct
+```
+
+<Callout type="info">
+  The first run downloads a few hundred MB (managed Python + PyTorch + eujeno) into
+  `~/.eujeno/runtime` (`%LOCALAPPDATA%\eujeno` on Windows); later runs start instantly.
+  On macOS you may need to clear the quarantine flag once:
+  `xattr -d com.apple.quarantine ./eujeno`.
+</Callout>
+
+## From source (for development)
+
+To hack on Eujeno, clone the repo and use the auto-bootstrapping `bin/eujeno` launcher.
+
+### Prerequisites
 
 - **Python 3.10+** and the `python -m venv` module.
 - **git**, to clone the repository.
@@ -17,14 +68,14 @@ environment on its first run.
   layers it hosts — so a single node can cover a small model, or several nodes can
   share a larger one.
 
-## Clone the repository
+### Clone the repository
 
 ```bash
 git clone <repository-url> eujeno
 cd eujeno
 ```
 
-## Bootstrap with the launcher (recommended)
+### Bootstrap with the launcher (recommended)
 
 The `bin/eujeno` launcher is auto-bootstrapping: the first time you run it, it creates
 a `.venv` and installs the package (`pip install -e .`), then forwards your command. No
@@ -37,7 +88,7 @@ manual environment setup needed.
 Every later invocation reuses the same `.venv` and runs immediately. You can keep using
 `./bin/eujeno <command>` for everything.
 
-## Manual installation (alternative)
+### Manual installation (alternative)
 
 If you prefer to manage the virtual environment yourself:
 
@@ -63,8 +114,6 @@ and more). To list the models Eujeno can run:
 ```bash
 eujeno models
 ```
-
-import { Callout } from 'nextra/components'
 
 <Callout type="info">
   Throughout the docs we write commands as `eujeno <command>`. If you used the launcher

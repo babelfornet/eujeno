@@ -1,23 +1,36 @@
 import { useState, useRef, useEffect } from 'react'
 import { container, sectionLabel, h2, mono } from '../styles.js'
 
-const INSTALL_CMD = 'curl -fsSL https://get.eujeno.com | sh'
+const REL = 'https://github.com/babelfornet/eujeno/releases/latest/download'
+
+const DOWNLOADS = [
+  { os: 'macOS', sub: 'Apple Silicon', asset: 'eujeno-macos-arm64' },
+  { os: 'macOS', sub: 'Intel', asset: 'eujeno-macos-x64' },
+  { os: 'Linux', sub: 'x86-64', asset: 'eujeno-linux-x64' },
+  { os: 'Linux', sub: 'ARM64', asset: 'eujeno-linux-arm64' },
+  { os: 'Windows', sub: 'x86-64', asset: 'eujeno-windows-x64.exe' },
+]
+
+const RUN_CMD = `curl -fsSL ${REL}/eujeno-macos-arm64 -o eujeno && chmod +x eujeno
+# Join an existing network:
+./eujeno serve --peers http://SEED:8001 --model Qwen/Qwen2.5-7B-Instruct
+# …or create a new one:
+./eujeno up --model Qwen/Qwen2.5-7B-Instruct`
 
 const CHECKS = [
-  { title: 'Any modern GPU', body: '8 GB VRAM is enough to host a few layers.' },
-  { title: 'A public port', body: 'So neighbours can pass activations to you.' },
-  { title: "That's it", body: 'No registration. The node auto-joins on boot.' },
+  { title: 'No Python to install', body: 'The binary provisions its own runtime on first run.' },
+  { title: 'GPU auto-detected', body: 'CPU, NVIDIA CUDA, or Apple MPS — picked for your machine.' },
+  { title: 'Join or create', body: 'Point at a seed to join, or start a fresh network for a model.' },
 ]
 
 export default function RunNode() {
   const [copied, setCopied] = useState(false)
   const timer = useRef(null)
-
   useEffect(() => () => clearTimeout(timer.current), [])
 
   const copy = () => {
     try {
-      navigator.clipboard && navigator.clipboard.writeText(INSTALL_CMD)
+      navigator.clipboard && navigator.clipboard.writeText(RUN_CMD)
     } catch (e) {
       /* clipboard unavailable */
     }
@@ -33,13 +46,39 @@ export default function RunNode() {
         style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr', gap: '48px', alignItems: 'center' }}
       >
         <div>
-          <div style={sectionLabel}>Join the swarm</div>
-          <h2 style={h2}>Run a node in one command.</h2>
-          <p style={{ margin: '18px 0 0', fontSize: '16px', lineHeight: 1.6, color: 'var(--muted)', maxWidth: '420px' }}>
-            Point it at the network, let it claim the layers your GPU can hold, and start serving. The swarm handles
-            discovery, routing, and failover.
+          <div style={sectionLabel}>Download &amp; run</div>
+          <h2 style={h2}>Run a node. No install.</h2>
+          <p style={{ margin: '18px 0 0', fontSize: '16px', lineHeight: 1.6, color: 'var(--muted)', maxWidth: '430px' }}>
+            Grab the single binary for your OS, point it at the network, and start serving. First run sets up a private
+            runtime and the right PyTorch automatically — nothing else to install.
           </p>
-          <div style={{ marginTop: '28px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+          {/* download buttons */}
+          <div style={{ marginTop: '24px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+            {DOWNLOADS.map((d) => (
+              <a
+                key={d.asset}
+                href={`${REL}/${d.asset}`}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '1px',
+                  padding: '9px 14px',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  textDecoration: 'none',
+                  background: 'var(--card-bg)',
+                  color: 'var(--text)',
+                  minWidth: '96px',
+                }}
+              >
+                <span style={{ fontSize: '14.5px', fontWeight: 700 }}>{d.os}</span>
+                <span style={{ fontSize: '12px', color: 'var(--muted2)' }}>{d.sub}</span>
+              </a>
+            ))}
+          </div>
+
+          <div style={{ marginTop: '26px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {CHECKS.map((c) => (
               <div key={c.title} style={{ display: 'flex', gap: '13px', alignItems: 'flex-start' }}>
                 <span
@@ -101,32 +140,39 @@ export default function RunNode() {
               {copied ? 'copied ✓' : 'copy'}
             </button>
           </div>
-          <div style={{ padding: '20px 18px', fontFamily: mono, fontSize: '13px', lineHeight: 1.9, color: '#dce3ee' }}>
+          <div style={{ padding: '20px 18px', fontFamily: mono, fontSize: '12.5px', lineHeight: 1.85, color: '#dce3ee' }}>
+            <div style={{ color: '#6b7689' }}># download the binary for your OS</div>
             <div>
-              <span style={{ color: '#8b86ff' }}>$</span> curl -fsSL https://get.eujeno.com | sh
+              <span style={{ color: '#8b86ff' }}>$</span> curl -fsSL .../eujeno-macos-arm64 -o eujeno
             </div>
             <div>
-              <span style={{ color: '#8b86ff' }}>$</span> eujeno serve --auto --peers https://seed.eujeno.com \
+              <span style={{ color: '#8b86ff' }}>$</span> chmod +x eujeno
             </div>
+            <div style={{ height: '10px' }} />
+            <div style={{ color: '#6b7689' }}># join an existing network…</div>
             <div>
-              {'      '}--model Qwen/Qwen2.5-72B-Instruct
+              <span style={{ color: '#8b86ff' }}>$</span> ./eujeno serve --peers http://SEED:8001 \
+            </div>
+            <div>{'      '}--model Qwen/Qwen2.5-7B-Instruct</div>
+            <div style={{ height: '10px' }} />
+            <div style={{ color: '#6b7689' }}># …or create a new one</div>
+            <div>
+              <span style={{ color: '#8b86ff' }}>$</span> ./eujeno up --model Qwen/Qwen2.5-7B-Instruct
             </div>
             <div style={{ height: '10px' }} />
             <div style={{ color: '#6b7689' }}>
-              {'  '}resolving peers ..... <span style={{ color: '#6ee7a8' }}>142 found</span>
+              {'  '}provisioning runtime ... <span style={{ color: '#6ee7a8' }}>ok</span>
             </div>
             <div style={{ color: '#6b7689' }}>
-              {'  '}claiming layers ..... <span style={{ color: '#dce3ee' }}>decoder:24-31</span>
+              {'  '}torch backend ......... <span style={{ color: '#dce3ee' }}>auto (cuda/mps/cpu)</span>
             </div>
             <div style={{ color: '#6b7689' }}>
-              {'  '}loading weights ..... <span style={{ color: '#6ee7a8' }}>ok</span>
+              {'  '}claiming layers ....... <span style={{ color: '#dce3ee' }}>decoder:12-24</span>
             </div>
-            <div style={{ color: '#6b7689' }}>
-              {'  '}joining chain ....... <span style={{ color: '#6ee7a8' }}>ok</span>
-            </div>
-            <div style={{ height: '10px' }} />
+            <div style={{ height: '8px' }} />
             <div>
-              <span style={{ color: '#6ee7a8' }}>●</span> serving <span style={{ color: '#6b7689' }}>· 0 errors · 38 tok/s out</span>{' '}
+              <span style={{ color: '#6ee7a8' }}>●</span> serving{' '}
+              <span style={{ color: '#6b7689' }}>· 0 errors · joined swarm</span>{' '}
               <span
                 style={{
                   display: 'inline-block',
