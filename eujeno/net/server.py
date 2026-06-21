@@ -70,12 +70,11 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
             while True:
                 now = time.time()
                 if node_url:
-                    # Refresh advertised metadata each tick from config + metrics
-                    own_stages["name"] = config.get()["name"]
-                    own_stages["region"] = config.get()["region"]
+                    # Build a fresh advertised dict each tick; do NOT mutate own_stages
+                    adv = {**own_stages, "name": config.get()["name"], "region": config.get()["region"]}
                     if config.get().get("telemetry"):
-                        own_stages["tput"] = metrics.throughput_tok_s()
-                    registry.upsert(node_url, own_stages, now=now, ttl=ttl)
+                        adv["tput"] = metrics.throughput_tok_s()
+                    registry.upsert(node_url, adv, now=now, ttl=ttl)
                 for peer in (peers or []):
                     try:
                         resp = await client.get(f"{peer}/registry")
@@ -84,6 +83,8 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
                         pass
                 registry.prune(now)
                 await asyncio.sleep(gossip_interval)
+
+    peer_fail: dict[str, int] = {}
 
     async def _probe_loop():
         """Ping each peer every 5 s; record latency + update peer_status."""
@@ -100,8 +101,10 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
                         ms = (time.monotonic() - t0) * 1000
                         metrics.observe_latency(url, ms)
                         peer_status[url] = "online"
+                        peer_fail[url] = 0
                     except Exception:
-                        peer_status[url] = "syncing"
+                        peer_fail[url] = peer_fail.get(url, 0) + 1
+                        peer_status[url] = "offline" if peer_fail[url] >= 3 else "syncing"
                 await asyncio.sleep(5.0)
 
     @asynccontextmanager
@@ -145,12 +148,13 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
     async def api_node():
         try:
             used, tot = _ram_gb()
+            clean_stages = {"embed": stages.embed, "head": stages.head, "decoders": list(prepared.keys())}
             return {
                 "peerId": config.peer_id,
                 "name": config.get()["name"],
                 "model": getattr(model.config, "_name_or_path", "?"),
                 "numLayers": num_layers,
-                "stages": own_stages,
+                "stages": clean_stages,
                 "layers": _layers_label(),
                 "status": "serving",
                 "ramUsedGb": used,
@@ -237,7 +241,15 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
 
     @app.post("/api/node/restart")
     async def api_restart():
-        return {"ok": True, "message": "node re-initialised (re-probed capacity, re-broadcast registration)"}
+        try:
+            own_stages["capacity"] = probe_capacity()
+            adv = {**own_stages, "name": config.get()["name"], "region": config.get()["region"]}
+            if config.get().get("telemetry"):
+                adv["tput"] = metrics.throughput_tok_s()
+            registry.upsert(node_url, adv, now=time.time(), ttl=ttl)
+        except Exception as e:
+            logging.getLogger("eujeno.node").warning("/api/node/restart error: %s", e)
+        return {"ok": True, "message": "re-probed capacity and re-broadcast registration"}
 
     # ── existing routes ────────────────────────────────────────────────────────
 
@@ -257,18 +269,18 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
 
     @app.post("/embed")
     async def embed(job_id: str, request: Request):
-        metrics.inc_request()
         if embed_block is None:
             return JSONResponse({"error": "this node does not serve the embed stage"}, status_code=400)
+        metrics.inc_request()
         t = decode_tensors(await request.body())
         h = embed_block.run_block(t["input_ids"])
         return Response(encode_tensors({"hidden_states": h}), media_type=_OCTET)
 
     @app.post("/decode/{block_key}")
     async def decode(block_key: str, job_id: str, request: Request):
-        metrics.inc_request()
         if block_key not in prepared:
             return JSONResponse({"error": f"block {block_key} not served"}, status_code=400)
+        metrics.inc_request()
         t = decode_tensors(await request.body())
         job = jobs.setdefault(job_id, {})
         block = job.get(block_key)
@@ -281,9 +293,9 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
 
     @app.post("/head")
     async def head(job_id: str, request: Request, topk: int = 1):
-        metrics.inc_request()
         if head_block is None:
             return JSONResponse({"error": "this node does not serve the head stage"}, status_code=400)
+        metrics.inc_request()
         t = decode_tensors(await request.body())
         logits = head_block.run_block(t["hidden_states"])[:, -1, :]
         k = min(int(topk), logits.shape[-1])
@@ -321,6 +333,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
             prompt = "\n".join((m.get("content") or "") for m in messages)
         _entry_job["n"] += 1
         job_id = f"entry-{_proc}-{_entry_job['n']}"
+        metrics.inc_request()
         prompt_len0 = int(tokenizer(prompt, return_tensors="pt").input_ids.shape[1])
         _store_safe(store.create_job, job_id, _model_id, prompt, sampling, prompt_len0)
         receipts = {}
@@ -367,7 +380,6 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
             return JSONResponse({"error": {"message": str(e), "type": "generation_failed"}}, status_code=502)
 
         elapsed = time.monotonic() - t0_gen
-        metrics.inc_request()
         metrics.record_job(len(tokens), elapsed)
         for url, rc in receipts.items():
             metrics.observe_hop_time(url, rc["t_compute"])
