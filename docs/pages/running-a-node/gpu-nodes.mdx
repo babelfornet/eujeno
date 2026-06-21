@@ -1,0 +1,84 @@
+---
+title: GPU Nodes
+---
+
+# GPU Nodes
+
+By default a node runs on **CPU**. Pass `serve --device cuda` (or `mps`) to run that node's
+layers on a GPU. A GPU node **interoperates with CPU peers** in the same swarm — it moves
+incoming activations onto its device and moves the outputs back to CPU before sending them
+over the wire, so you can mix a fast GPU box with ordinary CPU machines.
+
+import { Callout } from 'nextra/components'
+
+## 1. Install a GPU build of PyTorch
+
+The default install pulls CPU-only PyTorch. Install the CUDA build that matches your driver
+**before** installing eujeno (so the CPU wheel is not pulled in):
+
+```bash
+# NVIDIA / CUDA 12.x (RTX 30/40 series, etc.)
+pip install torch --index-url https://download.pytorch.org/whl/cu124
+pip install -e .          # the rest of eujeno's deps (torch already satisfied)
+```
+
+Verify the GPU is visible to torch:
+
+```bash
+python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+# -> True NVIDIA GeForce RTX 3070 Ti
+```
+
+<Callout type="info">
+  `--device` only changes where **this** node computes. Use `--dtype bfloat16` on the GPU to
+  halve VRAM. On Apple Silicon, `--device mps`.
+</Callout>
+
+## 2. Size the layers to VRAM
+
+A GPU node holds **only its assigned layers** in VRAM. In `bfloat16` a 7B decoder layer is
+~0.5 GB and the `head` (the `vocab × hidden` matrix) adds ~1 GB, so an 8 GB card comfortably
+hosts ~12 decoder layers plus the head:
+
+| Card | VRAM | 7B bf16 capacity (rough) |
+|---|---|---|
+| RTX 3070 Ti | 8 GB | ~12 decoder layers + `head` |
+| RTX 4090 | 24 GB | the whole 7B (all 28 layers) |
+
+`eujeno fit --model <id> --ram <VRAM_GB> --dtype bfloat16` prints a suggested split (treat
+VRAM like RAM for the estimate).
+
+## 3. Run the GPU node
+
+```bash
+eujeno serve \
+  --stages "decoder:16-28,head" \
+  --model Qwen/Qwen2.5-7B-Instruct \
+  --dtype bfloat16 \
+  --device cuda \
+  --host 0.0.0.0 --port 8001 \
+  --advertise http://<gpu-ip>:8001 \
+  --peers http://<peer-a>:8001,http://<peer-b>:8001
+```
+
+The GPU node joins the gossip swarm like any other. Because it's fast, give it the **largest
+share** of layers that VRAM allows and let the CPU nodes cover the rest.
+
+## Mixed CPU/GPU swarm
+
+A typical layout: CPU machines host `embed` + the early layers, the GPU node hosts the bulk
+of the decoders + the `head`. Activations flow CPU → GPU → CPU transparently. Only the
+**dtype** must match across nodes (`bfloat16` everywhere) — the *device* does not.
+
+<Callout type="warning">
+  A node needs enough **disk** for the model snapshot (a 7B is ~15 GB) plus enough **VRAM**
+  for its layers. These are separate limits: VRAM caps how many layers the node can host;
+  disk caps whether the model can be cached at all.
+</Callout>
+
+## Windows notes
+
+- Install Python 3.12 (`winget install Python.Python.3.12`) — PyTorch publishes CUDA wheels for it.
+- Open the node port (admin PowerShell):
+  `New-NetFirewallRule -DisplayName eujeno -Direction Inbound -Protocol TCP -LocalPort 8001 -Action Allow`
+- Run the node detached: `Start-Process -WindowStyle Hidden -FilePath …\.venv\Scripts\eujeno.exe -ArgumentList 'serve', …`
