@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { container, sectionLabel, h2, mono } from '../styles.js'
 
-const INSTALL_CMD = 'curl -fsSL https://get.eujeno.net | sh'
+const INSTALL_CMD = 'curl -fsSL https://get.eujeno.com | sh'
 
 const CHECKS = [
   { title: 'Any modern GPU', body: '8 GB VRAM is enough to host a few layers.' },
@@ -103,17 +103,20 @@ export default function RunNode() {
           </div>
           <div style={{ padding: '20px 18px', fontFamily: mono, fontSize: '13px', lineHeight: 1.9, color: '#dce3ee' }}>
             <div>
-              <span style={{ color: '#8b86ff' }}>$</span> curl -fsSL https://get.eujeno.net | sh
+              <span style={{ color: '#8b86ff' }}>$</span> curl -fsSL https://get.eujeno.com | sh
             </div>
             <div>
-              <span style={{ color: '#8b86ff' }}>$</span> eujeno up --model swarm/llama-70b --layers auto
+              <span style={{ color: '#8b86ff' }}>$</span> eujeno serve --auto --peers https://seed.eujeno.com \
+            </div>
+            <div>
+              {'      '}--model Qwen/Qwen2.5-72B-Instruct
             </div>
             <div style={{ height: '10px' }} />
             <div style={{ color: '#6b7689' }}>
               {'  '}resolving peers ..... <span style={{ color: '#6ee7a8' }}>142 found</span>
             </div>
             <div style={{ color: '#6b7689' }}>
-              {'  '}claiming layers ..... <span style={{ color: '#dce3ee' }}>L24–L31</span>
+              {'  '}claiming layers ..... <span style={{ color: '#dce3ee' }}>decoder:24-31</span>
             </div>
             <div style={{ color: '#6b7689' }}>
               {'  '}loading weights ..... <span style={{ color: '#6ee7a8' }}>ok</span>
