@@ -28,7 +28,7 @@ _OCTET = "application/octet-stream"
 
 def create_app(model, tokenizer, stages, node_url=None, peers=None,
                num_layers=None, gossip_interval=2.0, ttl=30.0, db_path=None,
-               config_path=None):
+               config_path=None, device="cpu"):
     """Create the FastAPI app of a BlockServer. With node_url/peers it enables
     decentralized gossip discovery (Mode A); without, Part 1 behavior."""
     embed_block = EmbedBlock(model.model.embed_tokens) if stages.embed else None
@@ -285,8 +285,8 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
             return JSONResponse({"error": "this node does not serve the embed stage"}, status_code=400)
         metrics.inc_request()
         t = decode_tensors(await request.body())
-        h = embed_block.run_block(t["input_ids"])
-        return Response(encode_tensors({"hidden_states": h}), media_type=_OCTET)
+        h = embed_block.run_block(t["input_ids"].to(device))
+        return Response(encode_tensors({"hidden_states": h.cpu()}), media_type=_OCTET)
 
     @app.post("/decode/{block_key}")
     async def decode(block_key: str, job_id: str, request: Request):
@@ -300,8 +300,8 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
             layers, rotary = prepared[block_key]
             block = DecoderBlock(layers, rotary)   # own cache per (job, block)
             job[block_key] = block
-        h = block.run_block(t["hidden_states"], t["cache_position"])
-        return Response(encode_tensors({"hidden_states": h}), media_type=_OCTET)
+        h = block.run_block(t["hidden_states"].to(device), t["cache_position"].to(device))
+        return Response(encode_tensors({"hidden_states": h.cpu()}), media_type=_OCTET)
 
     @app.post("/head")
     async def head(job_id: str, request: Request, topk: int = 1):
@@ -309,7 +309,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
             return JSONResponse({"error": "this node does not serve the head stage"}, status_code=400)
         metrics.inc_request()
         t = decode_tensors(await request.body())
-        logits = head_block.run_block(t["hidden_states"])[:, -1, :]
+        logits = head_block.run_block(t["hidden_states"].to(device))[:, -1, :]
         k = min(int(topk), logits.shape[-1])
         vals, idx = torch.topk(logits[0], k=k)
         ids = idx.tolist()
