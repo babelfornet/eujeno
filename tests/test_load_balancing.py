@@ -65,3 +65,18 @@ def test_reputation_none_matches_load_only_path():
 def test_prefers_higher_reputation_decoder_replica():
     s = {"a": _s(embed=True), "b": _s(decoders=["0-24"]), "c": _s(decoders=["0-24"]), "d": _s(head=True)}
     assert build_chain(s, 24, reputation={"b": 0.0, "c": 9.0})[1] == [("0-24", "c")]
+
+
+def test_build_chain_prefers_faster_peer():
+    # two redundant heads; u_fast faster (higher speed) than u_slow -> u_fast chosen
+    stages = {
+        "u_embed": _s(embed=True, decoders=["0-12"]),
+        "u_fast":  _s(head=True, decoders=["12-24"]),
+        "u_slow":  _s(head=True, decoders=["12-24"]),
+    }
+    chain = build_chain(stages, 24, speed={"u_fast": 9.0, "u_slow": 1.0})
+    _, decoders, head = chain
+    assert head == "u_fast"
+    assert dict(decoders)["12-24"] == "u_fast"
+    # default path unchanged when no maps given
+    assert build_chain(stages, 24) is not None
