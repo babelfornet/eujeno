@@ -18,12 +18,16 @@ from eujeno.net.discovery import Registry, build_chain
 from eujeno.net.generation import generate_tokens
 from eujeno.net.jobstore import JobStore
 from eujeno.net.tools import extract_tool_calls
+from eujeno.net.nodeconfig import NodeConfig
+from eujeno.net.metrics import NodeMetrics
+from eujeno.net.capacity import probe_capacity
 
 _OCTET = "application/octet-stream"
 
 
 def create_app(model, tokenizer, stages, node_url=None, peers=None,
-               num_layers=None, gossip_interval=2.0, ttl=30.0, db_path=None):
+               num_layers=None, gossip_interval=2.0, ttl=30.0, db_path=None,
+               config_path=None):
     """Create the FastAPI app of a BlockServer. With node_url/peers it enables
     decentralized gossip discovery (Mode A); without, Part 1 behavior."""
     embed_block = EmbedBlock(model.model.embed_tokens) if stages.embed else None
@@ -31,11 +35,14 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
     prepared = {f"{lo}-{hi}": prepare_decoder_block(model, lo, hi) for (lo, hi) in stages.decoders}
     jobs = {}
     own_stages = {"embed": stages.embed, "head": stages.head, "decoders": list(prepared.keys())}
-    from eujeno.net.capacity import probe_capacity
     own_stages["capacity"] = probe_capacity()
     registry = Registry()
     if node_url:
         registry.upsert(node_url, own_stages, now=time.time(), ttl=ttl)
+
+    config = NodeConfig(config_path)
+    metrics = NodeMetrics()
+    peer_status = {}   # url -> "online"|"syncing"|"offline"
 
     stop_ids = set()
     if tokenizer is not None and tokenizer.eos_token_id is not None:
@@ -63,6 +70,11 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
             while True:
                 now = time.time()
                 if node_url:
+                    # Refresh advertised metadata each tick from config + metrics
+                    own_stages["name"] = config.get()["name"]
+                    own_stages["region"] = config.get()["region"]
+                    if config.get().get("telemetry"):
+                        own_stages["tput"] = metrics.throughput_tok_s()
                     registry.upsert(node_url, own_stages, now=now, ttl=ttl)
                 for peer in (peers or []):
                     try:
@@ -73,16 +85,161 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
                 registry.prune(now)
                 await asyncio.sleep(gossip_interval)
 
+    async def _probe_loop():
+        """Ping each peer every 5 s; record latency + update peer_status."""
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            while True:
+                now = time.time()
+                nodes = registry.stages_by_url(now)
+                for url in list(nodes.keys()):
+                    if url == node_url:
+                        continue
+                    try:
+                        t0 = time.monotonic()
+                        await client.get(f"{url}/health")
+                        ms = (time.monotonic() - t0) * 1000
+                        metrics.observe_latency(url, ms)
+                        peer_status[url] = "online"
+                    except Exception:
+                        peer_status[url] = "syncing"
+                await asyncio.sleep(5.0)
+
     @asynccontextmanager
     async def lifespan(_app):
-        task = asyncio.create_task(_gossip_loop()) if node_url else None
+        gossip_task = asyncio.create_task(_gossip_loop()) if node_url else None
+        probe_task = asyncio.create_task(_probe_loop()) if node_url else None
         try:
             yield
         finally:
-            if task:
-                task.cancel()
+            if gossip_task:
+                gossip_task.cancel()
+            if probe_task:
+                probe_task.cancel()
 
     app = FastAPI(lifespan=lifespan)
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+
+    def _ram_gb():
+        try:
+            c = probe_capacity()
+            tot = c.get("ram_total_gb") or 0.0
+            free = c.get("ram_free_gb") or 0.0
+            return round(max(0.0, tot - free), 1), round(tot, 1)
+        except Exception:
+            return 0.0, 0.0
+
+    def _layers_label():
+        parts = []
+        if stages.embed:
+            parts.append("embed")
+        for (lo, hi) in stages.decoders:
+            parts.append(f"L{lo}–L{hi-1}")
+        if stages.head:
+            parts.append("head")
+        return ",".join(parts) or "—"
+
+    # ── /api/* routes ─────────────────────────────────────────────────────────
+
+    @app.get("/api/node")
+    async def api_node():
+        try:
+            used, tot = _ram_gb()
+            return {
+                "peerId": config.peer_id,
+                "name": config.get()["name"],
+                "model": getattr(model.config, "_name_or_path", "?"),
+                "numLayers": num_layers,
+                "stages": own_stages,
+                "layers": _layers_label(),
+                "status": "serving",
+                "ramUsedGb": used,
+                "ramTotalGb": tot,
+                "region": config.get()["region"],
+                "uptimeSec": round(metrics.uptime_sec()),
+                "port": config.get()["port"],
+                "requestsServed": metrics.requests_served,
+                "throughputTokS": metrics.throughput_tok_s(),
+            }
+        except Exception as e:
+            logging.getLogger("eujeno.node").warning("/api/node error: %s", e)
+            return {"peerId": config.peer_id, "error": str(e)}
+
+    @app.get("/api/metrics")
+    async def api_metrics():
+        try:
+            nodes = registry.stages_by_url(time.time())
+            try:
+                active = sum(1 for j in store.recent_jobs(100) if j.get("status") == "RUNNING")
+            except Exception:
+                active = 0
+            return {
+                "connectedPeers": max(0, len(nodes) - 1),
+                "throughputTokS": metrics.throughput_tok_s(),
+                "avgLatencyMs": metrics.avg_latency_ms(),
+                "activeQueries": active,
+                "requestsServed": metrics.requests_served,
+            }
+        except Exception as e:
+            logging.getLogger("eujeno.node").warning("/api/metrics error: %s", e)
+            return {"connectedPeers": 0, "throughputTokS": 0.0, "avgLatencyMs": 0,
+                    "activeQueries": 0, "requestsServed": metrics.requests_served}
+
+    @app.get("/api/peers")
+    async def api_peers():
+        try:
+            nodes = registry.stages_by_url(time.time())
+            out = []
+            for url, st in nodes.items():
+                if url == node_url:
+                    continue
+                decs = st.get("decoders") or []
+                parts = []
+                if st.get("embed"):
+                    parts.append("embed")
+                parts.extend(f"L{d}" for d in decs)
+                if st.get("head"):
+                    parts.append("head")
+                lab = ",".join(parts) or "—"
+                lat = metrics.peer_latency.get(url)
+                out.append({
+                    "peerId": st.get("name") or url,
+                    "url": url,
+                    "layers": lab,
+                    "region": st.get("region") or "—",
+                    "latencyMs": round(lat) if lat is not None else None,
+                    "throughputTokS": st.get("tput") or 0.0,
+                    "status": peer_status.get(url, "syncing"),
+                })
+            out.sort(key=lambda p: (
+                p["latencyMs"] if p["latencyMs"] is not None else 1e9,
+                -(p["throughputTokS"] or 0),
+            ))
+            return {"peers": out}
+        except Exception as e:
+            logging.getLogger("eujeno.node").warning("/api/peers error: %s", e)
+            return {"peers": []}
+
+    @app.get("/api/settings")
+    async def api_settings_get():
+        try:
+            return config.get()
+        except Exception as e:
+            return {"error": str(e)}
+
+    @app.put("/api/settings")
+    async def api_settings_put(request: Request):
+        try:
+            body = await request.json()
+            return config.update(body)
+        except Exception as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+
+    @app.post("/api/node/restart")
+    async def api_restart():
+        return {"ok": True, "message": "node re-initialised (re-probed capacity, re-broadcast registration)"}
+
+    # ── existing routes ────────────────────────────────────────────────────────
 
     @app.get("/registry")
     async def get_registry():
@@ -100,6 +257,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
 
     @app.post("/embed")
     async def embed(job_id: str, request: Request):
+        metrics.inc_request()
         if embed_block is None:
             return JSONResponse({"error": "this node does not serve the embed stage"}, status_code=400)
         t = decode_tensors(await request.body())
@@ -108,6 +266,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
 
     @app.post("/decode/{block_key}")
     async def decode(block_key: str, job_id: str, request: Request):
+        metrics.inc_request()
         if block_key not in prepared:
             return JSONResponse({"error": f"block {block_key} not served"}, status_code=400)
         t = decode_tensors(await request.body())
@@ -122,6 +281,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
 
     @app.post("/head")
     async def head(job_id: str, request: Request, topk: int = 1):
+        metrics.inc_request()
         if head_block is None:
             return JSONResponse({"error": "this node does not serve the head stage"}, status_code=400)
         t = decode_tensors(await request.body())
@@ -148,7 +308,10 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
         max_new = int(body.get("max_tokens", 256))
         tools = body.get("tools")
         sampling = {k: body.get(k) for k in ("temperature", "top_p", "repetition_penalty", "seed")}
-        chain = build_chain(registry.stages_by_url(time.time()), num_layers)
+        now = time.time()
+        nodes = registry.stages_by_url(now)
+        speed = metrics.speed_map(list(nodes.keys()))
+        chain = build_chain(nodes, num_layers, speed=speed)
         if chain is None:
             return JSONResponse({"error": {"message": "network not operational", "type": "not_operational"}}, status_code=503)
         embed_url, decoders, head_url = chain
@@ -168,6 +331,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
             r["bytes"] += sent + recv
             r["t_compute"] += dt
 
+        t0_gen = time.monotonic()
         try:
             async with httpx.AsyncClient(timeout=300.0) as client:
                 async def run_embed(cur):
@@ -202,6 +366,12 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
             _store_safe(store.add_receipts, job_id, receipts)
             return JSONResponse({"error": {"message": str(e), "type": "generation_failed"}}, status_code=502)
 
+        elapsed = time.monotonic() - t0_gen
+        metrics.inc_request()
+        metrics.record_job(len(tokens), elapsed)
+        for url, rc in receipts.items():
+            metrics.observe_hop_time(url, rc["t_compute"])
+
         text = tokenizer.decode(tokens, skip_special_tokens=True)
         _store_safe(store.finish, job_id, text, finish_reason)
         _store_safe(store.add_receipts, job_id, receipts)
@@ -210,11 +380,20 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
         if tool_calls:
             message["tool_calls"] = tool_calls
             finish_reason = "tool_calls"
+
+        hop_urls = {embed_url, head_url, *(u for _, u in decoders)}
+        eujeno_field = {
+            "hops": len(hop_urls),
+            "layers": num_layers,
+            "tokS": metrics.throughput_tok_s(),
+        }
+
         return {"id": "chatcmpl-" + job_id, "object": "chat.completion", "created": int(time.time()),
                 "model": _model_id,
                 "choices": [{"index": 0, "message": message, "finish_reason": finish_reason}],
                 "usage": {"prompt_tokens": prompt_len, "completion_tokens": len(tokens),
-                          "total_tokens": prompt_len + len(tokens)}}
+                          "total_tokens": prompt_len + len(tokens)},
+                "eujeno": eujeno_field}
 
     @app.get("/jobs")
     async def list_jobs(limit: int = 50):

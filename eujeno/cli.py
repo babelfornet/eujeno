@@ -271,6 +271,7 @@ def serve(
     reserve: float = typer.Option(0.2, "--reserve", help="Fraction of RAM reserved (auto)"),
     target: int = typer.Option(1, "--target", help="Desired replicas per range (auto; 2 = redundancy)"),
     db: str = typer.Option(None, "--db", help="[P2P] SQLite job-log path for this node (default: in-memory)"),
+    settings: str = typer.Option(None, "--settings", help="Node settings JSON path (default ~/.eujeno/node-<port>.json)"),
 ):
     """Start a BlockServer hosting the given stages (long-running process).
 
@@ -318,7 +319,9 @@ def serve(
     own_url = advertise or f"http://{host}:{port}"
     seeds = [p.strip() for p in peers.split(",")] if peers else []
     nl = num_layers if num_layers is not None else model_config_dims(model_id)["num_layers"]
-    fastapi_app = create_app(model, tokenizer, spec, node_url=own_url, peers=seeds, num_layers=nl, db_path=db)
+    cfg_path = settings or os.path.expanduser(f"~/.eujeno/node-{port}.json")
+    fastapi_app = create_app(model, tokenizer, spec, node_url=own_url, peers=seeds, num_layers=nl, db_path=db,
+                             config_path=cfg_path)
     typer.echo(f"eujeno serve (P2P): stages={stages} on http://{host}:{port} advertise={own_url} peers={seeds}", err=True)
     uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
 
