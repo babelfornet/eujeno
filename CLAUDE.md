@@ -37,7 +37,7 @@ eujeno --json model --info --model Qwen/Qwen2.5-0.5B-Instruct
 | `eujeno serve --auto --peers <seed>` | **Self-assignment**: the node reads the coverage gaps from the seed + its own RAM and claims a range by itself (`--target 2` for redundancy, `--ram` to force the budget). |
 | `eujeno coordinator --port 9000` | Starts a coordinator (relay for nodes behind NAT). |
 | `eujeno infer --coordinator <url> --prompt "..."` | One-shot inference over the network. `--peer <url>` for pure P2P. |
-| `eujeno ui --coordinator <url>` | Local dashboard (network status, chat, MCP). |
+| `eujeno ui --node <url>` | Open the node's dashboard (every node serves its own UI at its URL). |
 | `eujeno mcp --add <name> --command <cmd> --args "..."` | Configures MCP servers; `eujeno infer --mcp` uses them in the tool-calling loop. |
 | `eujeno selfcheck` | Checks the environment/model. |
 | `eujeno schema` | Machine-readable schema of all commands/flags. |
@@ -89,9 +89,9 @@ eujeno serve --coordinator ws://IP:9000/node --stages "decoder:12-24,head" \
 eujeno --json infer --coordinator http://IP:9000 --prompt "Explain photosynthesis"
 ```
 
-**d) Start the frontend:**
+**d) Open the node dashboard:**
 ```bash
-eujeno ui --coordinator http://IP:9000      # then open http://127.0.0.1:8500
+eujeno ui --node http://127.0.0.1:8001     # opens the node's built-in dashboard
 ```
 
 ## Operational notes
@@ -99,3 +99,4 @@ eujeno ui --coordinator http://IP:9000      # then open http://127.0.0.1:8500
 - **NAT without VPN:** use coordinator mode (nodes connect outbound). On LAN/VPN/public IPs, pure P2P (`--peer`) is fine.
 - **Operationality:** until coverage is complete, `infer` **parks the request** (job status `WAITING_COVERAGE`) and waits for a node to cover the missing range, up to the coordinator's `coverage_timeout` (default 120s), then resumes from where it left off; on timeout it errors. Jobs are persisted in a durable SQLite log (`coordinator --db`, default `~/.eujeno/coordinator-jobs.db`); inspect them at `GET /jobs[/{id}]`. Add nodes with the missing ranges to unblock parked jobs.
 - **OpenAI/Anthropic client models:** the coordinator exposes `/v1/chat/completions` (OpenAI). For Claude Code, put **LiteLLM** in front (see `docs/examples/agents.md`).
+- **Node dashboard:** every node serves its own dashboard at `http://<node>:<port>/` (Network/Chat/Settings); `eujeno ui --node <url>` opens it.

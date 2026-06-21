@@ -402,15 +402,16 @@ def up(
 
 @app.command()
 def ui(
-    coordinator: str = typer.Option("http://127.0.0.1:9000", "--coordinator", help="HTTP URL of the coordinator to connect to"),
-    host: str = typer.Option("127.0.0.1", "--host", help="UI host"),
-    port: int = typer.Option(8500, "--port", help="UI port"),
+    node: str = typer.Option("http://127.0.0.1:8001", "--node", help="URL of a node whose dashboard to open"),
 ):
-    """Start the local control frontend (network dashboard + chat)."""
-    import uvicorn
-    from eujeno.ui.server import create_ui_app
-    typer.echo(f"eujeno ui: http://{host}:{port}  (coordinator={coordinator})", err=True)
-    uvicorn.run(create_ui_app(coordinator), host=host, port=port, log_level="info")
+    """Open a node's dashboard (every node serves its own UI)."""
+    typer.echo(f"eujeno ui: opening node dashboard at {node}", err=True)
+    try:
+        import webbrowser
+        webbrowser.open(node)
+    except Exception:
+        pass
+    _emit_ok("ui", {"url": node}, human=f"Dashboard: {node}")
 
 
 @app.command()
