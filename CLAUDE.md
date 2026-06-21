@@ -33,7 +33,7 @@ eujeno --json model --info --model Qwen/Qwen2.5-0.5B-Instruct
 | `eujeno model --info --model <id>` | Model dimensions (num_layers, hidden, ...) + `architecture` + `compatible`. Use it to **decide the split**. |
 | `eujeno fit --model <id> --ram <GB> [--dtype bfloat16]` | How many layers a node can hold with N GB of RAM + a **suggested stage spec** for `--stages`. |
 | `eujeno up --model <id> [--dtype bfloat16]` | One-command bring-up: starts a coordinator + a node that covers all layers. `--dry-run` prints the commands without starting them. |
-| `eujeno serve --stages "<spec>" ...` | Starts a node that hosts certain blocks. `--dtype` for large models. |
+| `eujeno serve --stages "<spec>" ...` | Starts a node that hosts certain blocks. `--dtype` for large models; `--device cuda` to run that node's layers on a GPU (interoperates with CPU peers). |
 | `eujeno serve --auto --peers <seed>` | **Self-assignment**: the node reads the coverage gaps from the seed + its own RAM and claims a range by itself (`--target 2` for redundancy, `--ram` to force the budget). |
 | `eujeno coordinator --port 9000` | Starts a coordinator (relay for nodes behind NAT). |
 | `eujeno infer --coordinator <url> --prompt "..."` | One-shot inference over the network. `--peer <url>` for pure P2P. |

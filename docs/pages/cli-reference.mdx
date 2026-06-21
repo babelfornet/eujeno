@@ -164,6 +164,7 @@ eujeno serve --stages "embed,decoder:0-12" --port 8001
 | `--target INTEGER` | Desired replicas per range (auto; `2` = redundancy). Default `1`. |
 | `--db TEXT` | [P2P] SQLite job-log path for this node (default: in-memory). |
 | `--settings TEXT` | Node settings JSON path. Default `~/.eujeno/node-<port>.json`. |
+| `--device TEXT` | `cpu` \| `cuda` \| `mps`. Default `cpu`. `cuda` runs this node's layers on an NVIDIA GPU (needs a CUDA torch build); it interoperates with CPU peers — the node moves activations to/from the device automatically. |
 
 ### `coordinator`
 
