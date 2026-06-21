@@ -62,10 +62,17 @@ def distributed_generate_resilient(stages_by_url, num_layers, prompt, max_new_to
     excluded = set()
     finish_reason = "length"
 
-    def _resolve_chain():
+    deadline = time.monotonic() + coverage_timeout
+
+    def _resolve_chain(deadline):
         nonlocal stages_by_url
-        start = time.monotonic()
         while True:
+            chain = build_chain(stages_by_url, num_layers, exclude=excluded)
+            if chain is not None:
+                return chain
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(poll_interval)
             if refresh is not None:
                 try:
                     fresh = refresh()
@@ -73,15 +80,9 @@ def distributed_generate_resilient(stages_by_url, num_layers, prompt, max_new_to
                         stages_by_url = fresh
                 except Exception:
                     pass
-            chain = build_chain(stages_by_url, num_layers, exclude=excluded)
-            if chain is not None:
-                return chain
-            if time.monotonic() - start >= coverage_timeout:
-                return None
-            time.sleep(poll_interval)
 
     for attempt in range(max_failovers + 1):
-        chain = _resolve_chain()
+        chain = _resolve_chain(deadline)
         if chain is None:
             err = ("coverage timeout: model not operational" if coverage_timeout > 0
                    else "incomplete coverage: model not operational")
