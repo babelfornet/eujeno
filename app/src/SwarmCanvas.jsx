@@ -64,7 +64,7 @@ export default function SwarmCanvas({ accent, dark, count }) {
       const W = rect.width, H = rect.height
       if (W < 2 || H < 2) { stateRef.current.raf = requestAnimationFrame(draw); return }
 
-      const N = Math.max(6, stateRef.current._count ?? 6)
+      const N = Math.max(1, stateRef.current._count ?? 1)
       const dpr = Math.min(window.devicePixelRatio || 1, 2)
       const s = stateRef.current
 
@@ -150,7 +150,7 @@ export default function SwarmCanvas({ accent, dark, count }) {
 
   // Propagate count changes -> force re-init on next frame
   useEffect(() => {
-    stateRef.current._count = Math.max(6, count ?? 6)
+    stateRef.current._count = Math.max(1, count ?? 1)
     stateRef.current.N = 0 // triggers re-init in draw loop
   }, [count])
 
