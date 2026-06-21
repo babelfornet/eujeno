@@ -3,6 +3,7 @@ import { THEMES, ACCENTS, loadThemePrefs, saveThemePrefs } from './theme.js'
 import { getNode, getMetrics } from './api.js'
 import Sidebar from './Sidebar.jsx'
 import NetworkPage from './NetworkPage.jsx'
+import ChatPage from './ChatPage.jsx'
 
 export default function App() {
   // Theme state
@@ -81,15 +82,7 @@ export default function App() {
           <NetworkPage T={T} accent={accent} dark={theme === 'dark'} node={node} metrics={metrics} />
         )}
         {view === 'chat' && (
-          <div style={{flex:'1', display:'flex', alignItems:'center', justifyContent:'center',
-                       flexDirection:'column', gap:'8px', color:T.muted}}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 5.5h16v10.5H9l-4 3.5v-3.5H4z"/>
-              <path d="M8.5 10.5h7M8.5 13h4.5"/>
-            </svg>
-            <span style={{fontSize:'15px', fontWeight:'600'}}>Chat</span>
-            <span style={{fontSize:'13px', color:T.muted2}}>Coming soon</span>
-          </div>
+          <ChatPage T={T} accent={accent} />
         )}
         {view === 'settings' && (
           <div style={{flex:'1', display:'flex', alignItems:'center', justifyContent:'center',
