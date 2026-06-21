@@ -17,3 +17,14 @@ def test_latency_and_speed_prefers_faster():
     assert sp["new"] > 0                       # unmeasured gets a neutral default
     m.observe_latency("fast", 20); m.observe_latency("slow", 80)
     assert m.avg_latency_ms() == 50
+
+
+def test_retain_evicts_departed_peers():
+    # Once a peer ages out of the registry its per-peer metrics must be dropped,
+    # otherwise the dicts grow without bound over the life of a swarm.
+    m = NodeMetrics(ewma_alpha=1.0)
+    m.observe_latency("a", 10); m.observe_latency("b", 20)
+    m.observe_hop_time("a", 0.1); m.observe_hop_time("b", 0.2)
+    m.retain({"a"})                       # "b" departed
+    assert set(m.peer_latency) == {"a"}
+    assert set(m.peer_hop_time) == {"a"}

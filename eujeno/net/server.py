@@ -38,8 +38,24 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
     own_stages = {"embed": stages.embed, "head": stages.head, "decoders": list(prepared.keys())}
     own_stages["capacity"] = probe_capacity()
     registry = Registry()
+
+    # Monotonic per-origin heartbeat, stamped on every self-advert. The relay path
+    # (Registry.merge) extends an entry's TTL only on a newer hb, so a node's own
+    # adverts must always carry a strictly increasing one. Seeded from wall-clock so
+    # it keeps rising across restarts (a restarted node out-incarnates its old self).
+    _hb = {"v": time.time()}
+    _hb_lock = threading.Lock()
+
+    def _next_hb():
+        with _hb_lock:
+            t = time.time()
+            if t <= _hb["v"]:
+                t = _hb["v"] + 1e-3
+            _hb["v"] = t
+            return t
+
     if node_url:
-        registry.upsert(node_url, own_stages, now=time.time(), ttl=ttl)
+        registry.upsert(node_url, {**own_stages, "hb": _next_hb()}, now=time.time(), ttl=ttl)
 
     config = NodeConfig(config_path)
     metrics = NodeMetrics()
@@ -95,6 +111,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
                     adv = {**own_stages, "name": config.get()["name"], "region": config.get()["region"]}
                     if config.get().get("telemetry"):
                         adv["tput"] = metrics.throughput_tok_s()
+                    adv["hb"] = _next_hb()
                     registry.upsert(node_url, adv, now=now, ttl=ttl)
                 for peer in (peers or []):
                     # pull: learn what the peer already knows
@@ -112,6 +129,13 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
                         except Exception:
                             pass
                 registry.prune(now)
+                # Evict per-peer bookkeeping for nodes that just aged out, so the
+                # status/fail/metrics dicts track the live swarm instead of growing.
+                live = set(registry.stages_by_url(now).keys())
+                for d in (peer_status, peer_fail):
+                    for u in [u for u in d if u not in live]:
+                        del d[u]
+                metrics.retain(live)
             except Exception:
                 pass
             time.sleep(gossip_interval)
@@ -269,6 +293,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
             adv = {**own_stages, "name": config.get()["name"], "region": config.get()["region"]}
             if config.get().get("telemetry"):
                 adv["tput"] = metrics.throughput_tok_s()
+            adv["hb"] = _next_hb()
             registry.upsert(node_url, adv, now=time.time(), ttl=ttl)
         except Exception as e:
             logging.getLogger("eujeno.node").warning("/api/node/restart error: %s", e)

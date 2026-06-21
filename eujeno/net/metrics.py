@@ -33,6 +33,14 @@ class NodeMetrics:
         if seconds and seconds > 0:
             self._ewma(self.peer_hop_time, url, float(seconds))
 
+    def retain(self, urls):
+        """Drop per-peer measurements for URLs no longer in `urls` (peers that
+        have left the registry), so the dicts don't grow over the swarm's life."""
+        keep = set(urls)
+        for store in (self.peer_latency, self.peer_hop_time):
+            for u in [u for u in store if u not in keep]:
+                del store[u]
+
     def uptime_sec(self):
         return time.monotonic() - self._started
 

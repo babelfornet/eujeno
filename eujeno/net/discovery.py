@@ -4,6 +4,17 @@
 import threading
 
 
+def _hb_newer(new_hb, cur_hb) -> bool:
+    """Whether a relayed heartbeat is strictly fresher than the held one. Missing
+    heartbeats sort oldest, so a node still emitting `hb` always wins over a legacy
+    (None) entry, and a None relay never refreshes an entry that has an hb."""
+    if new_hb is None:
+        return False
+    if cur_hb is None:
+        return True
+    return new_hb > cur_hb
+
+
 class Registry:
     """Decentralized discovery state: url -> {stages, expiry}. Relative TTL:
     learned entries expire at now+ttl unless refreshed by the gossip.
@@ -19,9 +30,18 @@ class Registry:
             self.entries[url] = {"stages": stages, "expiry": now + ttl}
 
     def merge(self, stages_by_url: dict, now: float, ttl: float) -> None:
+        """Relay (gossip pull): adopt entries learned from a peer. Unlike upsert
+        (which is the origin authoritatively refreshing its OWN record), a relay
+        must NOT keep extending an entry's expiry on every round — otherwise a
+        dead node gossiped back and forth between two live peers never ages out.
+        We therefore refresh an existing entry only when the incoming heartbeat
+        (`hb`, stamped by the origin and carried verbatim through relays) is newer
+        than the one we hold; a frozen hb (dead origin) is left to expire."""
         with self._lock:
             for url, stages in stages_by_url.items():
-                self.entries[url] = {"stages": stages, "expiry": now + ttl}
+                cur = self.entries.get(url)
+                if cur is None or _hb_newer(stages.get("hb"), cur["stages"].get("hb")):
+                    self.entries[url] = {"stages": stages, "expiry": now + ttl}
 
     def prune(self, now: float) -> None:
         with self._lock:
