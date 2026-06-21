@@ -135,6 +135,13 @@ export default function ChatPage({ T, accent }) {
     }
   }
 
+  const newChat = useCallback(() => {
+    if (sending) return
+    setChat([])
+    persistChat([])
+    setInput('')
+  }, [sending])
+
   const chatEmpty = chat.length === 0
 
   return (
@@ -144,11 +151,42 @@ export default function ChatPage({ T, accent }) {
         padding: '22px 36px',
         borderBottom: `1px solid ${T.border}`,
         flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '16px',
       }}>
-        <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 800, letterSpacing: '-0.02em', color: T.text }}>Chat</h1>
-        <p style={{ margin: '5px 0 0', fontSize: '13.5px', color: T.muted }}>
-          Responses routed layer by layer across the network
-        </p>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 800, letterSpacing: '-0.02em', color: T.text }}>Chat</h1>
+          <p style={{ margin: '5px 0 0', fontSize: '13.5px', color: T.muted }}>
+            Responses routed layer by layer across the network
+          </p>
+        </div>
+        <button
+          onClick={newChat}
+          disabled={sending || chatEmpty}
+          title="Start a new chat"
+          style={{
+            flexShrink: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '7px',
+            border: `1px solid ${T.borderStrong}`,
+            background: T.cardBg,
+            color: (sending || chatEmpty) ? T.muted2 : T.text,
+            fontSize: '13.5px',
+            fontWeight: 600,
+            padding: '8px 14px',
+            borderRadius: '9px',
+            cursor: (sending || chatEmpty) ? 'default' : 'pointer',
+            opacity: (sending || chatEmpty) ? 0.5 : 1,
+            fontFamily: 'inherit',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          New chat
+        </button>
       </div>
 
       {/* Messages area */}
