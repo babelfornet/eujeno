@@ -32,6 +32,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 var (
@@ -39,6 +40,9 @@ var (
 	wheelURL      = ""
 	uvVersion     = "latest"
 )
+
+// repo is the GitHub repository releases are published to.
+const repo = "babelfornet/eujeno"
 
 const pythonVersion = "3.12"
 
@@ -55,6 +59,12 @@ func run(args []string) error {
 	if isVersionRequest(args) {
 		fmt.Println(versionLine())
 		return nil
+	}
+
+	// `eujeno update` is handled by the launcher: it replaces this binary with
+	// the latest release, and the new runtime is provisioned on the next run.
+	if isUpdateRequest(args) {
+		return selfUpdate()
 	}
 
 	rt := runtimeDir()
@@ -114,8 +124,105 @@ func isHelpRequest(args []string) bool {
 	return false
 }
 
+// isUpdateRequest reports whether this is the top-level `eujeno update` command.
+func isUpdateRequest(args []string) bool {
+	return len(args) == 1 && args[0] == "update"
+}
+
 func versionLine() string {
 	return "eujeno " + eujenoVersion
+}
+
+// ── self-update ─────────────────────────────────────────────────────────────
+
+// selfUpdate replaces the running launcher binary with the latest release for
+// this OS/arch. The new launcher carries a new baked version, so on the next
+// command it sees the runtime is stale and re-provisions the new wheel itself.
+func selfUpdate() error {
+	asset := launcherAsset()
+	if asset == "" {
+		return fmt.Errorf("unsupported platform %s/%s — update manually from the releases page", runtime.GOOS, runtime.GOARCH)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if resolved, err := filepath.EvalSymlinks(self); err == nil {
+		self = resolved
+	}
+	url := fmt.Sprintf("https://github.com/%s/releases/latest/download/%s", repo, asset)
+	tmp := self + ".new"
+	fmt.Fprintf(os.Stderr, "eujeno: fetching the latest launcher (%s)…\n", asset)
+	if err := download(url, tmp); err != nil {
+		return fmt.Errorf("download %s: %w", url, err)
+	}
+	if err := os.Chmod(tmp, 0o755); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	newVer := binVersion(tmp)
+	if newVer != "" && newVer == eujenoVersion {
+		os.Remove(tmp)
+		fmt.Fprintf(os.Stderr, "eujeno: already up to date (%s).\n", eujenoVersion)
+		return nil
+	}
+	if err := replaceExe(self, tmp); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("replace %s: %w (try re-running with elevated permissions, or reinstall via https://eujeno.com/install.sh)", self, err)
+	}
+	if newVer == "" {
+		newVer = "the latest version"
+	}
+	fmt.Fprintf(os.Stderr, "eujeno: updated %s → %s. The next command will provision the new runtime.\n", eujenoVersion, newVer)
+	return nil
+}
+
+// launcherAsset is the release asset name of the launcher for this OS/arch.
+func launcherAsset() string {
+	switch runtime.GOOS + "/" + runtime.GOARCH {
+	case "darwin/arm64":
+		return "eujeno-macos-arm64"
+	case "darwin/amd64":
+		return "eujeno-macos-x64"
+	case "linux/amd64":
+		return "eujeno-linux-x64"
+	case "linux/arm64":
+		return "eujeno-linux-arm64"
+	case "windows/amd64":
+		return "eujeno-windows-x64.exe"
+	}
+	return ""
+}
+
+// binVersion runs `<path> --version` and returns the version it prints, or "".
+func binVersion(path string) string {
+	out, err := exec.Command(path, "--version").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(out)), "eujeno"))
+}
+
+// replaceExe swaps the running binary at self for the freshly downloaded tmp.
+func replaceExe(self, tmp string) error {
+	if runtime.GOOS == "windows" {
+		// A running .exe can't be overwritten, but it can be renamed: move the
+		// old one aside, then the new one into place.
+		old := self + ".old"
+		os.Remove(old)
+		if err := os.Rename(self, old); err != nil {
+			return err
+		}
+		if err := os.Rename(tmp, self); err != nil {
+			os.Rename(old, self) // roll back
+			return err
+		}
+		os.Remove(old) // best-effort; may be locked until this process exits
+		return nil
+	}
+	// On Unix, renaming over the running binary is fine — the process keeps the
+	// old inode, the next launch uses the new file.
+	return os.Rename(tmp, self)
 }
 
 func helpText() string {
@@ -132,6 +239,7 @@ Common commands:
   infer  --coordinator <url> --prompt "..."    query the distributed model
   models                                        list compatible models
   ui     --node <url>                           open a node's dashboard
+  update                                        replace this launcher with the latest release
 
 Flags:
   --version, -V    print the eujeno version

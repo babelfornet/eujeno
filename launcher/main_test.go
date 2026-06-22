@@ -24,6 +24,28 @@ func TestIsVersionRequest(t *testing.T) {
 	}
 }
 
+func TestIsUpdateRequest(t *testing.T) {
+	if !isUpdateRequest([]string{"update"}) {
+		t.Error("isUpdateRequest([update]) should be true")
+	}
+	if isUpdateRequest(nil) {
+		t.Error("isUpdateRequest(nil) should be false")
+	}
+	// only the bare top-level command counts, not a flag or a subcommand arg
+	if isUpdateRequest([]string{"serve", "update"}) {
+		t.Error("isUpdateRequest must only match a lone update arg")
+	}
+	if isUpdateRequest([]string{"update", "--force"}) {
+		t.Error("isUpdateRequest must not match update with extra args")
+	}
+}
+
+func TestLauncherAssetCoversCurrentPlatform(t *testing.T) {
+	if launcherAsset() == "" {
+		t.Skip("no launcher asset mapping for this test platform")
+	}
+}
+
 func TestIsHelpRequest(t *testing.T) {
 	for _, arg := range []string{"--help", "-h", "help"} {
 		if !isHelpRequest([]string{arg}) {

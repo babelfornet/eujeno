@@ -40,6 +40,7 @@ eujeno --json model --info --model Qwen/Qwen2.5-0.5B-Instruct
 | `eujeno ui --node <url>` | Open the node's dashboard (every node serves its own UI at its URL). |
 | `eujeno mcp --add <name> --command <cmd> --args "..."` | Configures MCP servers; `eujeno infer --mcp` uses them in the tool-calling loop. |
 | `eujeno selfcheck` | Checks the environment/model. |
+| `eujeno update` | Updates eujeno to the latest version (binary: self-replaces the launcher + re-provisions; source: `git pull`). |
 | `eujeno schema` | Machine-readable schema of all commands/flags. |
 
 ## Which models can I use?

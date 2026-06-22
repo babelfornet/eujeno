@@ -105,6 +105,44 @@ def version():
 
 
 @app.command()
+def update():
+    """Update eujeno to the latest version.
+
+    From a source checkout this runs `git pull` (and refreshes dependencies when
+    they change). With the native binary, `eujeno update` is handled by the
+    launcher itself — it replaces the binary and re-provisions on the next run.
+    """
+    import subprocess
+    from pathlib import Path
+    here = Path(__file__).resolve()
+    root = next((p for p in here.parents
+                 if (p / ".git").exists() and (p / "pyproject.toml").exists()), None)
+    if root is None:
+        _emit_ok("update", {"method": "binary"},
+                 human="Not a source checkout. Re-run the installer to update the "
+                       "binary:\n  curl -fsSL https://eujeno.com/install.sh | sh")
+        return
+    try:
+        head = lambda: subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
+                                      capture_output=True, text=True).stdout.strip()
+        before = head()
+        pull = subprocess.run(["git", "-C", str(root), "pull", "--ff-only"],
+                              capture_output=True, text=True)
+    except FileNotFoundError:
+        _fail("update", "NO_GIT", "git not found on PATH")
+    if pull.returncode != 0:
+        _fail("update", "GIT_PULL_FAILED", (pull.stderr or pull.stdout).strip() or "git pull failed")
+    after = head()
+    changed = before != after
+    if changed:   # refresh deps in case the bump touched them (editable code is already live)
+        subprocess.run([sys.executable, "-m", "pip", "install", "-e", str(root)],
+                       capture_output=True, text=True)
+    _emit_ok("update", {"method": "git", "updated": changed, "head": after[:8]},
+             human=(f"Updated to {after[:8]} (dependencies refreshed)." if changed
+                    else "Already up to date."))
+
+
+@app.command()
 def model(
     info: bool = typer.Option(False, "--info", help="Show dimensions and proposed split"),
     model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="Hugging Face model ID"),

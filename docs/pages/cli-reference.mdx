@@ -116,6 +116,16 @@ Print the package version. No options.
 eujeno version
 ```
 
+### `update`
+
+Update eujeno to the latest version. With the native binary the launcher replaces itself
+with the latest release and re-provisions the runtime on the next command; from a source
+checkout it runs `git pull` and refreshes dependencies when they changed. No options.
+
+```bash
+eujeno update
+```
+
 ## Run
 
 Commands that start the long-running processes that make up a network.
