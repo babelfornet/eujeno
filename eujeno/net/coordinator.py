@@ -2,19 +2,20 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import json
 import logging
 import random
 import time
 
 import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from eujeno.net.framing import pack, unpack
 from eujeno.net.wire import encode_tensors, decode_tensors
 from eujeno.net.discovery import build_chain
 from eujeno.net.sampling import sample_token
-from eujeno.net.tools import extract_tool_calls
+from eujeno.net.tools import extract_tool_calls, normalize_messages, openai_stream_chunks
 from eujeno.net.jobstore import JobStore
 
 log = logging.getLogger("eujeno.coordinator")
@@ -256,7 +257,7 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
     @app.post("/v1/chat/completions")
     async def chat_completions(request: Request):
         body = await request.json()
-        messages = body.get("messages", [])
+        messages = normalize_messages(body.get("messages", []))
         max_new = int(body.get("max_tokens", 256))
         tools = body.get("tools")
         sampling = {k: body.get(k) for k in ("temperature", "top_p", "repetition_penalty", "seed")}
@@ -280,10 +281,16 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
         if tool_calls:
             message["tool_calls"] = tool_calls
             finish_reason = "tool_calls"
+        chunk_id = "chatcmpl-" + _next_id("oa")
+        created = int(time.time())
+        if body.get("stream"):
+            return StreamingResponse(
+                openai_stream_chunks(content, tool_calls, finish_reason, model_id, chunk_id, created),
+                media_type="text/event-stream")
         return {
-            "id": "chatcmpl-" + _next_id("oa"),
+            "id": chunk_id,
             "object": "chat.completion",
-            "created": int(time.time()),
+            "created": created,
             "model": model_id,
             "choices": [{"index": 0, "message": message, "finish_reason": finish_reason}],
             "usage": {"prompt_tokens": result["prompt_len"],

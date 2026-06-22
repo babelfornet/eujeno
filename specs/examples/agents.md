@@ -4,7 +4,9 @@
 
 When the model is OPERATIONAL, the coordinator exposes an **OpenAI-compatible** API: point any OpenAI client/SDK at `http://YOUR_COORDINATOR:9000/v1`.
 
-Available endpoints: `GET /v1/models`, `POST /v1/chat/completions` (with `temperature`, `top_p`, `max_tokens`, `repetition_penalty`, `seed`). The chat template is applied automatically to the `messages`.
+Available endpoints: `GET /v1/models`, `POST /v1/chat/completions` (with `temperature`, `top_p`, `max_tokens`, `repetition_penalty`, `seed`, and `stream`). The chat template is applied automatically to the `messages`. Message `content` may be a plain string or a list of OpenAI typed parts (`[{"type":"text","text":"…"}]`) — both are accepted.
+
+**Streaming:** pass `"stream": true` to receive Server-Sent Events (`chat.completion.chunk` deltas ending with `finish_reason` and `data: [DONE]`). Eujeno generates the whole answer store-and-forward, so the stream is emitted in a few chunks rather than token-by-token — enough for streaming clients (e.g. the [PI](https://pi.dev) coding agent, IDE agents).
 
 ## OpenAI SDK (Python)
 
@@ -37,7 +39,27 @@ Claude Code speaks the **Anthropic** API, not OpenAI. Put **LiteLLM** in front o
 ANTHROPIC_BASE_URL=http://LITELLM:4000 claude
 ```
 
-**SSE streaming** and a native Anthropic `/v1/messages` endpoint are next on the list (see [ROADMAP](../ROADMAP.md)).
+**SSE streaming** is supported (`stream: true`, see above). A native Anthropic `/v1/messages` endpoint is still next on the list (see [ROADMAP](../ROADMAP.md)).
+
+## PI coding agent
+
+[PI](https://pi.dev) is OpenAI-compatible. Add Eujeno as a provider in `~/.pi/agent/models.json`:
+
+```json
+{
+  "providers": {
+    "eujeno": {
+      "baseUrl": "http://127.0.0.1:9000/v1",
+      "api": "openai-completions",
+      "apiKey": "eujeno",
+      "compat": { "supportsDeveloperRole": false, "supportsReasoningEffort": false },
+      "models": [ { "id": "eujeno", "name": "Eujeno (distributed)" } ]
+    }
+  }
+}
+```
+
+Then `pi --provider eujeno --model eujeno`. PI streams (`stream: true`) and sends structured `content` parts and a large system prompt — all handled. Note: **driving a full agent harness like PI needs a capable model** (7B+, split across nodes if needed); a 1.5B connects and converses but tends to *describe* edits instead of emitting the tool calls, so files don't actually get written.
 
 ## Tool calling (and MCP tools)
 

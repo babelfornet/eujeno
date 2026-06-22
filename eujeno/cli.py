@@ -21,6 +21,11 @@ from eujeno.net.coordinator import create_coordinator_app
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="Eujeno — decentralized LLM inference network.")
 
+# Activations forwarded over the coordinator's WebSocket scale with seq_len × hidden
+# (e.g. a long agent prompt is tens of MB), well past uvicorn's 16MB default. Raise the
+# WS frame cap so big prompts from real clients (PI, IDE agents) don't trip 1009.
+WS_MAX_SIZE = 256 * 1024 * 1024  # 256 MB
+
 # Pre-import MCP stdio transport so its sys.stderr default is captured before any test
 # runner patches sys.stderr (otherwise stdio_client fails with 'fileno' inside CliRunner).
 try:
@@ -325,7 +330,7 @@ def serve(
     fastapi_app = create_app(model, tokenizer, spec, node_url=own_url, peers=seeds, num_layers=nl, db_path=db,
                              config_path=cfg_path, device=_device)
     typer.echo(f"eujeno serve (P2P): stages={stages} on http://{host}:{port} advertise={own_url} peers={seeds}", err=True)
-    uvicorn.run(fastapi_app, host=host, port=port, log_level="info")
+    uvicorn.run(fastapi_app, host=host, port=port, log_level="info", ws_max_size=WS_MAX_SIZE)
 
 
 @app.command()
@@ -346,7 +351,7 @@ def coordinator(
     db_path = db or os.path.expanduser("~/.eujeno/coordinator-jobs.db")
     coord_app = create_coordinator_app(model_id, num_layers, tokenizer, db_path=db_path)
     typer.echo(f"eujeno coordinator: model={model_id} layers={num_layers} on http://{host}:{port}", err=True)
-    uvicorn.run(coord_app, host=host, port=port, log_level="info")
+    uvicorn.run(coord_app, host=host, port=port, log_level="info", ws_max_size=WS_MAX_SIZE)
 
 
 @app.command()
