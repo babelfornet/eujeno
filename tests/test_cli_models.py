@@ -24,3 +24,24 @@ def test_up_dry_run_prints_commands(monkeypatch):
     assert "coordinator" in cmds and "serve" in cmds
     assert "embed,decoder:0-24,head" in cmds
     assert "bfloat16" in cmds
+    # the serve command now always carries a resolved --device
+    assert "--device" in cmds
+
+
+def test_up_dry_run_explicit_device(monkeypatch):
+    import eujeno.cli as cli
+    monkeypatch.setattr(cli, "model_config_dims", lambda mid: {"num_layers": 24})
+    r = runner.invoke(app, ["--json", "up", "--model", "X", "--device", "cpu", "--dry-run"])
+    assert r.exit_code == 0
+    cmds = " ".join(" ".join(c) for c in json.loads(r.stdout)["data"]["commands"])
+    assert "--device cpu" in cmds
+
+
+def test_up_dry_run_auto_device(monkeypatch):
+    # no --device -> the serve cmd carries the auto-detected device
+    import eujeno.cli as cli
+    monkeypatch.setattr(cli, "model_config_dims", lambda mid: {"num_layers": 24})
+    monkeypatch.setattr(cli, "resolve_device", lambda d: "mps" if d is None else d)
+    r = runner.invoke(app, ["--json", "up", "--model", "X", "--dry-run"])
+    cmds = " ".join(" ".join(c) for c in json.loads(r.stdout)["data"]["commands"])
+    assert "--device mps" in cmds

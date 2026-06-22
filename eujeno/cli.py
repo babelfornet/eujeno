@@ -7,7 +7,7 @@ import sys
 
 import typer
 
-from eujeno.config import DEFAULT_MODEL_ID, DTYPE, DEVICE
+from eujeno.config import DEFAULT_MODEL_ID, DTYPE, DEVICE, resolve_device
 from eujeno.model.blocks import compute_boundaries, split_into_blocks
 from eujeno.model.loader import model_config_dims, load_full_model, load_partial_model, model_dims
 from eujeno.model.generate import reference_generate, pipeline_generate
@@ -277,7 +277,7 @@ def serve(
     target: int = typer.Option(1, "--target", help="Desired replicas per range (auto; 2 = redundancy)"),
     db: str = typer.Option(None, "--db", help="[P2P] SQLite job-log path for this node (default: in-memory)"),
     settings: str = typer.Option(None, "--settings", help="Node settings JSON path (default ~/.eujeno/node-<port>.json)"),
-    device: str = typer.Option(None, "--device", help="cpu | cuda | mps (default: cpu). cuda needs a CUDA torch build."),
+    device: str = typer.Option(None, "--device", help="cpu | cuda | mps | auto. Default: auto — the GPU (mps/cuda) if present on this machine, else cpu."),
 ):
     """Start a BlockServer hosting the given stages (long-running process).
 
@@ -313,7 +313,9 @@ def serve(
         _dtype = parse_dtype(dtype)
     except ValueError as e:
         _fail("serve", "USAGE_ERROR", str(e), exit_code=2)
-    _device = device or DEVICE
+    _device = resolve_device(device)   # None/'auto' -> GPU (mps/cuda) if present, else cpu
+    if device is None:
+        typer.echo(f"eujeno serve: auto-selected device={_device}", err=True)
     try:
         model, tokenizer = load_partial_model(model_id, spec, _dtype, _device)
     except Exception as e:
@@ -360,15 +362,19 @@ def up(
     dtype: str = typer.Option("float32", "--dtype", help="float32 | bfloat16 | float16"),
     host: str = typer.Option("127.0.0.1", "--host", help="Coordinator host"),
     port: int = typer.Option(9000, "--port", help="Coordinator port"),
+    device: str = typer.Option(None, "--device", help="cpu | cuda | mps | auto. Default: auto — the GPU (mps/cuda) if present on this machine, else cpu."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print the commands without starting anything"),
 ):
     """Bring up an operational single-node network in one shot (coordinator + a node covering the whole model)."""
     nl = model_config_dims(model_id)["num_layers"]
+    # up is single-box, so the node runs here — resolve the device on this machine.
+    dev = resolve_device(device)
     coord_cmd = [sys.executable, "-m", "eujeno", "coordinator", "--model", model_id,
                  "--host", host, "--port", str(port)]
     ws = f"ws://{host}:{port}/node"
     serve_cmd = [sys.executable, "-m", "eujeno", "serve", "--coordinator", ws,
-                 "--stages", f"embed,decoder:0-{nl},head", "--model", model_id, "--dtype", dtype]
+                 "--stages", f"embed,decoder:0-{nl},head", "--model", model_id,
+                 "--dtype", dtype, "--device", dev]
     if dry_run:
         _emit_ok("up", {"commands": [coord_cmd, serve_cmd],
                         "coordinator_url": f"http://{host}:{port}"},
@@ -381,7 +387,7 @@ def up(
     _t.sleep(4)
     procs.append(subprocess.Popen(serve_cmd))
     base = f"http://{host}:{port}"
-    typer.echo(f"eujeno up: starting network for {model_id} (dtype={dtype})…", err=True)
+    typer.echo(f"eujeno up: starting network for {model_id} (dtype={dtype}, device={dev})…", err=True)
     operational = False
     for _ in range(120):
         try:

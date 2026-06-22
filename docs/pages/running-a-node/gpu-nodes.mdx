@@ -4,10 +4,12 @@ title: GPU Nodes
 
 # GPU Nodes
 
-By default a node runs on **CPU**. Pass `serve --device cuda` (or `mps`) to run that node's
-layers on a GPU. A GPU node **interoperates with CPU peers** in the same swarm — it moves
-incoming activations onto its device and moves the outputs back to CPU before sending them
-over the wire, so you can mix a fast GPU box with ordinary CPU machines.
+By default a node **auto-selects the GPU** on its machine — Apple `mps` or CUDA — and falls
+back to CPU when none is present. Pass `serve --device cpu` to force CPU, or `--device cuda`/`mps`/`auto`
+to be explicit (`eujeno up` takes `--device` too, with the same default). A GPU node
+**interoperates with CPU peers** in the same swarm — it moves incoming activations onto its
+device and moves the outputs back to CPU before sending them over the wire, so you can mix a
+fast GPU box with ordinary CPU machines.
 
 import { Callout } from 'nextra/components'
 
