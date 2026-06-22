@@ -52,7 +52,21 @@ r = client.chat.completions.create(model="eujeno",
 # r.choices[0].message.tool_calls -> [{function:{name:"get_weather", arguments:'{"city":"Rome"}'}}]
 ```
 
-Note: reliable tool calling requires a capable model (7B+). With Qwen 0.5B it's only good for verifying the mechanism. Generation stops at the end of the turn (EOS) and the output is stripped of special tokens.
+Note: tool calling improves sharply with model size. **Qwen2.5-0.5B** only exercises the *mechanism* — it works, but it often collapses to empty turns or emits truncated/malformed tool JSON. **~1.5B is the practical floor** for reliable structured tool-calling (`finish_reason: "tool_calls"` on the first try); a real agent that targets small models should still keep a retry + plain-codegen fallback. Generation stops at the end of the turn (EOS) and the output is stripped of special tokens.
+
+## A self-contained agentic example
+
+[`code_agent.py`](./code_agent.py) is a minimal PI/codex-style code-agent (pure standard library) that drives an Eujeno-served model end-to-end: it asks the model to call a `write_file` tool, falls back to plain code-gen when a tiny model can't drive tool-calls, then **runs the generated file and self-repairs it** — on failure it feeds the code + traceback back to the model, rewrites, and retries.
+
+```bash
+eujeno up --model Qwen/Qwen2.5-1.5B-Instruct        # an operational network on :9000
+python specs/examples/code_agent.py                  # generate fib.py, run it -> 55
+# watch the repair loop turn a broken file green:
+EUJENO_SEED=$'def average(nums):\n    return sum(nums)/len(numbers)\n\nif __name__=="__main__":\n    assert average([2,4,6])==4\n    print("OK")' \
+  EUJENO_FILE=stats.py python specs/examples/code_agent.py
+```
+
+It reads `EUJENO_BASE` (default `http://127.0.0.1:9000/v1`) and `EUJENO_MODEL` (default `eujeno`); see the file header for all knobs.
 
 ## MCP tools from the command line
 
