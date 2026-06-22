@@ -71,6 +71,15 @@ def _fail(command: str, code: str, message: str, exit_code: int = 1):
     raise typer.Exit(exit_code)
 
 
+def stages_from_registry(nodes) -> dict:
+    """Normalize a ``/registry`` ``nodes`` payload to ``{key: stages}`` for
+    coverage_gaps. The coordinator returns a list ``[{conn, stages}]`` while a
+    gossip node returns a dict ``{url: stages}`` — accept both."""
+    if isinstance(nodes, list):
+        return {n.get("conn", i): n["stages"] for i, n in enumerate(nodes)}
+    return dict(nodes or {})
+
+
 def plan_auto_stages(dims: dict, bytes_per: int, ram_gb: float, reserve: float,
                      stages_by_url: dict, target: int) -> str:
     """Decide the stage spec to claim by combining capacity (fit) and coverage gaps."""
@@ -296,10 +305,17 @@ def serve(
         _bp = torch.finfo(_pdt(dtype_name)).bits // 8
         dims = model_config_dims(model_id)
         ram_gb = ram if ram is not None else (probe_capacity().get("ram_free_gb") or 4.0)
+        # Coverage sources: explicit --peers, plus the coordinator's own /registry
+        # when --coordinator is set (so `serve --auto --coordinator …` works alone).
+        sources = [p.strip() for p in peers.split(",")] if peers else []
+        if coordinator:
+            base = coordinator.replace("wss://", "https://").replace("ws://", "http://")
+            sources.append(base.rsplit("/node", 1)[0].rstrip("/"))
         learned = {}
-        for seed in ([p.strip() for p in peers.split(",")] if peers else []):
+        for seed in sources:
             try:
-                learned.update(httpx.get(f"{seed}/registry", timeout=5).json().get("nodes", {}))
+                nodes = httpx.get(f"{seed}/registry", timeout=5).json().get("nodes", {})
+                learned.update(stages_from_registry(nodes))
             except Exception:
                 pass
         stages = plan_auto_stages(dims, _bp, ram_gb, reserve, learned, target)
