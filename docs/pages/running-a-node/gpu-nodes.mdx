@@ -79,6 +79,14 @@ of the decoders + the `head`. Activations flow CPU → GPU → CPU transparently
   disk caps whether the model can be cached at all.
 </Callout>
 
+## Seeing which nodes run on GPU
+
+Open a node's dashboard (`eujeno ui --node http://<node>:8001`) and go to **Network**: the
+**Compute** field on the *Your node* card and the **Compute** column in the peers table show
+each node's device — `CPU`, `GPU · mps`, or `GPU · cuda`. The same information is on the API:
+`GET /api/node` and `GET /api/peers` return a `device` (`cpu`/`cuda`/`mps`) and a `compute`
+(`CPU`/`GPU`) field per node.
+
 ## Windows notes
 
 - Install Python 3.12 (`winget install Python.Python.3.12`) — PyTorch publishes CUDA wheels for it.
