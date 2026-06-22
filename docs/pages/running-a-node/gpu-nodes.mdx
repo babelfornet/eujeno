@@ -32,8 +32,9 @@ python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_
 ```
 
 <Callout type="info">
-  `--device` only changes where **this** node computes. Use `--dtype bfloat16` on the GPU to
-  halve VRAM. On Apple Silicon, `--device mps`.
+  `--device` only changes where **this** node computes. On a GPU the dtype **defaults to
+  `bfloat16`** (halving VRAM); pass `--dtype float32`/`float16` to override. On Apple Silicon,
+  the GPU is `mps` and is auto-selected.
 </Callout>
 
 ## 2. Size the layers to VRAM

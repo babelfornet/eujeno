@@ -7,7 +7,7 @@ import sys
 
 import typer
 
-from eujeno.config import DEFAULT_MODEL_ID, DTYPE, DEVICE, resolve_device
+from eujeno.config import DEFAULT_MODEL_ID, DTYPE, DEVICE, resolve_device, default_dtype
 from eujeno.model.blocks import compute_boundaries, split_into_blocks
 from eujeno.model.loader import model_config_dims, load_full_model, load_partial_model, model_dims
 from eujeno.model.generate import reference_generate, pipeline_generate
@@ -270,7 +270,7 @@ def serve(
     advertise: str = typer.Option(None, "--advertise", help="URL the node advertises itself with (e.g. http://IP:8001). Default http://<host>:<port>"),
     num_layers: int = typer.Option(None, "--num-layers", help="Total number of layers (for coverage). Default: from config."),
     coordinator: str = typer.Option(None, "--coordinator", help="Coordinator WS URL (e.g. ws://host:9000/node). If present, the node connects outbound instead of exposing a direct server."),
-    dtype: str = typer.Option("float32", "--dtype", help="float32 | bfloat16 | float16 (bf16 for large models)"),
+    dtype: str = typer.Option(None, "--dtype", help="float32 | bfloat16 | float16. Default: bfloat16 on GPU, float32 on CPU."),
     auto: bool = typer.Option(False, "--auto", help="Auto-assign layers from registry gaps + RAM capacity"),
     ram: float = typer.Option(None, "--ram", help="RAM to use for auto-assignment, GB (default: detected)"),
     reserve: float = typer.Option(0.2, "--reserve", help="Fraction of RAM reserved (auto)"),
@@ -284,12 +284,16 @@ def serve(
     Loads into RAM ONLY the assigned layers (partial loading): a node doesn't need
     resources for the whole model, just enough for its stages."""
     import uvicorn
+    _device = resolve_device(device)            # None/'auto' -> GPU (mps/cuda) if present, else cpu
+    dtype_name = dtype or default_dtype(_device)  # bf16 on GPU, fp32 on CPU
+    if device is None or dtype is None:
+        typer.echo(f"eujeno serve: device={_device} dtype={dtype_name}", err=True)
     if auto:
         import torch
         import httpx
         from eujeno.net.capacity import probe_capacity
         from eujeno.config import parse_dtype as _pdt
-        _bp = torch.finfo(_pdt(dtype)).bits // 8
+        _bp = torch.finfo(_pdt(dtype_name)).bits // 8
         dims = model_config_dims(model_id)
         ram_gb = ram if ram is not None else (probe_capacity().get("ram_free_gb") or 4.0)
         learned = {}
@@ -310,12 +314,9 @@ def serve(
         _fail("serve", "USAGE_ERROR", str(e), exit_code=2)
     from eujeno.config import parse_dtype
     try:
-        _dtype = parse_dtype(dtype)
+        _dtype = parse_dtype(dtype_name)
     except ValueError as e:
         _fail("serve", "USAGE_ERROR", str(e), exit_code=2)
-    _device = resolve_device(device)   # None/'auto' -> GPU (mps/cuda) if present, else cpu
-    if device is None:
-        typer.echo(f"eujeno serve: auto-selected device={_device}", err=True)
     try:
         model, tokenizer = load_partial_model(model_id, spec, _dtype, _device)
     except Exception as e:
@@ -359,7 +360,7 @@ def coordinator(
 @app.command()
 def up(
     model_id: str = typer.Option(DEFAULT_MODEL_ID, "--model", help="Hugging Face model ID"),
-    dtype: str = typer.Option("float32", "--dtype", help="float32 | bfloat16 | float16"),
+    dtype: str = typer.Option(None, "--dtype", help="float32 | bfloat16 | float16. Default: bfloat16 on GPU, float32 on CPU."),
     host: str = typer.Option("127.0.0.1", "--host", help="Coordinator host"),
     port: int = typer.Option(9000, "--port", help="Coordinator port"),
     device: str = typer.Option(None, "--device", help="cpu | cuda | mps | auto. Default: auto — the GPU (mps/cuda) if present on this machine, else cpu."),
@@ -367,8 +368,9 @@ def up(
 ):
     """Bring up an operational single-node network in one shot (coordinator + a node covering the whole model)."""
     nl = model_config_dims(model_id)["num_layers"]
-    # up is single-box, so the node runs here — resolve the device on this machine.
+    # up is single-box, so the node runs here — resolve device + dtype on this machine.
     dev = resolve_device(device)
+    dtype = dtype or default_dtype(dev)         # bf16 on GPU, fp32 on CPU
     coord_cmd = [sys.executable, "-m", "eujeno", "coordinator", "--model", model_id,
                  "--host", host, "--port", str(port)]
     ws = f"ws://{host}:{port}/node"

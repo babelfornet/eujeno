@@ -1,5 +1,5 @@
 import eujeno.config as cfg
-from eujeno.config import auto_device, resolve_device, DEVICE
+from eujeno.config import auto_device, resolve_device, default_dtype, DEVICE
 
 
 def test_library_default_stays_cpu():
@@ -23,6 +23,12 @@ def test_resolve_none_and_auto_detect(monkeypatch):
     assert resolve_device(None) == "mps"
     assert resolve_device("auto") == "mps"
     assert resolve_device("AUTO") == "mps"
+
+
+def test_default_dtype_per_device():
+    assert default_dtype("cpu") == "float32"      # determinism on CPU
+    assert default_dtype("mps") == "bfloat16"     # halve memory on GPU
+    assert default_dtype("cuda") == "bfloat16"
 
 
 def test_auto_device_prefers_gpu_then_falls_back(monkeypatch):

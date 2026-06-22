@@ -132,7 +132,7 @@ eujeno up --model Qwen/Qwen2.5-0.5B-Instruct
 | Option | Meaning |
 |---|---|
 | `--model TEXT` | Hugging Face model ID. Default `Qwen/Qwen2.5-0.5B-Instruct`. |
-| `--dtype TEXT` | `float32` \| `bfloat16` \| `float16`. Default `float32`. |
+| `--dtype TEXT` | `float32` \| `bfloat16` \| `float16`. Default: **bfloat16 on GPU, float32 on CPU**. |
 | `--host TEXT` | Coordinator host. Default `127.0.0.1`. |
 | `--port INTEGER` | Coordinator port. Default `9000`. |
 | `--device TEXT` | `cpu` \| `cuda` \| `mps` \| `auto`. Default **`auto`**: the GPU if present on this machine, else `cpu`. Passed through to the node. |
@@ -158,7 +158,7 @@ eujeno serve --stages "embed,decoder:0-12" --port 8001
 | `--advertise TEXT` | URL the node advertises itself with (e.g. `http://IP:8001`). Default `http://<host>:<port>`. |
 | `--num-layers INTEGER` | Total number of layers (for coverage). Default: from config. |
 | `--coordinator TEXT` | Coordinator WS URL (e.g. `ws://host:9000/node`). If present, the node connects outbound instead of exposing a direct server. |
-| `--dtype TEXT` | `float32` \| `bfloat16` \| `float16` (bf16 for large models). Default `float32`. |
+| `--dtype TEXT` | `float32` \| `bfloat16` \| `float16`. Default: **bfloat16 on GPU, float32 on CPU** (bf16 for large models). |
 | `--auto` | Auto-assign layers from registry gaps + RAM capacity. |
 | `--ram FLOAT` | RAM to use for auto-assignment, GB (default: detected). |
 | `--reserve FLOAT` | Fraction of RAM reserved (auto). Default `0.2`. |

@@ -35,6 +35,12 @@ def resolve_device(device) -> str:
         return auto_device()
     return device
 
+
+def default_dtype(device) -> str:
+    """Default dtype name for a resolved device: ``bfloat16`` on a GPU
+    (``mps``/``cuda``) to halve memory, ``float32`` on CPU (for determinism)."""
+    return "float32" if str(device) == "cpu" else "bfloat16"
+
 _DTYPES = {
     "float32": torch.float32, "fp32": torch.float32,
     "bfloat16": torch.bfloat16, "bf16": torch.bfloat16,
