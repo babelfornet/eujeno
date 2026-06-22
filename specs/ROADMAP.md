@@ -2,7 +2,7 @@
 
 > Living document. Tracks **what has been done** and **what remains to do**. Updated at every significant step.
 >
-> **Last updated:** 2026-06-17 — Part 2 complete (pure P2P + coordinator-relay NAT) and **automatic failover** in the coordinator (node down → re-routing to a redundant holder).
+> **Last updated:** 2026-06-22 — **Operational-model milestone validated on 3 real machines**: a 7B split across a Mac (Apple `mps`), an Intel Mac (CPU) and a Windows box (NVIDIA `cuda`), self-assembled via `serve --auto`, answering correctly end-to-end. Plus real-client interop (PI coding agent): OpenAI `content` parts, big-prompt WebSocket cap, **SSE streaming**, GPU auto-default + bf16-on-GPU, and the relay device fix (mps/cuda).
 
 ## Legend
 

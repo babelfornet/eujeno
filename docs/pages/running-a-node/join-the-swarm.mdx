@@ -22,6 +22,14 @@ This connects to the seed at `http://192.168.1.10:8001`, inspects which layers a
 already covered, measures how many layers fit in the available RAM, and serves the
 range needed to fill a gap.
 
+In **coordinator mode** `--auto` works the same way — point it at the coordinator and it
+reads coverage from the coordinator's own `/registry` (no separate `--peers` needed):
+
+```bash
+eujeno serve --auto --coordinator ws://COORDINATOR:9000/node \
+  --model Qwen/Qwen2.5-7B-Instruct --dtype bfloat16
+```
+
 <Callout type="info">
   The model becomes **operational** only once coverage is complete: `embed` + all
   contiguous decoder ranges + `head`. Until then, `infer` responds `NOT_OPERATIONAL`.
@@ -35,10 +43,11 @@ range needed to fill a gap.
 |---|---|
 | `--auto` | Auto-assign layers from registry gaps + RAM capacity. The node plans its own range at startup instead of using `--stages`. |
 | `--peers <seed>` | Comma-separated seed peers for gossip discovery. From a seed the node learns the current topology and coverage. The first node in a swarm needs no seed; every other node lists at least one. |
+| `--coordinator <ws>` | Coordinator WS URL. In coordinator mode `--auto` reads coverage from the coordinator's `/registry` automatically — you don't also need `--peers`. |
 | `--ram <GB>` | Forces the memory budget used for planning. Defaults to the node's detected free RAM. |
 | `--reserve <fraction>` | Fraction of RAM kept aside for activations / KV-cache / OS. Default `0.2`. |
 | `--target <N>` | Desired replicas per range. `--target 2` aims for **≥2 nodes per range** for redundancy. Default `1`. |
-| `--dtype <type>` | `float32` (default), `bfloat16`, or `float16`. Use `bfloat16` for large models — it halves the RAM and lets the node hold more layers. |
+| `--dtype <type>` | `float32`, `bfloat16`, or `float16`. Default: **bfloat16 on GPU, float32 on CPU**. `bfloat16` halves the RAM and lets the node hold more layers. |
 | `--model <id>` | Hugging Face model ID. Must match the model the rest of the swarm is serving. |
 
 ## Startup order matters
@@ -48,11 +57,11 @@ until they are reachable and have published their range **before** launching oth
 `--auto` nodes.
 
 <Callout type="warning">
-  If a node plans while the seed's registry is still empty, it sees no existing
-  coverage and may claim too much. Start and warm up the seed first; you can confirm
-  it has published by checking that `SEED/registry` is non-empty. For a guaranteed
-  split, use explicit [stages](/running-a-node/layers-and-ram) instead, or stagger the
-  startup of each node.
+  If a node plans while the seed's registry is still empty, it sees no existing coverage
+  and may claim too much. The node **retries the coverage read** to ride out a transient
+  network blip, but it can't wait for a seed that hasn't published yet — start and warm up
+  the seed first (confirm `SEED/registry` is non-empty). For a guaranteed split, use
+  explicit [stages](/running-a-node/layers-and-ram) instead, or stagger node startup.
 </Callout>
 
 ## Redundancy with `--target`

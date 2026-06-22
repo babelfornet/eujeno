@@ -29,6 +29,20 @@ function statusLabel(status) {
   return 'offline'
 }
 
+// Human label for a node/peer's compute device, e.g. "GPU · mps", "GPU · cuda", "CPU".
+function computeLabel(n) {
+  if (!n) return '—'
+  const dev = n.device
+  const kind = n.compute || (dev === 'cuda' || dev === 'mps' ? 'GPU' : dev === 'cpu' ? 'CPU' : null)
+  if (!kind) return '—'
+  return kind === 'GPU' && dev ? `GPU · ${dev}` : kind
+}
+
+function computeColor(n) {
+  const kind = n?.compute || ((n?.device === 'cuda' || n?.device === 'mps') ? 'GPU' : 'CPU')
+  return kind === 'GPU' ? '#7c3aed' : 'var(--muted,#5b6471)'  // GPU = violet accent, CPU = muted
+}
+
 // Stat card
 function StatCard({ label, value, unit, valueColor }) {
   return (
@@ -195,6 +209,7 @@ export default function NetworkPage({ T, accent, dark, node, metrics }) {
               {[
                 { label: 'Status', value: node?.status ?? '—', valueStyle: { fontWeight: '600', color: statusColor(node?.status) } },
                 { label: 'Layers', value: node?.layers ?? '—', valueStyle: { fontFamily: "'JetBrains Mono',monospace", fontWeight: '600' } },
+                { label: 'Compute', value: computeLabel(node), valueStyle: { fontWeight: '700', color: computeColor(node) } },
                 { label: 'RAM used', value: node ? `${fmt(node.ramUsedGb, '—')} / ${fmt(node.ramTotalGb, '—')} GB` : '—', valueStyle: { fontWeight: '600' } },
                 { label: 'Region', value: node?.region ?? '—', valueStyle: { fontWeight: '600' } },
                 { label: 'Uptime', value: fmtUptime(node?.uptimeSec), valueStyle: { fontWeight: '600' } },
@@ -245,7 +260,7 @@ export default function NetworkPage({ T, accent, dark, node, metrics }) {
           {/* Table header */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1.4fr 1fr 1fr 0.8fr 0.9fr',
+            gridTemplateColumns: '1.3fr 1fr 0.9fr 0.9fr 0.8fr 0.9fr',
             padding: '10px 18px',
             borderBottom: '1px solid var(--border,#eef0f3)',
             fontFamily: "'JetBrains Mono',monospace",
@@ -254,7 +269,7 @@ export default function NetworkPage({ T, accent, dark, node, metrics }) {
             textTransform: 'uppercase',
             letterSpacing: '0.04em',
           }}>
-            <span>Peer</span><span>Layers</span><span>Region</span><span>Latency</span><span>Status</span>
+            <span>Peer</span><span>Layers</span><span>Compute</span><span>Region</span><span>Latency</span><span>Status</span>
           </div>
 
           {/* Table rows */}
@@ -269,7 +284,7 @@ export default function NetworkPage({ T, accent, dark, node, metrics }) {
               return (
                 <div key={peer.peerId ?? i} style={{
                   display: 'grid',
-                  gridTemplateColumns: '1.4fr 1fr 1fr 0.8fr 0.9fr',
+                  gridTemplateColumns: '1.3fr 1fr 0.9fr 0.9fr 0.8fr 0.9fr',
                   padding: '13px 18px',
                   borderBottom: isLast ? 'none' : '1px solid var(--border,#eef0f3)',
                   alignItems: 'center',
@@ -281,6 +296,7 @@ export default function NetworkPage({ T, accent, dark, node, metrics }) {
                   <span style={{ fontFamily: "'JetBrains Mono',monospace", color: 'var(--muted,#5b6471)' }}>
                     {peer.layers ?? '—'}
                   </span>
+                  <span style={{ fontWeight: '600', color: computeColor(peer) }}>{computeLabel(peer)}</span>
                   <span style={{ color: 'var(--muted,#5b6471)' }}>{peer.region ?? '—'}</span>
                   <span style={{ color: 'var(--muted,#5b6471)' }}>
                     {peer.latencyMs != null ? `${peer.latencyMs} ms` : '—'}

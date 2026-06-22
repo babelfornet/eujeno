@@ -20,10 +20,26 @@ import { Callout } from 'nextra/components'
 
 - `GET /v1/models`
 - `POST /v1/chat/completions` — accepts `temperature`, `top_p`, `max_tokens`,
-  `repetition_penalty`, and `seed`. The model's chat template is applied automatically to
-  the `messages`.
+  `repetition_penalty`, `seed`, and `stream`. The model's chat template is applied
+  automatically to the `messages`, whose `content` may be a plain string **or** a list of
+  OpenAI typed parts (`[{"type":"text","text":"…"}]`) — both are accepted.
 
 The model name to send is `eujeno`.
+
+## Streaming
+
+Pass `"stream": true` to receive **Server-Sent Events**: a sequence of
+`chat.completion.chunk` deltas ending with a `finish_reason` chunk and `data: [DONE]`.
+Because Eujeno generates the whole answer store-and-forward, the stream is emitted in a few
+chunks rather than strictly token-by-token — enough for any streaming client (the OpenAI
+SDK's `stream=True`, IDE agents, the [PI coding agent](/integrations/agents)).
+
+```bash
+curl -N http://127.0.0.1:9000/v1/chat/completions -H 'content-type: application/json' -d '{
+  "model": "eujeno", "stream": true,
+  "messages": [{"role":"user","content":"Say hi in 3 words"}], "max_tokens": 16
+}'
+```
 
 ## OpenAI SDK (Python)
 
@@ -75,9 +91,11 @@ r = client.chat.completions.create(
 ```
 
 <Callout type="warning">
-  Reliable tool calling needs a capable model (7B+). With Qwen 0.5B it only verifies the
-  mechanism. Generation stops at the end of the turn (EOS) and the output is stripped of
-  special tokens.
+  Tool-calling reliability scales with model size. **Qwen 0.5B** only verifies the mechanism
+  (it often emits empty turns or malformed tool JSON); **~1.5B** is the practical floor for
+  reliable structured `tool_calls`; a **full agent harness** (many tools + a large system
+  prompt, e.g. PI) needs **~7B+**. Generation stops at end-of-turn (EOS) and the output is
+  stripped of special tokens.
 </Callout>
 
 ## Connecting agents and Claude Code

@@ -37,6 +37,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
     jobs = {}
     own_stages = {"embed": stages.embed, "head": stages.head, "decoders": list(prepared.keys())}
     own_stages["capacity"] = probe_capacity()
+    own_stages["device"] = device                       # cpu | cuda | mps — advertised so peers can show it
     registry = Registry()
 
     # Monotonic per-origin heartbeat, stamped on every self-advert. The relay path
@@ -204,6 +205,8 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
                 "stages": clean_stages,
                 "layers": _layers_label(),
                 "status": "serving",
+                "device": device,                       # cpu | cuda | mps
+                "compute": "GPU" if device in ("cuda", "mps") else "CPU",
                 "ramUsedGb": used,
                 "ramTotalGb": tot,
                 "region": config.get()["region"],
@@ -253,6 +256,7 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
                     parts.append("head")
                 lab = ",".join(parts) or "—"
                 lat = metrics.peer_latency.get(url)
+                dev = st.get("device")
                 out.append({
                     "peerId": st.get("name") or url,
                     "url": url,
@@ -261,6 +265,8 @@ def create_app(model, tokenizer, stages, node_url=None, peers=None,
                     "latencyMs": round(lat) if lat is not None else None,
                     "throughputTokS": st.get("tput") or 0.0,
                     "status": peer_status.get(url, "syncing"),
+                    "device": dev,
+                    "compute": ("GPU" if dev in ("cuda", "mps") else "CPU") if dev else None,
                 })
             out.sort(key=lambda p: (
                 p["latencyMs"] if p["latencyMs"] is not None else 1e9,

@@ -30,9 +30,45 @@ ANTHROPIC_BASE_URL=http://LITELLM:4000 claude
 LiteLLM forwards Claude Code's Anthropic requests to the coordinator's OpenAI endpoint and
 translates the responses back.
 
+<Callout type="info">
+  **SSE streaming is supported** (`stream: true`, see
+  [OpenAI-compatible API](/integrations/openai-api#streaming)). A native Anthropic
+  `/v1/messages` endpoint is still on the roadmap — see [Design &amp; Roadmap](/design-roadmap).
+</Callout>
+
+## PI coding agent
+
+[PI](https://pi.dev) is OpenAI-compatible and streams. Add Eujeno as a provider in
+`~/.pi/agent/models.json`:
+
+```json
+{
+  "providers": {
+    "eujeno": {
+      "baseUrl": "http://127.0.0.1:9000/v1",
+      "api": "openai-completions",
+      "apiKey": "eujeno",
+      "compat": { "supportsDeveloperRole": false, "supportsReasoningEffort": false },
+      "models": [ { "id": "eujeno", "name": "Eujeno (distributed)" } ]
+    }
+  }
+}
+```
+
+Then point PI at it:
+
+```bash
+pi --provider eujeno --model eujeno
+```
+
+PI sends a large system prompt, structured `content` parts and `stream: true` — all handled
+by the coordinator. It then drives the model agentically (read / write / bash tools) to edit
+and run code.
+
 <Callout type="warning">
-  **SSE streaming** and a native Anthropic `/v1/messages` endpoint are next on the list —
-  see [Design &amp; Roadmap](/design-roadmap).
+  Driving a full agent harness like PI needs a **capable model (~7B+)**, split across nodes
+  if it doesn't fit on one box. A 1.5B connects and converses but tends to *describe* edits
+  instead of emitting the tool calls, so files don't actually get written.
 </Callout>
 
 ## Tool calling
@@ -44,8 +80,9 @@ call. Details and examples are in [OpenAI-compatible API](/integrations/openai-a
 configure MCP tool servers directly for `eujeno infer`, see [MCP Tools](/integrations/mcp).
 
 <Callout type="warning">
-  Reliable tool calling requires a capable model (7B+). With Qwen 0.5B it's only good for
-  verifying the mechanism.
+  Tool-calling reliability scales with model size: **~1.5B** is the floor for reliable
+  structured `tool_calls`, a **full harness** (PI, Claude Code) wants **~7B+**, and **0.5B**
+  only verifies the mechanism.
 </Callout>
 
 ## Many agents in parallel
