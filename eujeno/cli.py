@@ -298,6 +298,7 @@ def serve(
     if device is None or dtype is None:
         typer.echo(f"eujeno serve: device={_device} dtype={dtype_name}", err=True)
     if auto:
+        import time as _time
         import torch
         import httpx
         from eujeno.net.capacity import probe_capacity
@@ -311,13 +312,23 @@ def serve(
         if coordinator:
             base = coordinator.replace("wss://", "https://").replace("ws://", "http://")
             sources.append(base.rsplit("/node", 1)[0].rstrip("/"))
+        # Retry the read: on a flaky/idle LAN the first request right after model
+        # load can hit a transient blip (e.g. Wi-Fi power-save EHOSTUNREACH). A
+        # missed read would make the node wrongly claim the WHOLE model, so retry
+        # before falling back. Eujeno is meant to tolerate unreliable networks.
         learned = {}
         for seed in sources:
-            try:
-                nodes = httpx.get(f"{seed}/registry", timeout=5).json().get("nodes", {})
-                learned.update(stages_from_registry(nodes))
-            except Exception:
-                pass
+            for attempt in range(5):
+                try:
+                    nodes = httpx.get(f"{seed}/registry", timeout=5).json().get("nodes", {})
+                    learned.update(stages_from_registry(nodes))
+                    break
+                except Exception as e:
+                    if attempt == 4:
+                        typer.echo(f"eujeno serve --auto: could not read {seed}/registry "
+                                   f"({type(e).__name__}); claiming from RAM only", err=True)
+                    else:
+                        _time.sleep(1.5)
         stages = plan_auto_stages(dims, _bp, ram_gb, reserve, learned, target)
         if not stages:
             _fail("serve", "NO_GAP", "no range to cover (coverage complete or insufficient RAM)", exit_code=2)
