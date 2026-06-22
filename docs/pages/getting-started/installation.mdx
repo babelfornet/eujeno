@@ -121,6 +121,40 @@ eujeno models
   equivalent.
 </Callout>
 
+## Updating to a new version
+
+There is no `eujeno update` command — you just **replace the launcher binary**, and the
+next time you run a real command the launcher notices its version changed and **re-provisions
+the matching runtime automatically** (it re-installs the new wheel on first run; later runs
+start instantly).
+
+**Binary (macOS / Linux)** — re-run the one-line installer, which fetches the latest release:
+
+```bash
+curl -fsSL https://eujeno.com/install.sh | sh
+```
+
+**Binary (Windows)** — download the latest `eujeno-windows-x64.exe` again from the
+[releases page](https://github.com/babelfornet/eujeno/releases/latest) and replace your copy.
+
+<Callout type="info">
+  Pin a specific version instead of the latest with `EUJENO_VERSION=v0.1.4 curl -fsSL
+  https://eujeno.com/install.sh | sh`. If a run ever seems stuck on the old runtime, force a
+  clean re-provision with `EUJENO_FORCE_BOOTSTRAP=1 eujeno --help`.
+</Callout>
+
+**From source** — pull the latest code; the editable install reflects code changes
+immediately. Re-run `pip install -e .` only if a release changed the **dependencies** (the
+`bin/eujeno` launcher reinstalls only when the package is missing, not on dependency bumps):
+
+```bash
+git pull
+.venv/bin/pip install -e .     # only needed if dependencies changed
+./bin/eujeno --version
+```
+
+You can always check what you're running with `eujeno --version`.
+
 ## Next steps
 
 - [Quickstart](/getting-started/quickstart) — bring up an operational single-node
