@@ -321,7 +321,7 @@ def serve(
     if coordinator:
         import asyncio
         typer.echo(f"eujeno serve→coordinator {coordinator}: stages={stages} (model={model_id})", err=True)
-        asyncio.run(run_node(coordinator, NodeState(model, spec)))
+        asyncio.run(run_node(coordinator, NodeState(model, spec, _device)))
         return
     own_url = advertise or f"http://{host}:{port}"
     seeds = [p.strip() for p in peers.split(",")] if peers else []
