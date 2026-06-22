@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  ::selection{ background:#4f46e5; color:#fff; }
+  @keyframes flow { 0%{ transform:translateX(-120%);} 100%{ transform:translateX(900%);} }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.15;} }
+  @keyframes dotpulse { 0%,100%{opacity:0.3; transform:translateY(0);} 50%{opacity:1; transform:translateY(-3px);} }
+  ::-webkit-scrollbar{width:10px;height:10px;} ::-webkit-scrollbar-track{background:transparent;} ::-webkit-scrollbar-thumb{background:#9aa3b255;border-radius:6px;}
+  textarea{font-family:inherit;} button{font-family:inherit;}
+</style>
+</helmet>
+
+<div style="--accent: {{ accent }}; --page-bg: {{ pageBg }}; --card-bg: {{ cardBg }}; --elev-bg: {{ elevBg }}; --text: {{ text }}; --muted: {{ muted }}; --muted2: {{ muted2 }}; --border: {{ border }}; --border-strong: {{ borderStrong }}; --section-bg: {{ sectionBg }}; --canvas-bg: {{ canvasBg }}; --shadow: {{ shadow }}; height:100vh; display:flex; background:var(--page-bg,#fff); color:var(--text,#0e1116); font-family:'Hanken Grotesk',system-ui,sans-serif; -webkit-font-smoothing:antialiased; overflow:hidden;">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside style="flex:0 0 {{ asideW }}; width:{{ asideW }}; min-width:0; overflow:hidden; border-right:1px solid var(--border,#e9ebef); background:var(--section-bg,#f7f8fa); display:flex; flex-direction:column; padding:{{ asidePad }}; transition:flex-basis 0.18s ease, width 0.18s ease, padding 0.18s ease;">
+    <div style="display:flex; align-items:center; gap:8px; padding:6px 4px 18px;">
+      <button onClick="{{ toggleCollapse }}" title="{{ toggleTitle }}" style="flex:1; min-width:0; display:flex; align-items:center; justify-content:{{ navJustify }}; gap:10px; border:none; background:transparent; cursor:pointer; padding:0;">
+        <span style="flex:none; width:26px; height:26px; border-radius:7px; background:var(--accent,#4f46e5); display:grid; place-items:center;">
+          <span style="display:grid; grid-template-columns:repeat(2,4.5px); gap:2.5px;">
+            <span style="width:4.5px;height:4.5px;background:#fff;border-radius:1px;"></span><span style="width:4.5px;height:4.5px;background:rgba(255,255,255,0.5);border-radius:1px;"></span>
+            <span style="width:4.5px;height:4.5px;background:rgba(255,255,255,0.5);border-radius:1px;"></span><span style="width:4.5px;height:4.5px;background:#fff;border-radius:1px;"></span>
+          </span>
+        </span>
+        <span style="flex:1; text-align:left; color:var(--text,#0e1116); font-weight:700; font-size:18px; letter-spacing:-0.01em; white-space:nowrap; overflow:hidden; display:{{ labelDisplay }};">Eujeno</span>
+      </button>
+      <button onClick="{{ toggleCollapse }}" title="{{ toggleTitle }}" style="flex:none; display:{{ collapseBtnDisplay }}; place-items:center; width:28px; height:28px; border-radius:7px; border:1px solid var(--border-strong,#d9dce2); background:var(--card-bg,#fff); color:var(--muted,#5b6471); cursor:pointer;" style-hover="color:var(--text,#0e1116); border-color:var(--text,#0e1116);">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+      </button>
+    </div>
+
+    <nav style="display:flex; flex-direction:column; gap:3px;">
+      <button onClick="{{ goNetwork }}" title="Network" style="position:relative; display:flex; align-items:center; justify-content:{{ navJustify }}; gap:11px; width:100%; text-align:left; border:none; cursor:pointer; padding:{{ navPad }}; border-radius:9px; font-size:14.5px; font-weight:600; background:{{ navNet.bg }}; color:{{ navNet.color }};">
+        <span style="position:absolute; left:-10px; top:50%; transform:translateY(-50%); width:3px; height:20px; border-radius:0 3px 3px 0; background:var(--accent,#4f46e5); opacity:{{ navNet.bar }};"></span>
+        <svg style="flex:none;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="2.2"></circle><circle cx="19" cy="6" r="2.2"></circle><circle cx="12" cy="18" r="2.2"></circle><path d="M6.8 7.2 10.6 16M17.2 7.2 13.4 16M7 6h10"></path></svg>
+        <span style="display:{{ labelDisplay }}; white-space:nowrap;">Network</span>
+      </button>
+      <button onClick="{{ goChat }}" title="Chat" style="position:relative; display:flex; align-items:center; justify-content:{{ navJustify }}; gap:11px; width:100%; text-align:left; border:none; cursor:pointer; padding:{{ navPad }}; border-radius:9px; font-size:14.5px; font-weight:600; background:{{ navChat.bg }}; color:{{ navChat.color }};">
+        <span style="position:absolute; left:-10px; top:50%; transform:translateY(-50%); width:3px; height:20px; border-radius:0 3px 3px 0; background:var(--accent,#4f46e5); opacity:{{ navChat.bar }};"></span>
+        <svg style="flex:none;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v10.5H9l-4 3.5v-3.5H4z"></path><path d="M8.5 10.5h7M8.5 13h4.5"></path></svg>
+        <span style="display:{{ labelDisplay }}; white-space:nowrap;">Chat</span>
+      </button>
+      <button onClick="{{ goSettings }}" title="Settings" style="position:relative; display:flex; align-items:center; justify-content:{{ navJustify }}; gap:11px; width:100%; text-align:left; border:none; cursor:pointer; padding:{{ navPad }}; border-radius:9px; font-size:14.5px; font-weight:600; background:{{ navSet.bg }}; color:{{ navSet.color }};">
+        <span style="position:absolute; left:-10px; top:50%; transform:translateY(-50%); width:3px; height:20px; border-radius:0 3px 3px 0; background:var(--accent,#4f46e5); opacity:{{ navSet.bar }};"></span>
+        <svg style="flex:none;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"></circle><path d="M12 3.5v2.3M12 18.2v2.3M3.5 12h2.3M18.2 12h2.3M6 6l1.6 1.6M16.4 16.4 18 18M18 6l-1.6 1.6M7.6 16.4 6 18"></path></svg>
+        <span style="display:{{ labelDisplay }}; white-space:nowrap;">Settings</span>
+      </button>
+    </nav>
+
+    <div style="flex:1;"></div>
+
+    <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:12px; padding:{{ statusPad }};">
+      <div style="display:flex; align-items:center; gap:8px; justify-content:{{ navJustify }};">
+        <span style="flex:none; width:8px; height:8px; border-radius:50%; background:#16a34a; box-shadow:0 0 0 3px rgba(22,163,74,0.16);"></span>
+        <span style="font-size:13px; font-weight:600; color:var(--text,#0e1116); display:{{ labelDisplay }};">Connected</span>
+      </div>
+      <div style="margin-top:9px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted2,#7a828e); line-height:1.6; display:{{ labelDisplay }};">
+        <div>node·7f3a9c</div>
+        <div>142 peers · swarm/llama-3-70b</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main style="flex:1; min-width:0; height:100vh; display:flex; flex-direction:column; overflow:hidden;">
+
+    <!-- ================ NETWORK PAGE ================ -->
+    <sc-if value="{{ isNetwork }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:1; min-height:0; overflow-y:auto;">
+      <div style="max-width:1080px; margin:0 auto; padding:30px 36px 56px;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:20px; flex-wrap:wrap;">
+          <div>
+            <h1 style="margin:0; font-size:30px; font-weight:800; letter-spacing:-0.02em;">Network</h1>
+            <p style="margin:7px 0 0; font-size:15px; color:var(--muted,#5b6471);">You're serving <span style="font-family:'JetBrains Mono',monospace; color:var(--text,#0e1116);">swarm/llama-3-70b</span> with the swarm.</p>
+          </div>
+          <span style="display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:#16a34a; background:rgba(22,163,74,0.1); border:1px solid rgba(22,163,74,0.25); padding:7px 13px; border-radius:999px;"><span style="width:7px;height:7px;border-radius:50%;background:#16a34a;animation:blink 1.8s steps(2) infinite;"></span>Online</span>
+        </div>
+
+        <!-- stats -->
+        <div style="margin-top:24px; display:grid; grid-template-columns:repeat(4,1fr); gap:14px;">
+          <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:13px; padding:18px; box-shadow:var(--shadow,none);">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted2,#7a828e); text-transform:uppercase; letter-spacing:0.04em;">Connected peers</div>
+            <div style="margin-top:8px; font-size:28px; font-weight:800; letter-spacing:-0.02em;">142</div>
+          </div>
+          <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:13px; padding:18px; box-shadow:var(--shadow,none);">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted2,#7a828e); text-transform:uppercase; letter-spacing:0.04em;">Your layers</div>
+            <div style="margin-top:8px; font-size:28px; font-weight:800; letter-spacing:-0.02em; color:var(--accent,#4f46e5);">L24–31</div>
+          </div>
+          <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:13px; padding:18px; box-shadow:var(--shadow,none);">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted2,#7a828e); text-transform:uppercase; letter-spacing:0.04em;">Throughput</div>
+            <div style="margin-top:8px; font-size:28px; font-weight:800; letter-spacing:-0.02em;">{{ tput }} <span style="font-size:14px; font-weight:600; color:var(--muted2,#7a828e);">tok/s</span></div>
+          </div>
+          <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:13px; padding:18px; box-shadow:var(--shadow,none);">
+            <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted2,#7a828e); text-transform:uppercase; letter-spacing:0.04em;">Avg latency</div>
+            <div style="margin-top:8px; font-size:28px; font-weight:800; letter-spacing:-0.02em;">{{ latency }} <span style="font-size:14px; font-weight:600; color:var(--muted2,#7a828e);">ms</span></div>
+          </div>
+        </div>
+
+        <!-- canvas + your node -->
+        <div style="margin-top:14px; display:grid; grid-template-columns:1fr 300px; gap:14px;">
+          <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:14px; overflow:hidden; box-shadow:var(--shadow,none);">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:13px 16px; border-bottom:1px solid var(--border,#eef0f3);">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted2,#7a828e);">swarm.topology</span>
+              <span style="display:inline-flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent,#4f46e5);"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent,#4f46e5);"></span>{{ queries }} active queries</span>
+            </div>
+            <canvas ref="{{ canvasRef }}" style="display:block; width:100%; height:340px; background:var(--canvas-bg,#fafbfc);"></canvas>
+          </div>
+
+          <div style="border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:14px; padding:18px; box-shadow:var(--shadow,none); display:flex; flex-direction:column;">
+            <div style="font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted2,#7a828e);">Your node</div>
+            <div style="margin-top:14px; display:flex; flex-direction:column; gap:0;">
+              <div style="display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border,#eef0f3); font-size:13.5px;"><span style="color:var(--muted,#5b6471);">Status</span><span style="font-weight:600; color:#16a34a;">serving</span></div>
+              <div style="display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border,#eef0f3); font-size:13.5px;"><span style="color:var(--muted,#5b6471);">Layers</span><span style="font-family:'JetBrains Mono',monospace; font-weight:600;">L24–L31</span></div>
+              <div style="display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border,#eef0f3); font-size:13.5px;"><span style="color:var(--muted,#5b6471);">VRAM used</span><span style="font-weight:600;">11.2 / 16 GB</span></div>
+              <div style="display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border,#eef0f3); font-size:13.5px;"><span style="color:var(--muted,#5b6471);">Region</span><span style="font-weight:600;">eu-west</span></div>
+              <div style="display:flex; justify-content:space-between; padding:9px 0; font-size:13.5px;"><span style="color:var(--muted,#5b6471);">Uptime</span><span style="font-weight:600;">6d 14h</span></div>
+            </div>
+            <div style="flex:1;"></div>
+            <button style="margin-top:16px; width:100%; border:1px solid var(--border-strong,#d9dce2); background:var(--card-bg,#fff); color:var(--text,#0e1116); font-weight:600; font-size:13.5px; padding:10px; border-radius:9px; cursor:pointer;" style-hover="border-color:var(--text,#0e1116);">Restart node</button>
+          </div>
+        </div>
+
+        <!-- peers table -->
+        <div style="margin-top:14px; border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:14px; overflow:hidden; box-shadow:var(--shadow,none);">
+          <div style="padding:14px 18px; border-bottom:1px solid var(--border,#eef0f3); font-size:14px; font-weight:700;">Peers in your chain</div>
+          <div style="display:grid; grid-template-columns:1.4fr 1fr 1fr 0.8fr 0.9fr; padding:10px 18px; border-bottom:1px solid var(--border,#eef0f3); font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted2,#7a828e); text-transform:uppercase; letter-spacing:0.04em;">
+            <span>Peer</span><span>Layers</span><span>Region</span><span>Latency</span><span>Status</span>
+          </div>
+          <div style="display:grid; grid-template-columns:1.4fr 1fr 1fr 0.8fr 0.9fr; padding:13px 18px; border-bottom:1px solid var(--border,#eef0f3); align-items:center; font-size:13.5px;"><span style="font-family:'JetBrains Mono',monospace; color:var(--text,#0e1116);">node·a19c4f</span><span style="font-family:'JetBrains Mono',monospace; color:var(--muted,#5b6471);">L16–31</span><span style="color:var(--muted,#5b6471);">eu-west</span><span style="color:var(--muted,#5b6471);">24 ms</span><span style="display:inline-flex; align-items:center; gap:7px; color:#16a34a; font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#16a34a;"></span>online</span></div>
+          <div style="display:grid; grid-template-columns:1.4fr 1fr 1fr 0.8fr 0.9fr; padding:13px 18px; border-bottom:1px solid var(--border,#eef0f3); align-items:center; font-size:13.5px;"><span style="font-family:'JetBrains Mono',monospace; color:var(--text,#0e1116);">node·c4e1b8</span><span style="font-family:'JetBrains Mono',monospace; color:var(--muted,#5b6471);">L32–47</span><span style="color:var(--muted,#5b6471);">us-east</span><span style="color:var(--muted,#5b6471);">61 ms</span><span style="display:inline-flex; align-items:center; gap:7px; color:#16a34a; font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#16a34a;"></span>online</span></div>
+          <div style="display:grid; grid-template-columns:1.4fr 1fr 1fr 0.8fr 0.9fr; padding:13px 18px; border-bottom:1px solid var(--border,#eef0f3); align-items:center; font-size:13.5px;"><span style="font-family:'JetBrains Mono',monospace; color:var(--text,#0e1116);">node·5f2e9d</span><span style="font-family:'JetBrains Mono',monospace; color:var(--muted,#5b6471);">L0–15</span><span style="color:var(--muted,#5b6471);">ap-south</span><span style="color:var(--muted,#5b6471);">88 ms</span><span style="display:inline-flex; align-items:center; gap:7px; color:#d97706; font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#d97706;"></span>syncing</span></div>
+          <div style="display:grid; grid-template-columns:1.4fr 1fr 1fr 0.8fr 0.9fr; padding:13px 18px; border-bottom:1px solid var(--border,#eef0f3); align-items:center; font-size:13.5px;"><span style="font-family:'JetBrains Mono',monospace; color:var(--text,#0e1116);">node·b6d4e0</span><span style="font-family:'JetBrains Mono',monospace; color:var(--muted,#5b6471);">L48–63</span><span style="color:var(--muted,#5b6471);">eu-west</span><span style="color:var(--muted,#5b6471);">31 ms</span><span style="display:inline-flex; align-items:center; gap:7px; color:#16a34a; font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#16a34a;"></span>online</span></div>
+          <div style="display:grid; grid-template-columns:1.4fr 1fr 1fr 0.8fr 0.9fr; padding:13px 18px; align-items:center; font-size:13.5px;"><span style="font-family:'JetBrains Mono',monospace; color:var(--text,#0e1116);">node·9e8f23</span><span style="font-family:'JetBrains Mono',monospace; color:var(--muted,#5b6471);">L0–15</span><span style="color:var(--muted,#5b6471);">sa-east</span><span style="color:var(--muted,#5b6471);">104 ms</span><span style="display:inline-flex; align-items:center; gap:7px; color:#16a34a; font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:#16a34a;"></span>online</span></div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ================ CHAT PAGE ================ -->
+    <sc-if value="{{ isChat }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1; min-height:0; display:flex; flex-direction:column;">
+      <div style="padding:22px 36px; border-bottom:1px solid var(--border,#e9ebef);">
+        <h1 style="margin:0; font-size:22px; font-weight:800; letter-spacing:-0.02em;">Chat</h1>
+        <p style="margin:5px 0 0; font-size:13.5px; color:var(--muted,#5b6471);">Querying <span style="font-family:'JetBrains Mono',monospace; color:var(--text,#0e1116);">swarm/llama-3-70b</span> · responses served across the network</p>
+      </div>
+
+      <div ref="{{ messagesRef }}" style="flex:1; min-height:0; overflow-y:auto; padding:26px 36px;">
+        <div style="max-width:760px; margin:0 auto;">
+          <sc-if value="{{ chatEmpty }}" hint-placeholder-val="{{ true }}">
+            <div style="text-align:center; padding:54px 0 30px;">
+              <span style="display:inline-grid; place-items:center; width:54px; height:54px; border-radius:14px; background:color-mix(in srgb, var(--accent,#4f46e5) 12%, transparent); color:var(--accent,#4f46e5);">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v10.5H9l-4 3.5v-3.5H4z"></path><path d="M8.5 10.5h7M8.5 13h4.5"></path></svg>
+              </span>
+              <h2 style="margin:18px 0 6px; font-size:22px; font-weight:800; letter-spacing:-0.02em;">Ask the swarm</h2>
+              <p style="margin:0 auto; font-size:15px; color:var(--muted,#5b6471); max-width:420px;">Your prompt routes layer by layer through the connected nodes and streams back here.</p>
+              <div style="margin-top:22px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+                <sc-for list="{{ examples }}" as="ex" hint-placeholder-count="3">
+                  <button onClick="{{ ex.onClick }}" style="border:1px solid var(--border-strong,#d9dce2); background:var(--card-bg,#fff); color:var(--text,#0e1116); font-size:13.5px; font-weight:500; padding:9px 14px; border-radius:999px; cursor:pointer;" style-hover="border-color:var(--accent,#4f46e5); color:var(--accent,#4f46e5);">{{ ex.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-for list="{{ chat }}" as="m" hint-placeholder-count="0">
+            <div style="display:flex; justify-content:{{ m.rowJustify }}; margin-bottom:18px;">
+              <div style="max-width:80%; min-width:0;">
+                <div style="border:1px solid {{ m.bubbleBorder }}; background:{{ m.bubbleBg }}; color:{{ m.bubbleColor }}; padding:13px 16px; border-radius:14px; font-size:14.5px; line-height:1.6; white-space:pre-wrap; word-break:break-word;">
+                  <sc-if value="{{ m.pending }}" hint-placeholder-val="{{ true }}">
+                    <span style="display:inline-flex; align-items:center; gap:9px; color:var(--muted,#5b6471);">
+                      <span style="display:inline-flex; gap:4px;">
+                        <span style="width:6px;height:6px;border-radius:50%;background:var(--accent,#4f46e5);animation:dotpulse 1s ease-in-out infinite;"></span>
+                        <span style="width:6px;height:6px;border-radius:50%;background:var(--accent,#4f46e5);animation:dotpulse 1s ease-in-out 0.15s infinite;"></span>
+                        <span style="width:6px;height:6px;border-radius:50%;background:var(--accent,#4f46e5);animation:dotpulse 1s ease-in-out 0.3s infinite;"></span>
+                      </span>
+                      <span style="font-family:'JetBrains Mono',monospace; font-size:12.5px;">routing through the swarm…</span>
+                    </span>
+                  </sc-if>
+                  <sc-if value="{{ m.hasText }}" hint-placeholder-val="{{ false }}">{{ m.content }}</sc-if>
+                </div>
+                <sc-if value="{{ m.hasRouting }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:6px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--muted2,#7a828e);">{{ m.routing }}</div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border,#e9ebef); padding:16px 36px; background:var(--page-bg,#fff);">
+        <div style="max-width:760px; margin:0 auto;">
+          <div style="display:flex; gap:10px; align-items:flex-end; border:1px solid var(--border-strong,#d9dce2); background:var(--card-bg,#fff); border-radius:14px; padding:8px 8px 8px 14px;">
+            <textarea value="{{ input }}" onInput="{{ onInput }}" onKeyDown="{{ onKeyDown }}" rows="1" placeholder="Message the swarm…" style="flex:1; resize:none; border:none; outline:none; background:transparent; color:var(--text,#0e1116); font-size:15px; line-height:1.5; max-height:140px; padding:7px 0;"></textarea>
+            <button onClick="{{ send }}" disabled="{{ sendDisabled }}" style="flex:none; display:grid; place-items:center; width:38px; height:38px; border-radius:10px; border:none; cursor:{{ sendCursor }}; background:var(--accent,#4f46e5); color:#fff; opacity:{{ sendOpacity }};">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M12 6l6 6-6 6"></path></svg>
+            </button>
+          </div>
+          <div style="margin-top:8px; text-align:center; font-size:11.5px; color:var(--muted2,#7a828e);">Eujeno serves an open model across volunteer nodes. Output may be imperfect.</div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ================ SETTINGS PAGE ================ -->
+    <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1; min-height:0; overflow-y:auto;">
+      <div style="max-width:760px; margin:0 auto; padding:30px 36px 60px;">
+        <h1 style="margin:0; font-size:30px; font-weight:800; letter-spacing:-0.02em;">Settings</h1>
+        <p style="margin:7px 0 0; font-size:15px; color:var(--muted,#5b6471);">Configure how your node joins and serves the network.</p>
+
+        <!-- Identity -->
+        <div style="margin-top:26px; border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:14px; padding:22px; box-shadow:var(--shadow,none);">
+          <div style="font-size:15px; font-weight:700;">Identity</div>
+          <div style="margin-top:18px; display:flex; flex-direction:column; gap:16px;">
+            <div>
+              <label style="display:block; font-size:13px; font-weight:600; color:var(--muted,#5b6471); margin-bottom:7px;">Peer ID</label>
+              <div style="display:flex; gap:8px;">
+                <div style="flex:1; font-family:'JetBrains Mono',monospace; font-size:13.5px; color:var(--text,#0e1116); background:var(--section-bg,#f7f8fa); border:1px solid var(--border,#e9ebef); border-radius:9px; padding:11px 13px;">node·7f3a9c2e·d41b88a0</div>
+                <button onClick="{{ copyId }}" style="flex:none; border:1px solid var(--border-strong,#d9dce2); background:var(--card-bg,#fff); color:var(--text,#0e1116); font-size:13px; font-weight:600; padding:0 16px; border-radius:9px; cursor:pointer;" style-hover="border-color:var(--accent,#4f46e5); color:var(--accent,#4f46e5);">{{ copyIdLabel }}</button>
+              </div>
+            </div>
+            <div>
+              <label style="display:block; font-size:13px; font-weight:600; color:var(--muted,#5b6471); margin-bottom:7px;">Node name</label>
+              <input value="{{ s_name }}" onInput="{{ setName }}" style="width:100%; font-size:14.5px; color:var(--text,#0e1116); background:var(--card-bg,#fff); border:1px solid var(--border-strong,#d9dce2); border-radius:9px; padding:11px 13px; outline:none;" style-focus="border-color:var(--accent,#4f46e5);">
+            </div>
+          </div>
+        </div>
+
+        <!-- Node -->
+        <div style="margin-top:16px; border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:14px; padding:22px; box-shadow:var(--shadow,none);">
+          <div style="font-size:15px; font-weight:700;">Node</div>
+          <div style="margin-top:18px; display:flex; flex-direction:column; gap:18px;">
+            <div>
+              <label style="display:block; font-size:13px; font-weight:600; color:var(--muted,#5b6471); margin-bottom:7px;">Model</label>
+              <select value="{{ s_model }}" onChange="{{ setModel }}" style="width:100%; font-size:14.5px; color:var(--text,#0e1116); background:var(--card-bg,#fff); border:1px solid var(--border-strong,#d9dce2); border-radius:9px; padding:11px 13px; outline:none; cursor:pointer;">
+                <option value="swarm/llama-3-70b">swarm/llama-3-70b</option>
+                <option value="swarm/mixtral-8x22b">swarm/mixtral-8x22b</option>
+                <option value="swarm/qwen-2-72b">swarm/qwen-2-72b</option>
+                <option value="swarm/falcon-180b">swarm/falcon-180b</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block; font-size:13px; font-weight:600; color:var(--muted,#5b6471); margin-bottom:7px;">Layer assignment</label>
+              <div style="display:inline-flex; padding:3px; background:var(--section-bg,#f7f8fa); border:1px solid var(--border,#e9ebef); border-radius:10px; gap:3px;">
+                <button onClick="{{ setLayerAuto }}" style="border:none; cursor:pointer; font-size:13.5px; font-weight:600; padding:8px 18px; border-radius:7px; background:{{ autoBtnBg }}; color:{{ autoBtnColor }};">Auto</button>
+                <button onClick="{{ setLayerManual }}" style="border:none; cursor:pointer; font-size:13.5px; font-weight:600; padding:8px 18px; border-radius:7px; background:{{ manualBtnBg }}; color:{{ manualBtnColor }};">Manual</button>
+              </div>
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:9px;"><label style="font-size:13px; font-weight:600; color:var(--muted,#5b6471);">Max layers to host</label><span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; color:var(--accent,#4f46e5);">{{ s_maxLayers }}</span></div>
+              <input type="range" min="2" max="20" step="1" value="{{ s_maxLayers }}" onInput="{{ setMaxLayers }}" style="width:100%; accent-color:var(--accent,#4f46e5);">
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:9px;"><label style="font-size:13px; font-weight:600; color:var(--muted,#5b6471);">Max VRAM</label><span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; color:var(--accent,#4f46e5);">{{ s_maxVram }} GB</span></div>
+              <input type="range" min="4" max="48" step="2" value="{{ s_maxVram }}" onInput="{{ setVram }}" style="width:100%; accent-color:var(--accent,#4f46e5);">
+            </div>
+            <div>
+              <label style="display:block; font-size:13px; font-weight:600; color:var(--muted,#5b6471); margin-bottom:7px;">Public port</label>
+              <input type="number" value="{{ s_port }}" onInput="{{ setPort }}" style="width:160px; font-family:'JetBrains Mono',monospace; font-size:14px; color:var(--text,#0e1116); background:var(--card-bg,#fff); border:1px solid var(--border-strong,#d9dce2); border-radius:9px; padding:11px 13px; outline:none;" style-focus="border-color:var(--accent,#4f46e5);">
+            </div>
+          </div>
+        </div>
+
+        <!-- Network -->
+        <div style="margin-top:16px; border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:14px; padding:22px; box-shadow:var(--shadow,none);">
+          <div style="font-size:15px; font-weight:700;">Network</div>
+          <div style="margin-top:18px; display:flex; flex-direction:column; gap:18px;">
+            <div>
+              <label style="display:block; font-size:13px; font-weight:600; color:var(--muted,#5b6471); margin-bottom:7px;">Region</label>
+              <select value="{{ s_region }}" onChange="{{ setRegion }}" style="width:100%; font-size:14.5px; color:var(--text,#0e1116); background:var(--card-bg,#fff); border:1px solid var(--border-strong,#d9dce2); border-radius:9px; padding:11px 13px; outline:none; cursor:pointer;">
+                <option value="eu-west">eu-west</option>
+                <option value="eu-north">eu-north</option>
+                <option value="us-east">us-east</option>
+                <option value="us-west">us-west</option>
+                <option value="ap-south">ap-south</option>
+                <option value="sa-east">sa-east</option>
+              </select>
+            </div>
+            <div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:9px;"><label style="font-size:13px; font-weight:600; color:var(--muted,#5b6471);">Bandwidth limit</label><span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; color:var(--accent,#4f46e5);">{{ s_bandwidth }} Mbps</span></div>
+              <input type="range" min="50" max="1000" step="50" value="{{ s_bandwidth }}" onInput="{{ setBandwidth }}" style="width:100%; accent-color:var(--accent,#4f46e5);">
+            </div>
+          </div>
+        </div>
+
+        <!-- Privacy & behavior -->
+        <div style="margin-top:16px; border:1px solid var(--border,#e9ebef); background:var(--card-bg,#fff); border-radius:14px; padding:8px 22px; box-shadow:var(--shadow,none);">
+          <sc-for list="{{ toggles }}" as="t" hint-placeholder-count="4">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:20px; padding:16px 0; border-bottom:1px solid {{ t.divider }};">
+              <div><div style="font-size:14.5px; font-weight:600; color:var(--text,#0e1116);">{{ t.label }}</div><div style="font-size:13px; color:var(--muted2,#7a828e); margin-top:2px;">{{ t.desc }}</div></div>
+              <button onClick="{{ t.onToggle }}" style="flex:none; width:44px; height:25px; border-radius:999px; border:none; cursor:pointer; position:relative; transition:background 0.15s; background:{{ t.trackBg }};">
+                <span style="position:absolute; top:3px; left:3px; width:19px; height:19px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.25); transition:transform 0.15s; transform:translateX({{ t.knobX }});"></span>
+              </button>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="margin-top:22px; display:flex; align-items:center; gap:14px;">
+          <button onClick="{{ saveSettings }}" style="background:var(--accent,#4f46e5); color:#fff; font-weight:600; font-size:14.5px; padding:12px 24px; border:none; border-radius:10px; cursor:pointer; box-shadow:0 8px 18px -8px color-mix(in srgb, var(--accent,#4f46e5) 55%, transparent);">Save changes</button>
+          <sc-if value="{{ savedFlash }}" hint-placeholder-val="{{ false }}">
+            <span style="display:inline-flex; align-items:center; gap:7px; font-size:13.5px; font-weight:600; color:#16a34a;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"></path></svg>Saved</span>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;theme&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;light&quot;, &quot;options&quot;: [&quot;light&quot;, &quot;dark&quot;], &quot;tsType&quot;: &quot;string&quot; },
+  &quot;accentColor&quot;: { &quot;editor&quot;: &quot;color&quot;, &quot;default&quot;: &quot;#4f46e5&quot;, &quot;options&quot;: [&quot;#4f46e5&quot;, &quot;#2563eb&quot;, &quot;#0d9488&quot;, &quot;#7c3aed&quot;, &quot;#e8590c&quot;, &quot;#e11d48&quot;], &quot;tsType&quot;: &quot;string&quot; },
+  &quot;startPage&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;network&quot;, &quot;options&quot;: [&quot;network&quot;, &quot;chat&quot;, &quot;settings&quot;], &quot;tsType&quot;: &quot;string&quot; }
+}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.canvasRef = React.createRef();
+    this.messagesRef = React.createRef();
+    this._W=-1; this._H=-1; this._N=-1; this._nodes=[]; this._adj=[]; this._pulses=[];
+    this.state = {
+      view: props.startPage ?? 'network',
+      collapsed: false,
+      input: '',
+      sending: false,
+      chat: [],
+      copiedId: false,
+      savedFlash: false,
+      metrics: { tput: 38.4, latency: 42, queries: 6 },
+      settings: {
+        name: 'workstation-01',
+        model: 'swarm/llama-3-70b',
+        layerMode: 'auto',
+        maxLayers: 8,
+        maxVram: 16,
+        port: 31330,
+        region: 'eu-west',
+        bandwidth: 200,
+        autojoin: true,
+        contribute: true,
+        telemetry: false,
+        inbound: true
+      }
+    };
+  }
+
+  componentDidMount(){
+    try {
+      const sv = localStorage.getItem('eujeno_settings');
+      if(sv) this.setState(s=>({ settings: { ...s.settings, ...JSON.parse(sv) } }));
+      const cv = localStorage.getItem('eujeno_chat');
+      if(cv) this.setState({ chat: JSON.parse(cv) });
+    } catch(e){}
+    this._raf = requestAnimationFrame(this._draw);
+    this._metrics = setInterval(()=>{
+      this.setState(s=>({ metrics: {
+        tput: Math.min(58, Math.max(22, s.metrics.tput + (Math.random()-0.5)*4)),
+        latency: Math.round(Math.max(28, Math.min(72, s.metrics.latency + (Math.random()-0.5)*7))),
+        queries: Math.max(1, Math.min(14, s.metrics.queries + (Math.random()<0.5?-1:1)))
+      }}));
+    }, 2200);
+  }
+
+  componentDidUpdate(prevProps, prevState){
+    if(prevProps && prevProps.startPage !== this.props.startPage && this.props.startPage){
+      this.setState({ view: this.props.startPage });
+    }
+    const prevLen = (prevState && prevState.chat) ? prevState.chat.length : -1;
+    if(prevLen !== this.state.chat.length && this.messagesRef.current){
+      const el = this.messagesRef.current;
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+
+  componentWillUnmount(){
+    cancelAnimationFrame(this._raf);
+    clearInterval(this._metrics);
+    clearTimeout(this._idT); clearTimeout(this._saveT);
+  }
+
+  setView = (v) => this.setState({ view: v });
+  toggleCollapse = () => this.setState(s=>({ collapsed: !s.collapsed }));
+
+  // ---------- canvas swarm ----------
+  _dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+  _init(N,W,H){
+    const nodes=[], pad=26;
+    for(let i=0;i<N;i++) nodes.push({ x:pad+Math.random()*(W-2*pad), y:pad+Math.random()*(H-2*pad), vx:(Math.random()-0.5)*0.11, vy:(Math.random()-0.5)*0.11, r:Math.random()*1.5+1.7, pulse:0 });
+    const adj = nodes.map(()=>[]);
+    for(let i=0;i<N;i++){
+      const order = nodes.map((n,j)=>({j,d:j===i?Infinity:this._dist(nodes[i],n)})).sort((a,b)=>a.d-b.d);
+      for(let k=0;k<2;k++){ const j=order[k].j; if(!adj[i].includes(j))adj[i].push(j); if(!adj[j].includes(i))adj[j].push(i); }
+    }
+    const pulses=[]; const count=Math.max(3,Math.round(N/5));
+    for(let p=0;p<count;p++){ const a=Math.floor(Math.random()*N); const nb=adj[a]; if(!nb.length)continue; pulses.push({a,b:nb[Math.floor(Math.random()*nb.length)],t:Math.random(),speed:0.004+Math.random()*0.005}); }
+    this._nodes=nodes; this._adj=adj; this._pulses=pulses;
+  }
+  _draw = () => {
+    const canvas = this.canvasRef.current;
+    if(!canvas){ this._raf=requestAnimationFrame(this._draw); return; }
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const W=rect.width, H=rect.height;
+    if(W<2||H<2){ this._raf=requestAnimationFrame(this._draw); return; }
+    const N=30, dpr=Math.min(window.devicePixelRatio||1,2);
+    if(W!==this._W||H!==this._H||N!==this._N){ this._W=W; this._H=H; this._N=N; canvas.width=Math.max(1,W*dpr); canvas.height=Math.max(1,H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0); this._init(N,W,H); }
+    const dark = (this.props.theme ?? 'light')==='dark';
+    const accent = this.props.accentColor ?? '#4f46e5';
+    const edge = dark ? 'rgba(255,255,255,0.07)' : 'rgba(14,17,22,0.09)';
+    const idle = dark ? '#3a4150' : '#aab0bb';
+    const nodes=this._nodes, adj=this._adj, pulses=this._pulses;
+    ctx.clearRect(0,0,W,H);
+    for(const n of nodes){ n.x+=n.vx; n.y+=n.vy; if(n.x<18||n.x>W-18)n.vx*=-1; if(n.y<18||n.y>H-18)n.vy*=-1; if(n.pulse>0)n.pulse-=0.03; }
+    ctx.lineWidth=1; ctx.strokeStyle=edge;
+    for(let i=0;i<nodes.length;i++) for(const j of adj[i]){ if(j<=i)continue; ctx.beginPath(); ctx.moveTo(nodes[i].x,nodes[i].y); ctx.lineTo(nodes[j].x,nodes[j].y); ctx.stroke(); }
+    for(const pl of pulses){
+      pl.t+=pl.speed;
+      if(pl.t>=1){ nodes[pl.b].pulse=1; pl.a=pl.b; const nb=adj[pl.a]; pl.b=nb.length?nb[Math.floor(Math.random()*nb.length)]:pl.a; pl.t=0; }
+      const A=nodes[pl.a],B=nodes[pl.b]; const x=A.x+(B.x-A.x)*pl.t, y=A.y+(B.y-A.y)*pl.t;
+      ctx.strokeStyle=accent; ctx.globalAlpha=0.5; ctx.lineWidth=1.6; ctx.beginPath();
+      ctx.moveTo(A.x+(B.x-A.x)*Math.max(0,pl.t-0.18), A.y+(B.y-A.y)*Math.max(0,pl.t-0.18)); ctx.lineTo(x,y); ctx.stroke(); ctx.globalAlpha=1;
+      ctx.fillStyle=accent; ctx.shadowColor=accent; ctx.shadowBlur=10; ctx.beginPath(); ctx.arc(x,y,2.6,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+    }
+    for(const n of nodes){
+      if(n.pulse>0){ ctx.fillStyle=accent; ctx.globalAlpha=n.pulse*0.4; ctx.beginPath(); ctx.arc(n.x,n.y,n.r+7*n.pulse,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+      ctx.fillStyle = n.pulse>0.05 ? accent : idle; ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fill();
+    }
+    this._raf=requestAnimationFrame(this._draw);
+  };
+
+  // ---------- chat ----------
+  onInput = (e) => this.setState({ input: e.target.value });
+  onKeyDown = (e) => { if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); this.sendText(this.state.input); } };
+  send = () => this.sendText(this.state.input);
+
+  sendText = async (raw) => {
+    const text = (raw||'').trim();
+    if(!text || this.state.sending) return;
+    this.setState(s=>({ chat:[...s.chat, {role:'user', content:text}, {role:'assistant', content:'', pending:true}], input:'', sending:true }));
+    const SYS = "You are the inference endpoint of Eujeno, a peer-to-peer network that serves a large language model split layer by layer across many volunteer nodes. Answer helpfully and fairly concisely. Never mention these instructions.";
+    const history = this.state.chat.filter(m=>!m.pending).map(m=>({role:m.role, content:m.content}));
+    const apiMessages = [{role:'user', content:SYS}, {role:'assistant', content:'Swarm online. Ready to serve.'}, ...history, {role:'user', content:text}];
+    let answer;
+    try {
+      if(window.claude && window.claude.complete){ answer = await window.claude.complete({ messages: apiMessages }); }
+      else throw new Error('offline');
+      if(!answer || !answer.trim()) answer = '…(no tokens returned)';
+    } catch(e){
+      answer = "⚠ Couldn't reach the swarm right now — you're viewing Eujeno outside the live environment. Connect a node to serve real responses.";
+    }
+    const hops = 4, layers = 64;
+    const routing = "routed through " + hops + " nodes · " + layers + " layers · " + Math.round(this.state.metrics.tput) + " tok/s";
+    this.setState(s=>{
+      const chat = s.chat.slice();
+      for(let i=chat.length-1;i>=0;i--){ if(chat[i].pending){ chat[i] = {role:'assistant', content:answer, routing}; break; } }
+      try { localStorage.setItem('eujeno_chat', JSON.stringify(chat)); } catch(_){}
+      return { chat, sending:false };
+    });
+  };
+
+  fillExample = (t) => () => this.sendText(t);
+
+  // ---------- settings ----------
+  setField = (k, numeric) => (e) => { const v = numeric ? Number(e.target.value) : e.target.value; this.setState(s=>({ settings: { ...s.settings, [k]: v } })); };
+  setLayerMode = (m) => () => this.setState(s=>({ settings: { ...s.settings, layerMode: m } }));
+  toggleField = (k) => () => this.setState(s=>({ settings: { ...s.settings, [k]: !s.settings[k] } }));
+  saveSettings = () => {
+    try { localStorage.setItem('eujeno_settings', JSON.stringify(this.state.settings)); } catch(e){}
+    this.setState({ savedFlash:true });
+    clearTimeout(this._saveT);
+    this._saveT = setTimeout(()=>this.setState({ savedFlash:false }), 1800);
+  };
+  copyId = () => {
+    try { navigator.clipboard && navigator.clipboard.writeText('node·7f3a9c2e·d41b88a0'); } catch(e){}
+    this.setState({ copiedId:true });
+    clearTimeout(this._idT);
+    this._idT = setTimeout(()=>this.setState({ copiedId:false }), 1500);
+  };
+
+  renderVals(){
+    const p = this.props, st = this.state, s = st.settings;
+    const accent = p.accentColor ?? '#4f46e5';
+    const dark = (p.theme ?? 'light')==='dark';
+    const T = dark ? {
+      pageBg:'#0b0d12', cardBg:'#14171f', elevBg:'#1a1e28', text:'#f2f4f7', muted:'#9aa3b2', muted2:'#7a8494',
+      border:'#20242e', borderStrong:'#2a2f3b', section:'#0f1217', canvasBg:'#0e1117', shadow:'none'
+    } : {
+      pageBg:'#ffffff', cardBg:'#ffffff', elevBg:'#ffffff', text:'#0e1116', muted:'#5b6471', muted2:'#7a828e',
+      border:'#e9ebef', borderStrong:'#d9dce2', section:'#f7f8fa', canvasBg:'#fafbfc', shadow:'0 1px 2px rgba(16,24,40,0.05)'
+    };
+    const view = st.view;
+    const nav = (id) => ({
+      bg: view===id ? ('color-mix(in srgb, '+accent+' 13%, transparent)') : 'transparent',
+      color: view===id ? accent : T.muted,
+      bar: view===id ? '1' : '0'
+    });
+
+    const chat = st.chat.map(m=>{
+      const isUser = m.role==='user';
+      return {
+        isUser, pending: !!m.pending,
+        content: m.content,
+        hasText: !m.pending && !!m.content,
+        routing: m.routing || '',
+        hasRouting: !m.pending && !!m.routing,
+        rowJustify: isUser ? 'flex-end' : 'flex-start',
+        bubbleBg: isUser ? accent : T.cardBg,
+        bubbleColor: isUser ? '#ffffff' : T.text,
+        bubbleBorder: isUser ? 'transparent' : T.border
+      };
+    });
+
+    const examples = [
+      { label: 'Explain layer-sharded inference', onClick: this.fillExample('Explain how layer-sharded inference works in a peer-to-peer model network, simply.') },
+      { label: 'Write a haiku about distributed compute', onClick: this.fillExample('Write a haiku about distributed compute.') },
+      { label: 'What can I run on 8GB VRAM?', onClick: this.fillExample('What kinds of models or layers can I contribute to a swarm with only 8GB of VRAM?') }
+    ];
+
+    const segOn = (on) => ({ bg: on?accent:'transparent', color: on?'#ffffff':T.muted });
+    const auto = segOn(s.layerMode==='auto'), manual = segOn(s.layerMode==='manual');
+
+    const tdef = [
+      { key:'autojoin', label:'Auto-join on boot', desc:'Connect to the swarm automatically when the node starts.' },
+      { key:'contribute', label:'Contribute compute', desc:'Host layers and serve other peers, not just query.' },
+      { key:'inbound', label:'Allow inbound queries', desc:'Let the network route activations through your node.' },
+      { key:'telemetry', label:'Share anonymous telemetry', desc:'Send latency and uptime stats to improve routing.' }
+    ];
+    const toggles = tdef.map((t,i)=>({
+      label:t.label, desc:t.desc,
+      onToggle: this.toggleField(t.key),
+      trackBg: s[t.key] ? accent : T.borderStrong,
+      knobX: s[t.key] ? '19px' : '0px',
+      divider: i===tdef.length-1 ? 'transparent' : T.border
+    }));
+
+    return {
+      accent, pageBg:T.pageBg, cardBg:T.cardBg, elevBg:T.elevBg, text:T.text, muted:T.muted, muted2:T.muted2,
+      border:T.border, borderStrong:T.borderStrong, sectionBg:T.section, canvasBg:T.canvasBg, shadow:T.shadow,
+      canvasRef:this.canvasRef, messagesRef:this.messagesRef,
+      goNetwork:()=>this.setView('network'), goChat:()=>this.setView('chat'), goSettings:()=>this.setView('settings'),
+      collapsed: st.collapsed, toggleCollapse: this.toggleCollapse,
+      asideW: st.collapsed ? '70px' : '248px',
+      asidePad: st.collapsed ? '18px 10px' : '18px 14px',
+      headerDir: st.collapsed ? 'column' : 'row',
+      labelDisplay: st.collapsed ? 'none' : 'inline',
+      navJustify: st.collapsed ? 'center' : 'flex-start',
+      navPad: st.collapsed ? '11px 0' : '10px 12px',
+      statusPad: st.collapsed ? '12px 0' : '13px',
+      toggleRotate: st.collapsed ? '180deg' : '0deg',
+      toggleTitle: st.collapsed ? 'Expand sidebar' : 'Collapse sidebar',
+      collapseBtnDisplay: st.collapsed ? 'none' : 'grid',
+      navNet:nav('network'), navChat:nav('chat'), navSet:nav('settings'),
+      isNetwork: view==='network', isChat: view==='chat', isSettings: view==='settings',
+      tput: st.metrics.tput.toFixed(1), latency: st.metrics.latency, queries: st.metrics.queries,
+      chat, chatEmpty: chat.length===0, examples,
+      input: st.input, onInput:this.onInput, onKeyDown:this.onKeyDown, send:this.send,
+      sendDisabled: st.sending || !st.input.trim(),
+      sendOpacity: (st.sending || !st.input.trim()) ? '0.5' : '1',
+      sendCursor: (st.sending || !st.input.trim()) ? 'default' : 'pointer',
+      s_name:s.name, s_model:s.model, s_region:s.region, s_port:s.port,
+      s_maxLayers:s.maxLayers, s_maxVram:s.maxVram, s_bandwidth:s.bandwidth,
+      setName:this.setField('name',false), setModel:this.setField('model',false), setRegion:this.setField('region',false),
+      setPort:this.setField('port',true), setMaxLayers:this.setField('maxLayers',true), setVram:this.setField('maxVram',true), setBandwidth:this.setField('bandwidth',true),
+      setLayerAuto:this.setLayerMode('auto'), setLayerManual:this.setLayerMode('manual'),
+      autoBtnBg:auto.bg, autoBtnColor:auto.color, manualBtnBg:manual.bg, manualBtnColor:manual.color,
+      toggles, saveSettings:this.saveSettings, savedFlash:st.savedFlash,
+      copyId:this.copyId, copyIdLabel: st.copiedId ? 'Copied' : 'Copy'
+    };
+  }
+}
+</script>
+</body>
+</html>
