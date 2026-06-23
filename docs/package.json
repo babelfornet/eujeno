@@ -2,7 +2,7 @@
   "name": "eujeno-docs",
   "private": true,
   "type": "module",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Eujeno documentation site (Nextra) — static export served at /docs",
   "scripts": {
     "dev": "next dev",
