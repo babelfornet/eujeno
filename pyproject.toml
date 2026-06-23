@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "eujeno"
-version = "0.1.5"
+version = "0.1.6"
 description = "Decentralized peer-to-peer LLM inference network"
 requires-python = ">=3.11"
 license = "BUSL-1.1"
