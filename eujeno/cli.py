@@ -325,6 +325,7 @@ def serve(
     db: str = typer.Option(None, "--db", help="[P2P] SQLite job-log path for this node (default: in-memory)"),
     settings: str = typer.Option(None, "--settings", help="Node settings JSON path (default ~/.eujeno/node-<port>.json)"),
     device: str = typer.Option(None, "--device", help="cpu | cuda | mps | auto. Default: auto — the GPU (mps/cuda) if present on this machine, else cpu."),
+    backend: str = typer.Option("torch", "--backend", help="torch | mlx. 'mlx' runs the node's blocks via a 4-bit MLX-quantized model on Apple Silicon (much faster, ~1/3 the memory). Requires --coordinator and the 'mlx' extra; pass the MLX repo as --model (e.g. mlx-community/Qwen2.5-7B-Instruct-4bit)."),
 ):
     """Start a BlockServer hosting the given stages (long-running process).
 
@@ -382,6 +383,20 @@ def serve(
         _dtype = parse_dtype(dtype_name)
     except ValueError as e:
         _fail("serve", "USAGE_ERROR", str(e), exit_code=2)
+    if backend == "mlx":
+        # MLX (Apple Silicon) backend: skip the torch partial-load; the node runs its blocks
+        # via a 4-bit MLX model and serves the coordinator's fused `chain` op (single-node).
+        if not coordinator:
+            _fail("serve", "USAGE_ERROR", "--backend mlx currently requires --coordinator", exit_code=2)
+        try:
+            from eujeno.model.mlx_backend import MlxNodeState
+            state = MlxNodeState(model_id, spec)
+        except Exception as e:
+            _fail("serve", "MODEL_LOAD_FAILED", f"mlx backend: {e}")
+        import asyncio
+        typer.echo(f"eujeno serve→coordinator {coordinator}: backend=mlx stages={stages} (model={model_id})", err=True)
+        asyncio.run(run_node(coordinator, state))
+        return
     try:
         model, tokenizer = load_partial_model(model_id, spec, _dtype, _device)
     except Exception as e:

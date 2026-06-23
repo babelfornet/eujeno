@@ -21,8 +21,11 @@ class NodeState:
                 "decoders": list(self.prepared.keys())}
 
 
-def handle_request(state: NodeState, header: dict, payload: bytes):
+def handle_request(state, header: dict, payload: bytes):
     """Run a hop. Returns (resp_header: dict, resp_payload: bytes)."""
+    if getattr(state, "is_mlx", False):       # MLX-backed node: route to the MLX backend
+        from eujeno.model.mlx_backend import handle_request_mlx
+        return handle_request_mlx(state, header, payload)
     op = header["op"]
     dev = state.device                       # inputs arrive on CPU from the wire;
     # move them onto the node's device (mps/cuda) and bring outputs back to CPU
