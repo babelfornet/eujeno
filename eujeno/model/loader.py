@@ -39,6 +39,23 @@ def model_config_dims(model_id: str) -> dict:
     }
 
 
+def stage_weight_prefixes(stages, tie: bool) -> set:
+    """Safetensors key prefixes a node must load for its assigned stages. Shared by the torch
+    (`load_partial_model`) and MLX (`mlx_backend.load_partial_mlx`) partial loaders so the
+    split-selection policy lives in ONE place."""
+    prefixes = set()
+    if stages.embed or (stages.head and tie):
+        prefixes.add("model.embed_tokens.")
+    if stages.head:
+        prefixes.add("model.norm.")
+        if not tie:
+            prefixes.add("lm_head.")
+    for (lo, hi) in stages.decoders:
+        for i in range(lo, hi):
+            prefixes.add(f"model.layers.{i}.")
+    return prefixes
+
+
 def load_partial_model(model_id: str, stages, dtype, device):
     """Carica in RAM SOLO i pesi dei layer assegnati (+ embed/head se nei tuoi stage);
     il resto del modello resta su 'meta' (zero memoria). Ritorna (model, tokenizer)."""
@@ -56,16 +73,7 @@ def load_partial_model(model_id: str, stages, dtype, device):
         model = AutoModelForCausalLM.from_config(config)
 
     tie = bool(getattr(config, "tie_word_embeddings", False))
-    prefixes = set()
-    if stages.embed or (stages.head and tie):
-        prefixes.add("model.embed_tokens.")
-    if stages.head:
-        prefixes.add("model.norm.")
-        if not tie:
-            prefixes.add("lm_head.")
-    for (lo, hi) in stages.decoders:
-        for i in range(lo, hi):
-            prefixes.add(f"model.layers.{i}.")
+    prefixes = stage_weight_prefixes(stages, tie)
 
     path = snapshot_download(model_id)
     for f in glob.glob(os.path.join(path, "*.safetensors")):

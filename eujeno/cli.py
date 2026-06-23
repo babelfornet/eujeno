@@ -336,6 +336,11 @@ def serve(
     dtype_name = dtype or default_dtype(_device)  # bf16 on GPU, fp32 on CPU
     if device is None or dtype is None:
         typer.echo(f"eujeno serve: device={_device} dtype={dtype_name}", err=True)
+    if backend == "mlx" and auto:
+        _fail("serve", "USAGE_ERROR",
+              "--backend mlx does not support --auto: the RAM planner sizes layers with the torch "
+              "dtype (bf16/fp32), not the ~4-bit MLX weights, so it would badly under-claim. Pass "
+              "explicit --stages.", exit_code=2)
     if auto:
         import time as _time
         import torch

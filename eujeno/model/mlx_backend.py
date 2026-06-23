@@ -39,6 +39,8 @@ def load_partial_mlx(model_id: str, stages):
     from huggingface_hub import snapshot_download
     from mlx_lm.utils import _get_classes, load_config
 
+    from eujeno.model.loader import stage_weight_prefixes
+
     model_path = Path(snapshot_download(model_id))
     config = load_config(model_path)
     model_class, args_class = _get_classes(config)
@@ -46,18 +48,10 @@ def load_partial_mlx(model_id: str, stages):
     num_layers = len(model.model.layers)
 
     tie = bool(getattr(model.args, "tie_word_embeddings", False))
-    prefixes = []
-    if stages.embed or (stages.head and tie):
-        prefixes.append("model.embed_tokens.")
-    if stages.head:
-        prefixes.append("model.norm.")
-        if not tie:
-            prefixes.append("lm_head.")
+    prefixes = stage_weight_prefixes(stages, tie)          # shared with the torch loader
     served = set()
     for (lo, hi) in stages.decoders:
         served.update(range(lo, hi))
-        for i in range(lo, hi):
-            prefixes.append(f"model.layers.{i}.")
 
     # load ONLY the assigned weights from the safetensors shards
     weights = {}
@@ -152,15 +146,14 @@ def _apply_head(model, h):
 
 
 def _topk_response(ln, topk):
+    from eujeno.net.node_exec import topk_response          # shared response envelope
     k = min(int(topk), int(ln.shape[-1]))
     if k <= 1:
         tid = int(ln.argmax())
-        return {"ok": True, "token_id": tid, "topk_ids": [tid], "topk_logits": [float(ln[tid])]}, b""
+        return topk_response([tid], [float(ln[tid])])
     idx = np.argpartition(-ln, k - 1)[:k]
     idx = idx[np.argsort(-ln[idx])]
-    return {"ok": True, "token_id": int(idx[0]),
-            "topk_ids": [int(i) for i in idx],
-            "topk_logits": [float(ln[i]) for i in idx]}, b""
+    return topk_response([int(i) for i in idx], [float(ln[i]) for i in idx])
 
 
 def handle_request_mlx(state: MlxNodeState, header: dict, payload: bytes):
@@ -185,6 +178,21 @@ def handle_request_mlx(state: MlxNodeState, header: dict, payload: bytes):
 
     t = decode_tensors(payload) if payload else {}
     job_cache = _job_cache(state, header["job_id"])
+
+    # Failover/resume safety: the coordinator's cache_position is authoritative. If our KV-cache
+    # offset doesn't match it (e.g. a resume re-sends the full prefill to a node whose cache has
+    # already advanced), rebuild the job cache so we start from the right position instead of
+    # appending onto stale KV. No-op in the normal monotonic prefill→+1 flow.
+    cpos = t.get("cache_position")
+    decode_steps = [s for s in steps if s["op"] == "decode"]
+    if cpos is not None and decode_steps:
+        start = int(cpos.reshape(-1)[0])
+        lo0 = int(decode_steps[0]["block_key"].split("-")[0])
+        if int(job_cache[lo0].offset) != start:
+            from mlx_lm.models.cache import KVCache
+            job_cache = [KVCache() for _ in range(state.num_layers)]
+            state.jobs[header["job_id"]] = job_cache
+
     model = state.model
     h = None
     for st in steps:

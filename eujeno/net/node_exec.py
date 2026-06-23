@@ -6,6 +6,12 @@ from eujeno.model.blocks import EmbedBlock, HeadBlock, DecoderBlock, prepare_dec
 from eujeno.net.wire import encode_tensors, decode_tensors
 
 
+def topk_response(ids, logits):
+    """Shared op response for head / chain-head (torch) and the MLX backend: the sampled token
+    + its top-k. `ids` and `logits` are plain Python lists, top-1 first."""
+    return {"ok": True, "token_id": ids[0], "topk_ids": ids, "topk_logits": logits}, b""
+
+
 class NodeState:
     """Local state of a worker node: served blocks + per-job KV-cache."""
     def __init__(self, model, stages, device="cpu"):
@@ -50,9 +56,7 @@ def handle_request(state, header: dict, payload: bytes):
         logits = state.head_block.run_block(t["hidden_states"].to(dev))[:, -1, :]
         k = min(int(header.get("topk", 1)), logits.shape[-1])
         vals, idx = torch.topk(logits[0], k=k)
-        ids = idx.tolist()
-        return {"ok": True, "token_id": ids[0],
-                "topk_ids": ids, "topk_logits": vals.tolist()}, b""
+        return topk_response(idx.tolist(), vals.tolist())
     if op == "chain":
         # Run a maximal run of this node's consecutive blocks (embed / decoder(s) / head)
         # in ONE round-trip, keeping the activation ON-DEVICE between steps — no per-block
@@ -81,9 +85,7 @@ def handle_request(state, header: dict, payload: bytes):
                 logits = state.head_block.run_block(h)[:, -1, :]
                 k = min(int(header.get("topk", 1)), logits.shape[-1])
                 vals, idx = torch.topk(logits[0], k=k)
-                ids = idx.tolist()
-                return {"ok": True, "token_id": ids[0],
-                        "topk_ids": ids, "topk_logits": vals.tolist()}, b""
+                return topk_response(idx.tolist(), vals.tolist())
         return {"ok": True}, encode_tensors({"hidden_states": h.to("cpu")})
     if op == "end":
         state.jobs.pop(header["job_id"], None)
