@@ -13,7 +13,8 @@ async def run_node(coordinator_ws_url: str, state):
     """Connects (outbound, NAT-friendly) to the coordinator, announces its stages and serves
     the relayed hops. The torch computation runs in an executor so the loop isn't blocked."""
     async with websockets.connect(coordinator_ws_url, max_size=None) as ws:
-        await ws.send(pack({"type": "announce", "stages": state.stages_dict()}))
+        await ws.send(pack({"type": "announce", "stages": state.stages_dict(),
+                            "caps": ["chain"]}))
         loop = asyncio.get_running_loop()
         async for message in ws:
             header, payload = unpack(message)

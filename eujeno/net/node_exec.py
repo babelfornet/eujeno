@@ -50,6 +50,38 @@ def handle_request(state: NodeState, header: dict, payload: bytes):
         ids = idx.tolist()
         return {"ok": True, "token_id": ids[0],
                 "topk_ids": ids, "topk_logits": vals.tolist()}, b""
+    if op == "chain":
+        # Run a maximal run of this node's consecutive blocks (embed / decoder(s) / head)
+        # in ONE round-trip, keeping the activation ON-DEVICE between steps — no per-block
+        # WS hop and no per-block CPU<->device copy. The coordinator only sends a chain op
+        # to nodes that advertised the "chain" cap, so this is purely additive.
+        job = state.jobs.setdefault(header["job_id"], {})
+        t = decode_tensors(payload)
+        cache_position = t.get("cache_position")
+        if cache_position is not None:
+            cache_position = cache_position.to(dev)
+        h = None
+        for st in header["steps"]:
+            kind = st["op"]
+            if kind == "embed":
+                h = state.embed_block.run_block(t["input_ids"].to(dev))
+            elif kind == "decode":
+                bk = st["block_key"]
+                block = job.get(bk)
+                if block is None:
+                    layers, rotary = state.prepared[bk]
+                    block = DecoderBlock(layers, rotary)
+                    job[bk] = block
+                src = h if h is not None else t["hidden_states"].to(dev)
+                h = block.run_block(src, cache_position)
+            elif kind == "head":
+                logits = state.head_block.run_block(h)[:, -1, :]
+                k = min(int(header.get("topk", 1)), logits.shape[-1])
+                vals, idx = torch.topk(logits[0], k=k)
+                ids = idx.tolist()
+                return {"ok": True, "token_id": ids[0],
+                        "topk_ids": ids, "topk_logits": vals.tolist()}, b""
+        return {"ok": True}, encode_tensors({"hidden_states": h.to("cpu")})
     if op == "end":
         state.jobs.pop(header["job_id"], None)
         return {"ok": True}, b""

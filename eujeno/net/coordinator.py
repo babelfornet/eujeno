@@ -86,7 +86,8 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
         await ws.accept()
         announce, _ = unpack(await ws.receive_bytes())
         conn_id = _next_id("c")
-        conns[conn_id] = {"ws": ws, "stages": announce["stages"], "pending": {}, "load": 0, "reputation": REP_INITIAL}
+        conns[conn_id] = {"ws": ws, "stages": announce["stages"], "pending": {}, "load": 0,
+                          "reputation": REP_INITIAL, "caps": announce.get("caps", [])}
         try:
             while True:
                 rh, rp = unpack(await ws.receive_bytes())
@@ -143,17 +144,60 @@ def create_coordinator_app(model_id: str, num_layers: int, tokenizer, db_path=No
             cache_position = torch.arange(seq_len)
         tokens = list(resume_tokens)
         finish_reason = "length"
+
+        # Group the chain into per-node segments: a maximal run of consecutive blocks on the
+        # SAME node is fused into one round-trip when that node advertised the "chain" cap
+        # (it then runs embed/decoder(s)/head in sequence, keeping the activation on-device —
+        # no per-block WS hop, no per-block CPU<->device copy). Nodes without the cap (e.g. an
+        # older peer) transparently keep the classic one-op-per-block path, so this is additive.
+        flat = ([("embed", embed_c, None)]
+                + [("decode", cid, bk) for bk, cid in decoders]
+                + [("head", head_c, None)])
+        segments = []
+        for kind, cid, bk in flat:
+            if segments and segments[-1]["cid"] == cid:
+                segments[-1]["ops"].append((kind, bk))
+            else:
+                segments.append({"cid": cid, "ops": [(kind, bk)]})
+        for seg in segments:
+            seg["chain"] = (len(seg["ops"]) > 1
+                            and "chain" in conns.get(seg["cid"], {}).get("caps", []))
+
         for _ in range(max_new - len(resume_tokens)):
-            _, p = await _rc(embed_c, {"op": "embed", "job_id": job_id},
-                             encode_tensors({"input_ids": cur}))
-            h = decode_tensors(p)["hidden_states"]
-            for block_key, cid in decoders:
-                _, p = await _rc(cid, {"op": "decode", "block_key": block_key, "job_id": job_id},
-                                 encode_tensors({"hidden_states": h, "cache_position": cache_position}))
-                h = decode_tensors(p)["hidden_states"]
-            rh, _ = await _rc(head_c, {"op": "head", "job_id": job_id, "topk": topk},
-                               encode_tensors({"hidden_states": h}))
-            tok = sample_token(rh["topk_ids"], rh["topk_logits"], tokens, temperature, top_p, rep, generator) if do_sample else rh["token_id"]
+            h = None
+            rh_head = None
+            for seg in segments:
+                cid = seg["cid"]
+                ops = seg["ops"]
+                if seg["chain"]:
+                    steps = [({"op": k, "block_key": bk} if bk else {"op": k}) for k, bk in ops]
+                    tens = {"cache_position": cache_position}
+                    if ops[0][0] == "embed":
+                        tens["input_ids"] = cur
+                    else:
+                        tens["hidden_states"] = h
+                    rh, p = await _rc(cid, {"op": "chain", "job_id": job_id, "steps": steps, "topk": topk},
+                                      encode_tensors(tens))
+                    if ops[-1][0] == "head":
+                        rh_head = rh
+                    else:
+                        h = decode_tensors(p)["hidden_states"]
+                else:
+                    for kind, bk in ops:
+                        if kind == "embed":
+                            _, p = await _rc(cid, {"op": "embed", "job_id": job_id},
+                                             encode_tensors({"input_ids": cur}))
+                            h = decode_tensors(p)["hidden_states"]
+                        elif kind == "decode":
+                            _, p = await _rc(cid, {"op": "decode", "block_key": bk, "job_id": job_id},
+                                             encode_tensors({"hidden_states": h, "cache_position": cache_position}))
+                            h = decode_tensors(p)["hidden_states"]
+                        else:  # head
+                            rh_head, _ = await _rc(cid, {"op": "head", "job_id": job_id, "topk": topk},
+                                                   encode_tensors({"hidden_states": h}))
+            tok = (sample_token(rh_head["topk_ids"], rh_head["topk_logits"], tokens,
+                                temperature, top_p, rep, generator)
+                   if do_sample else rh_head["token_id"])
             if tok in stop_ids:
                 finish_reason = "stop"
                 break
