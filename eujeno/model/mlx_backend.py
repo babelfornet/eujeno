@@ -18,20 +18,97 @@ Single-node ~68 tok/s end-to-end (vs ~10-11 torch bf16). NOTE: the model is load
 slab is sliced from it (partial loading of MLX checkpoints is future work); multi-node MLX wins
 when slabs live on SEPARATE Apple machines (one Mac GPU split across processes just timeshares).
 """
+import glob
+import os
+
 import numpy as np
 
 from eujeno.net.wire import decode_tensors, encode_tensors
 
 
+def load_partial_mlx(model_id: str, stages):
+    """Partial loader for MLX (mirrors loader.load_partial_model for torch): builds the MLX
+    model structure but loads into memory ONLY the weights of the assigned layers (+ embed/head
+    if served), and drops every other module so its (random, lazy) init never materializes on
+    eval. RAM/VRAM scales with the slab, not the whole model — the point of the architecture.
+    Returns (model, num_layers)."""
+    from pathlib import Path
+
+    import mlx.core as mx
+    import mlx.nn as nn
+    from huggingface_hub import snapshot_download
+    from mlx_lm.utils import _get_classes, load_config
+
+    model_path = Path(snapshot_download(model_id))
+    config = load_config(model_path)
+    model_class, args_class = _get_classes(config)
+    model = model_class(args_class.from_dict(config))
+    num_layers = len(model.model.layers)
+
+    tie = bool(getattr(model.args, "tie_word_embeddings", False))
+    prefixes = []
+    if stages.embed or (stages.head and tie):
+        prefixes.append("model.embed_tokens.")
+    if stages.head:
+        prefixes.append("model.norm.")
+        if not tie:
+            prefixes.append("lm_head.")
+    served = set()
+    for (lo, hi) in stages.decoders:
+        served.update(range(lo, hi))
+        for i in range(lo, hi):
+            prefixes.append(f"model.layers.{i}.")
+
+    # load ONLY the assigned weights from the safetensors shards
+    weights = {}
+    for wf in glob.glob(os.path.join(str(model_path), "model*.safetensors")):
+        for k, v in mx.load(wf).items():
+            if any(k.startswith(p) for p in prefixes):
+                weights[k] = v
+    if hasattr(model, "sanitize"):
+        weights = model.sanitize(weights)
+
+    # quantize per the checkpoint's config; the predicate only quantizes a module when its
+    # scales were loaded (i.e. it's part of our slab) — same logic mlx_lm.load_model uses.
+    q = config.get("quantization")
+    if q:
+        def class_predicate(p, m):
+            if p in config["quantization"]:
+                return config["quantization"][p]
+            if not hasattr(m, "to_quantized"):
+                return False
+            return f"{p}.scales" in weights
+        nn.quantize(model, group_size=q["group_size"], bits=q["bits"],
+                    mode=q.get("mode", "affine"), class_predicate=class_predicate)
+
+    model.load_weights(list(weights.items()), strict=False)
+
+    # drop the modules we don't serve so eval doesn't materialize their random init
+    class _Drop(nn.Module):
+        pass
+    for i in range(num_layers):
+        if i not in served:
+            model.model.layers[i] = _Drop()
+    if not (stages.embed or (stages.head and tie)):
+        model.model.embed_tokens = _Drop()
+    if not stages.head:
+        model.model.norm = _Drop()
+        if hasattr(model, "lm_head"):
+            model.lm_head = _Drop()
+
+    mx.eval(model.parameters())
+    model.eval()
+    return model, num_layers
+
+
 class MlxNodeState:
     """MLX-backed node state. Mirrors NodeState's stages_dict()/jobs surface so `node.run_node`
-    drives it unchanged. Holds the whole quantized model; serves whichever stages it was assigned
-    (slicing the slab from the full model). jobs: job_id -> full MLX prompt cache (one per layer)."""
+    drives it unchanged. Partial-loads ONLY its assigned layers; jobs: job_id -> per-layer MLX
+    KV cache (one entry per MODEL layer; only the served slab's entries are ever used)."""
     is_mlx = True
 
     def __init__(self, model_id: str, stages):
-        from mlx_lm import load
-        self.model, _ = load(model_id)
+        self.model, self.num_layers = load_partial_mlx(model_id, stages)
         self.stages = stages
         self.jobs = {}
 
@@ -41,13 +118,14 @@ class MlxNodeState:
 
 
 def _job_cache(state, job_id):
-    """Per-job MLX prompt cache (one entry per MODEL layer). A decoder block [lo,hi) uses the
-    slice cache[lo:hi]; positions/rope stay consistent because each layer's cache advances once
-    per token regardless of which node owns it."""
+    """Per-job KV cache, one entry per MODEL layer. A decoder block [lo,hi) uses the slice
+    cache[lo:hi]; positions/rope stay consistent because each layer's cache advances once per
+    token regardless of which node owns it. (Built directly, not via make_prompt_cache, since
+    dropped non-slab modules would trip that helper.)"""
     cache = state.jobs.get(job_id)
     if cache is None:
-        from mlx_lm.models.cache import make_prompt_cache
-        cache = make_prompt_cache(state.model)
+        from mlx_lm.models.cache import KVCache
+        cache = [KVCache() for _ in range(state.num_layers)]
         state.jobs[job_id] = cache
     return cache
 
