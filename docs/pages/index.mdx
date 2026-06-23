@@ -35,19 +35,6 @@ eujeno up --model Qwen/Qwen2.5-0.5B-Instruct     # coordinator + a node, single 
 See [Getting Started](/getting-started/installation) for the full walkthrough, or
 [Running a Node](/running-a-node/join-the-swarm) to contribute your GPU to a swarm.
 
-## Status
-
-import { Callout } from 'nextra/components'
-
-<Callout type="warning">
-  **PoC under construction.** Distributed inference across multiple nodes over HTTP
-  already works (orchestrator-driven): a model is split into layer blocks hosted by
-  `eujeno serve` on different nodes, and `eujeno infer` runs generation across the
-  network, reproducing the full model exactly. Next: DHT discovery, a durable
-  store-and-forward queue with failover. Token incentives are deferred (designed on
-  paper — see [Design &amp; Roadmap](/design-roadmap)).
-</Callout>
-
 ## Where to go next
 
 import { Cards } from 'nextra/components'
