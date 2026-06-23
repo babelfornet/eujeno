@@ -12,11 +12,11 @@ Scope (prototype): single-node deployments, where the whole model lives on one M
 the coordinator emits one `chain` op per token. Multi-node MLX slabs (per-block torch↔mlx
 hidden-state conversion at the wire boundary) are future work — see the feat/mlx-backend branch.
 
-DEPENDENCY ISOLATION (important): `mlx-lm` pulls transformers>=5 + numpy>=2, which CONFLICT
-with eujeno's torch path (pinned transformers==4.46.3, numpy<2). An MLX node must therefore
-run in its OWN environment (it doesn't use the torch stack at all). Do NOT `pip install mlx-lm`
-into a torch-backend venv — it silently upgrades transformers/numpy and breaks torch nodes.
-Measured: ~59 tok/s end-to-end through the coordinator (vs ~10-11 torch bf16), output coherent.
+DEPENDENCY NOTE: install via the `mlx` extra (`pip install -e '.[mlx]'`), pinned to
+mlx-lm<0.30 — mlx-lm 0.30+ requires transformers>=5, which conflicts with eujeno's
+transformers==4.46.3 pin and breaks the torch path. With mlx-lm 0.29.x the MLX and torch
+backends coexist in ONE env (transformers 4.46.3 / numpy 1.26). Measured: ~68 tok/s
+end-to-end through the coordinator (vs ~10-11 torch bf16), output coherent; torch suite green.
 """
 import numpy as np
 

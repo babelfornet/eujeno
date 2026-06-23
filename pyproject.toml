@@ -32,11 +32,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
-# Apple Silicon only: 4-bit MLX backend for `serve --backend mlx` (much faster single-node).
-# NOTE (WIP, feat/mlx-backend): mlx-lm pulls transformers>=5 + numpy>=2, which CONFLICT with the
-# base pins above (transformers==4.46.3, numpy<2). An MLX node must run in its OWN venv until the
-# torch path is made transformers-5-compatible; do not co-install with the torch backend.
-mlx = ["mlx-lm>=0.20"]
+# Apple Silicon only: 4-bit MLX backend for `serve --backend mlx` (much faster single-node,
+# ~1/3 the memory). Pinned <0.30 on purpose: mlx-lm 0.30+ requires transformers>=5 (which
+# conflicts with the transformers==4.46.3 pin above and breaks the torch path); 0.29.x is
+# transformers-4.46 / numpy-1 compatible, so the MLX and torch backends coexist in ONE env.
+mlx = ["mlx-lm>=0.29.1,<0.30"]
 
 [project.scripts]
 eujeno = "eujeno.cli:app"
