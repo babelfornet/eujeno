@@ -176,6 +176,7 @@ eujeno serve --stages "embed,decoder:0-12" --port 8001
 | `--db TEXT` | [P2P] SQLite job-log path for this node (default: in-memory). |
 | `--settings TEXT` | Node settings JSON path. Default `~/.eujeno/node-<port>.json`. |
 | `--device TEXT` | `cpu` \| `cuda` \| `mps` \| `auto`. Default **`auto`**: the GPU (Apple `mps` / CUDA) if present on this machine, else `cpu`. Force CPU with `--device cpu`. A GPU node interoperates with CPU peers — it moves activations to/from the device automatically. |
+| `--backend TEXT` | `torch` \| `mlx`. Default `torch`. `mlx` runs the node's layers via a 4-bit MLX model on **Apple Silicon** (~6× faster, ~⅓ the memory). Requires `--coordinator` and the `mlx` extra (`pip install -e '.[mlx]'`); pass the MLX repo as `--model` (e.g. `mlx-community/Qwen2.5-7B-Instruct-4bit`). See [GPU Nodes](/running-a-node/gpu-nodes#apple-silicon-the-mlx-4-bit-backend). |
 
 ### `coordinator`
 

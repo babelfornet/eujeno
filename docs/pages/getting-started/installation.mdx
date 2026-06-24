@@ -100,6 +100,17 @@ eujeno --help
 With the environment activated, the `eujeno` command is on your `PATH` directly (no
 `./bin/` prefix).
 
+### Optional: the MLX backend (Apple Silicon)
+
+On Apple Silicon, install the optional `mlx` extra to run a node as a **4-bit MLX model** —
+much faster and ~⅓ the memory of the default PyTorch `mps` path:
+
+```bash
+pip install -e '.[mlx]'
+```
+
+Then serve with `--backend mlx`; see [GPU Nodes → Apple Silicon: the MLX 4-bit backend](/running-a-node/gpu-nodes#apple-silicon-the-mlx-4-bit-backend).
+
 ## Verify the install
 
 Either path should leave you with a working CLI. Confirm it:

@@ -67,6 +67,48 @@ eujeno serve \
 The GPU node joins the gossip swarm like any other. Because it's fast, give it the **largest
 share** of layers that VRAM allows and let the CPU nodes cover the rest.
 
+## Apple Silicon: the MLX 4-bit backend
+
+On Apple Silicon a node can run its layers through a **4-bit [MLX](https://github.com/ml-explore/mlx)
+model** instead of the default PyTorch `mps` path — `serve --backend mlx`. It is much faster and
+much smaller, because 4-bit weights mean far fewer bytes read per token (decode is memory-bound):
+
+| 7B, Apple Silicon (single node) | tok/s | memory |
+|---|---|---|
+| PyTorch `mps` (bfloat16) | ~10–11 | ~14 GB |
+| **`--backend mlx` (4-bit)** | **~68** | **~4.5 GB** |
+
+That is ~6× the throughput at ~⅓ the memory — on par with `ollama`. A node loads **only its
+assigned layers**, so an 8-layer slab is ~1 GB and the savings carry over to multi-node splits.
+
+Install the optional `mlx` extra (source checkout, Apple Silicon only):
+
+```bash
+pip install -e '.[mlx]'
+```
+
+Then run the node, passing a **4-bit MLX checkpoint** as `--model` (the `mlx-community` repos are
+already quantized):
+
+```bash
+eujeno serve --backend mlx \
+  --coordinator ws://<coordinator-ip>:9000/node \
+  --stages "embed,decoder:0-28,head" \
+  --model mlx-community/Qwen2.5-7B-Instruct-4bit
+```
+
+<Callout type="info">
+  The **coordinator** stays an ordinary process and keeps the base model for its tokenizer
+  (`coordinator --model Qwen/Qwen2.5-7B-Instruct`); only the MLX serving node uses the
+  `mlx-community/…-4bit` repo. MLX nodes **interoperate with torch / CPU / CUDA peers** — the
+  hidden state always crosses the wire as bfloat16 — so you can split a model across MLX and
+  torch nodes, with each MLX node loading only its slab.
+</Callout>
+
+**Constraints:** Apple Silicon only; requires `--coordinator` (not the direct P2P server); and
+`--auto` is not supported with `--backend mlx` (the RAM planner assumes full-precision weights),
+so pass explicit `--stages`.
+
 ## Mixed CPU/GPU swarm
 
 A typical layout: CPU machines host `embed` + the early layers, the GPU node hosts the bulk
